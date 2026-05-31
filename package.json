@@ -1,0 +1,43 @@
+{
+  "name": "order-manager",
+  "type": "module",
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "check": "biome check ./src && astro check",
+    "fix": "biome check --write ./src",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^13.6.0",
+    "@astrojs/solid-js": "^6.0.1",
+    "@hono/zod-validator": "^0.8.0",
+    "astro": "^6.4.2",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.12.23",
+    "solid-js": "^1.9.13",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.9",
+    "@biomejs/biome": "2.4.16",
+    "@cloudflare/workers-types": "^4.20260530.1",
+    "@solidjs/testing-library": "^0.8.10",
+    "@testing-library/user-event": "^14.6.1",
+    "@vitest/coverage-v8": "^4.1.7",
+    "drizzle-kit": "^0.31.10",
+    "happy-dom": "^20.9.0",
+    "lefthook": "^2.1.9",
+    "typescript": "^6.0.3",
+    "vite-plugin-solid": "^2.11.12",
+    "vitest": "^4.1.7",
+    "wrangler": "^4.95.0"
+  }
+}

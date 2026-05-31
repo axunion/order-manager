@@ -1,0 +1,6 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: biome
+      glob: "**/*.{js,ts,jsx,tsx,astro,json,jsonc}"
+      run: pnpm biome check {staged_files}
