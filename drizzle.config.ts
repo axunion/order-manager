@@ -1,12 +1,12 @@
 import { defineConfig } from 'drizzle-kit';
 
+// d1-http driver is intentionally disabled.
+// Production migrations run only via GitHub Actions (wrangler d1 migrations apply --remote).
+// Local schema changes: edit src/db/schema.ts → pnpm db:generate → pnpm db:migrate
 export default defineConfig({
   dialect: 'sqlite',
   schema: './src/db/schema.ts',
   out: './drizzle',
-  // Cloudflare D1 へのマイグレーション実行には以下を追加し、
-  // CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_DATABASE_ID / CLOUDFLARE_D1_TOKEN を
-  // 環境変数または .dev.vars に設定してください。
   // driver: 'd1-http',
   // dbCredentials: {
   //   accountId: process.env.CLOUDFLARE_ACCOUNT_ID!,

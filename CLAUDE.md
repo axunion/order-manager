@@ -34,31 +34,6 @@
 
 ---
 
-## Commit Rules
-
-Messages must be in **English**. **No prefix tags** (do not use `feat:`, `fix:`, `chore:`, etc.).
-
-```
-<one-line summary>
-
-<Why: the motivation or problem — one sentence, only when non-obvious>
-
-- <what changed>
-- <what changed>
-```
-
-- **Summary**: imperative mood, under 70 characters, no trailing period
-- **Why**: include only when the reason is non-obvious; one sentence maximum; omit otherwise
-- **Bullets**: only when there are multiple distinct changes worth calling out; omit file names; skip entirely for single-concern changes
-
-### Safety
-- Never commit secrets-looking files (`.env*`, `*.key`, `*.pem`, `credentials*`, etc.).
-- Never use `--no-verify`. If a pre-commit hook fails, fix the root cause before committing again.
-- Never use `git add -A` or `git add .`. Stage files explicitly by path.
-- Never use `--amend`. Always create a new commit.
-
----
-
 ## Tech Stack
 
 Astro 6 SSR (Cloudflare Workers) / SolidJS / Hono / Drizzle ORM + Cloudflare D1 / Zod / Vitest / Biome / pnpm

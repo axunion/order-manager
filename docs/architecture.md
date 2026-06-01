@@ -218,13 +218,81 @@ export const ALL = (context) => app.fetch(context.request, context.env);
 
 ## 8. デプロイ構成
 
+### 8.1 コマンド早見表
+
+| 目的 | コマンド | 実行場所 |
+|---|---|---|
+| ローカル開発 | `pnpm dev` | ローカル |
+| ビルド確認 | `pnpm build` | ローカル |
+| プレビュー | `pnpm preview` | ローカル |
+| **本番デプロイ** | `wrangler deploy` | **CI のみ** |
+
+---
+
+### 8.2 DB マイグレーション戦略
+
+#### ローカル開発
+
 ```
-ローカル開発:  pnpm dev  (astro dev / wrangler dev)
-ビルド:        pnpm build → dist/
-プレビュー:    pnpm preview
-デプロイ:      wrangler deploy
+スキーマ変更
+  → src/db/schema.ts を編集
+  → pnpm db:generate          # drizzle-kit generate → drizzle/ に SQL 生成
+  → pnpm db:migrate           # wrangler d1 migrations apply order-manager --local
+  → pnpm db:studio            # drizzle-kit studio（ブラウザで D1 ローカルを閲覧・編集）
 ```
 
-- **D1 データベース**: `wrangler.jsonc` に `[[d1_databases]]` を追加して紐付け（初期セットアップ時に実施）
-- **マイグレーション**: `drizzle-kit generate` で SQL 生成 → `wrangler d1 migrations apply` で適用
-- **環境変数**: `.dev.vars`（ローカル）/ Cloudflare ダッシュボードのシークレット（本番）
+- `pnpm db:migrate` は **必ず `--local` フラグ付き**で実行される（`package.json` で固定済み）
+- ローカル D1 の実体は `.wrangler/state/v3/d1/`（`.gitignore` 対象）
+
+#### 本番環境（GitHub Actions 経由のみ）
+
+```
+main ブランチへ push / PR マージ
+  → GitHub Actions ワークフロー
+      1. wrangler d1 migrations apply order-manager --remote   # D1 マイグレーション
+      2. wrangler deploy                                        # Workers デプロイ
+```
+
+**ルール**:
+- ローカルから `--remote` フラグを使ったマイグレーション、および `wrangler deploy` は禁止
+- Cloudflare の本番認証情報（`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`）は **GitHub Actions シークレットにのみ** 存在し、`.dev.vars` には書かない
+- `drizzle.config.ts` の `d1-http` ドライバは意図的にコメントアウト（ローカルから本番 D1 に直接接続する手段を塞いでいる）
+
+---
+
+### 8.3 環境変数・シークレット管理
+
+| 変数 | ローカル（`.dev.vars`） | 本番（Cloudflare シークレット / GitHub Actions）|
+|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | **書かない** | GitHub Actions Secret |
+| `CLOUDFLARE_ACCOUNT_ID` | **書かない** | GitHub Actions Secret |
+| アプリ固有のシークレット | `.dev.vars`（gitignore 済み） | Cloudflare Workers シークレット |
+
+> `.dev.vars` は `.gitignore` に含まれているが、本番認証情報を書く習慣自体を禁止する。
+
+---
+
+### 8.4 CI/CD ワークフロー（リリース前に追加予定）
+
+リリース前に `.github/workflows/deploy.yml` を追加する。想定フロー:
+
+```yaml
+# 概念的なフロー（実装はリリース前フェーズで追加）
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    steps:
+      - pnpm check          # lint + 型チェック
+      - pnpm test           # ユニット・コンポーネントテスト
+      - pnpm build          # Astro ビルド
+      - wrangler d1 migrations apply order-manager --remote   # DB マイグレーション
+      - wrangler deploy     # Workers デプロイ
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+```
+
+マイグレーションはデプロイより先に実行し、ロールバック時は古いコードが新スキーマで動作できることを事前に確認する（後方互換マイグレーション戦略）。

@@ -119,13 +119,16 @@ open ──[来客が「会計をお願いする」]──→ payment_requested 
 | カラム | 型 | 説明 |
 |---|---|---|
 | `id` | TEXT (UUID) | PK |
+| `store_id` | TEXT | FK → stores.id（**テナント分離用**・非正規化） |
 | `order_id` | TEXT | FK → orders.id |
 | `menu_item_id` | TEXT | FK → menu_items.id（参照用） |
 | `name_snapshot` | TEXT | **注文時点の商品名（スナップショット）** |
 | `unit_price_snapshot` | INTEGER | **注文時点の単価（スナップショット）** |
-| `quantity` | INTEGER | 注文数量 |
+| `quantity` | INTEGER | 注文数量（1 以上）|
 | `status` | TEXT | 明細の状態（下記参照） |
 | `created_at` | INTEGER (Unix ms) | 注文日時 |
+
+> **設計メモ**: `store_id` は `orders.store_id` と常に一致する冗長カラムだが、すべての DB クエリに `store_id` フィルタを必須とするマルチテナント分離ルールを `order_items` 単体で満たすために保持する。
 
 #### スナップショット保存の理由
 
@@ -149,12 +152,14 @@ ordered ──[スタッフが提供済みにマーク]──→ served
 | カラム | 型 | 説明 |
 |---|---|---|
 | `id` | TEXT (UUID) | PK |
+| `store_id` | TEXT | FK → stores.id（**テナント分離用**・非正規化） |
 | `order_id` | TEXT UNIQUE | FK → orders.id |
-| `total_amount` | INTEGER | 合計金額（円） |
-| `method` | TEXT | 支払い方法（`cash` / 将来: `card`, `qr`） |
+| `total_amount` | INTEGER | 合計金額（円、0 以上） |
+| `method` | TEXT | 支払い方法（Phase 1: `cash` / Phase 4: `card`, `qr`） |
 | `paid_at` | INTEGER (Unix ms) | 会計完了日時 |
 
 - `total_amount` は会計時点での `order_items` の `unit_price_snapshot × quantity` の合計を計算して保存する
+- `store_id` は `order_items` と同じ理由で保持する非正規化カラム
 
 ---
 
@@ -166,18 +171,17 @@ ordered ──[スタッフが提供済みにマーク]──→ served
 -- アクティブな伝票を検索（なければ INSERT）
 SELECT * FROM orders WHERE seat_id = :seatId AND status IN ('open', 'payment_requested');
 
--- 注文明細の追加
-INSERT INTO order_items (id, order_id, menu_item_id, name_snapshot, unit_price_snapshot, quantity, status, created_at)
-SELECT :id, :orderId, mi.id, mi.name, mi.price, :qty, 'ordered', :now
+-- 注文明細の追加（store_id は非正規化して保持）
+INSERT INTO order_items (id, store_id, order_id, menu_item_id, name_snapshot, unit_price_snapshot, quantity, status, created_at)
+SELECT :id, :storeId, :orderId, mi.id, mi.name, mi.price, :qty, 'ordered', :now
 FROM menu_items mi WHERE mi.id = :menuItemId AND mi.store_id = :storeId;
 ```
 
 ### ステップ 4: スタッフが提供済みにマーク
 
 ```sql
-UPDATE order_items SET status = 'served' WHERE id = :itemId AND order_id IN (
-  SELECT id FROM orders WHERE store_id = :storeId
-);
+-- store_id で直接フィルタ可能（orders への JOIN 不要）
+UPDATE order_items SET status = 'served' WHERE id = :itemId AND store_id = :storeId;
 ```
 
 ### ステップ 5a: 来店客が会計を要求
@@ -192,8 +196,8 @@ UPDATE orders SET status = 'payment_requested' WHERE id = :orderId AND status = 
 -- 合計金額を計算
 SELECT SUM(unit_price_snapshot * quantity) AS total FROM order_items WHERE order_id = :orderId;
 
--- 会計レコードを作成
-INSERT INTO payments (id, order_id, total_amount, method, paid_at) VALUES (...);
+-- 会計レコードを作成（store_id は非正規化して保持）
+INSERT INTO payments (id, store_id, order_id, total_amount, method, paid_at) VALUES (...);
 
 -- 伝票をクローズ
 UPDATE orders SET status = 'paid', closed_at = :now WHERE id = :orderId;
@@ -224,9 +228,10 @@ order_item_options: id, order_item_id, option_id, name_snapshot, price_delta_sna
 パフォーマンスに影響するクエリのために以下のインデックスを初期から設定する:
 
 ```sql
-CREATE INDEX idx_menu_items_store ON menu_items(store_id);
-CREATE INDEX idx_seats_store ON seats(store_id);
-CREATE INDEX idx_orders_seat ON orders(seat_id, status);
-CREATE INDEX idx_orders_store ON orders(store_id, status);
-CREATE INDEX idx_order_items_order ON order_items(order_id, status);
+CREATE INDEX idx_menu_items_store   ON menu_items(store_id);
+CREATE INDEX idx_seats_store        ON seats(store_id);
+CREATE INDEX idx_orders_seat        ON orders(seat_id, status);
+CREATE INDEX idx_orders_store       ON orders(store_id, status);
+CREATE INDEX idx_order_items_order  ON order_items(order_id, status);
+CREATE INDEX idx_order_items_store  ON order_items(store_id);
 ```

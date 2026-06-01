@@ -13,7 +13,10 @@
     "check": "biome check ./src && astro check",
     "fix": "biome check --write ./src",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "wrangler d1 migrations apply order-manager --local",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^13.6.0",
