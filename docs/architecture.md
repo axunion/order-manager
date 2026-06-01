@@ -11,7 +11,7 @@
 | **API** | Hono + `@hono/zod-validator` | Astro の API ルートを Hono で構成。型安全なルーティング |
 | **バリデーション** | Zod | リクエスト・レスポンスの型検証 |
 | **ORM** | Drizzle ORM | Cloudflare D1 用の型安全なクエリビルダ |
-| **テスト** | Vitest + happy-dom | ユニット・コンポーネントテスト |
+| **テスト** | Vitest (2 プロジェクト) | node プロジェクト（happy-dom）: ユニット・コンポーネントテスト。workers プロジェクト（@cloudflare/vitest-pool-workers）: API 結合テスト |
 | **Lint / Format** | Biome | コードスタイルの統一 |
 | **パッケージマネージャ** | pnpm | 高速な依存関係管理 |
 
@@ -37,17 +37,8 @@ src/
 │   │   └── checkout.astro   # ④ 会計・レジ画面
 │   ├── order/
 │   │   └── [seatToken].astro  # ③ 顧客注文画面（席 QR から開く）
-│   └── api/                 # Hono API ルート（Astro endpoint）
-│       ├── stores/
-│       │   └── [...].ts     # 店舗 CRUD
-│       ├── menu/
-│       │   └── [...].ts     # メニュー CRUD
-│       ├── seats/
-│       │   └── [...].ts     # 座席 CRUD・QR トークン
-│       ├── orders/
-│       │   └── [...].ts     # 注文・伝票の取得・作成
-│       └── payments/
-│           └── [...].ts     # 会計処理
+│   └── api/
+│       └── [...path].ts     # 単一キャッチオール → src/lib/api/index.ts の Hono app に委譲
 │
 ├── components/              # Astro / SolidJS コンポーネント
 │   ├── admin/               # 管理画面専用 SolidJS コンポーネント
@@ -197,10 +188,16 @@ src/
 Astro の API エンドポイント（`src/pages/api/`）を Hono で実装する。各リソースごとにルータを分割し、`src/lib/api/` に定義する。
 
 ```ts
-// src/pages/api/[...all].ts のイメージ
-import { app } from '../../lib/api/index';
-export const ALL = (context) => app.fetch(context.request, context.env);
+// src/pages/api/[...path].ts — 実装済み
+import { env } from "cloudflare:workers";
+import type { APIRoute } from "astro";
+import { app } from "../../lib/api";
+
+export const ALL: APIRoute = ({ request }) => app.fetch(request, env);
 ```
+
+単一のキャッチオールファイルを使うことで、新しいリソースを `src/lib/api/` に追加しても
+Astro 側のファイルを増やさずに済む。
 
 ### レスポンス形式
 

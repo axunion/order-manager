@@ -28,7 +28,7 @@ stores
 |---|---|---|
 | `id` | TEXT (UUID) | PK |
 | `name` | TEXT | 店舗名 |
-| `slug` | TEXT UNIQUE | URL フレンドリーな識別子（将来の URL 表示用） |
+| `slug` | TEXT UNIQUE | URL フレンドリーな識別子（将来の URL 表示用）。生成ルール: `slugify(店舗名) + "-" + 5 文字ランダム英数字`（例: `my-cafe-x4k2p`）。日本語のみの場合は `"store"` にフォールバック |
 | `access_token` | TEXT UNIQUE | 管理画面保護用トークン（UUID v4） |
 | `created_at` | INTEGER (Unix ms) | 登録日時 |
 | ~~`logo_url`~~ | TEXT（将来追加） | 店舗ロゴの URL |

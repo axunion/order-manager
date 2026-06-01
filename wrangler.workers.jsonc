@@ -1,0 +1,16 @@
+{
+  // Wrangler config for vitest-pool-workers (API integration tests).
+  // Excludes the "main" field intentionally — tests import Hono routes directly
+  // and do not need the Astro SSR entrypoint.
+  "name": "order-manager-test",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "order-manager",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "drizzle"
+    }
+  ]
+}

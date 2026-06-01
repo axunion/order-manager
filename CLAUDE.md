@@ -23,6 +23,11 @@
 
 ## Critical Rules
 
+### Committing Changes
+- **Never create a git commit unless the user explicitly requests it** (e.g. "commit", "コミット", "git commit").
+- Finish all implementation, tests (`pnpm test`), and lint (`pnpm check`) first, then wait for an explicit commit request.
+- Do not amend or revert commits without an explicit instruction to do so.
+
 ### Multi-tenant Data Isolation
 - Every database query that reads or writes tenant data **must** include a `store_id` filter.
 - Never fetch records by `id` alone — always also verify `store_id` matches the authenticated store.
