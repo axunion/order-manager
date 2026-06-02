@@ -34,6 +34,38 @@ export async function getStoreByAccessToken(
 }
 
 /**
+ * Minimum seat fields needed to identify the seat and its owning store.
+ * Used by the customer order screen to resolve a qr_token URL parameter.
+ */
+export type SeatSession = {
+  id: string;
+  store_id: string;
+  name: string;
+};
+
+/**
+ * Looks up the seat matching the given qr_token.
+ * Returns a SeatSession (id, store_id, name) or null if the token is invalid.
+ *
+ * Selects only the columns needed — qr_token is never returned to callers.
+ */
+export async function getSeatByQrToken(
+  db: Database,
+  token: string,
+): Promise<SeatSession | null> {
+  const result = await db
+    .select({
+      id: schema.seats.id,
+      store_id: schema.seats.store_id,
+      name: schema.seats.name,
+    })
+    .from(schema.seats)
+    .where(eq(schema.seats.qr_token, token))
+    .limit(1);
+  return result[0] ?? null;
+}
+
+/**
  * Builds a Set-Cookie header value for the admin access token.
  *
  * Pass `secure: true` in production (HTTPS) environments.

@@ -5,6 +5,7 @@ import {
   integer,
   sqliteTable,
   text,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 import { newId } from "../lib/id";
 import { now } from "../lib/time";
@@ -121,6 +122,12 @@ export const orders = sqliteTable(
   (table) => [
     index("idx_orders_seat").on(table.seat_id, table.status),
     index("idx_orders_store").on(table.store_id, table.status),
+    // Enforce the one-active-order-per-seat invariant at the DB level.
+    // Covers only 'open' and 'payment_requested' rows so historical paid
+    // orders for the same seat are unrestricted.
+    uniqueIndex("idx_one_active_order_per_seat")
+      .on(table.seat_id)
+      .where(sql`${table.status} IN ('open', 'payment_requested')`),
     check(
       "orders_status_chk",
       sql`${table.status} IN ('open', 'payment_requested', 'paid')`,

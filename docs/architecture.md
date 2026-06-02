@@ -250,6 +250,16 @@ export const menuRouter = new Hono<AuthEnv>().use(requireStore).get(...);
 | PATCH | `/api/menu/items/:id` | 商品更新 → 200 / 404 |
 | DELETE | `/api/menu/items/:id` | 商品削除 → 200 / 404 / 409 |
 
+### 顧客注文 API（Step 5 実装済み）
+
+認証: `:seatToken` URL パラメータ（`seats.qr_token`）。`requireSeat` ミドルウェアが seat + store_id を解決し、全 DB クエリに `store_id` フィルタを付与する。
+
+| メソッド | URL | 用途 |
+|---|---|---|
+| GET | `/api/order/:seatToken` | ブートストラップ（席情報・メニュー・アクティブ注文）→ 200 / 404 |
+| POST | `/api/order/:seatToken/items` | 注文追加（初回は伝票を遅延作成）→ 201 / 400 / 404 / 409 |
+| PATCH | `/api/order/:seatToken/request-payment` | 会計要求（`open → payment_requested`）→ 200 / 404 / 409 |
+
 ---
 
 ## 8. デプロイ構成

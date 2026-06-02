@@ -1,4 +1,5 @@
 import { createSignal, For, onMount, Show } from "solid-js";
+import { apiFetch, jsonFetch } from "../../lib/client";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,47 +21,6 @@ type Item = {
   category_id: string | null;
   sort_order: number;
 };
-
-// ---------------------------------------------------------------------------
-// API helpers
-// ---------------------------------------------------------------------------
-
-async function apiFetch<T>(
-  url: string,
-  init: RequestInit = {},
-): Promise<{ ok: boolean; data?: T; message?: string }> {
-  try {
-    const res = await fetch(url, init);
-    const body = (await res.json()) as
-      | { data: T }
-      | { error: { code: string; message: string } };
-    if (!res.ok) {
-      const errBody = body as { error: { code: string; message: string } };
-      return {
-        ok: false,
-        message: errBody.error?.message ?? "エラーが発生しました",
-      };
-    }
-    return { ok: true, data: (body as { data: T }).data };
-  } catch {
-    return {
-      ok: false,
-      message: "通信エラーが発生しました。再度お試しください。",
-    };
-  }
-}
-
-function jsonFetch<T>(
-  url: string,
-  method: string,
-  body: unknown,
-): Promise<{ ok: boolean; data?: T; message?: string }> {
-  return apiFetch<T>(url, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-}
 
 // ---------------------------------------------------------------------------
 // MenuManager — SolidJS Island for /admin/menu
