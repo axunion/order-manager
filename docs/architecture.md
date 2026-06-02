@@ -211,6 +211,45 @@ Astro 側のファイルを増やさずに済む。
 { "error": { "code": "NOT_FOUND", "message": "..." } }
 ```
 
+#### エラーコード一覧
+
+| コード | HTTP | 説明 |
+|---|---|---|
+| `VALIDATION_ERROR` | 400 | リクエストボディのバリデーション失敗 |
+| `UNAUTHORIZED` | 401 | `access_token` クッキーが未設定または無効 |
+| `NOT_FOUND` | 404 | リソースが存在しない、または他テナントのリソース（テナント越境防止のため 403 でなく 404 を返す） |
+| `CONFLICT` | 409 | 操作が他のデータと競合（例: 過去の注文から参照されている商品の削除） |
+| `INTERNAL_ERROR` | 500 | サーバー内部エラー |
+
+### 認証付き API ルータ（`AuthEnv`）
+
+管理画面向け API（`/api/menu/*` など）は `src/lib/api/middleware.ts` の `requireStore` ミドルウェアで保護する。
+
+```ts
+// src/lib/api/middleware.ts
+export type AuthEnv = { Bindings: Env; Variables: { store: StoreSession } };
+export const requireStore = createMiddleware<AuthEnv>(async (c, next) => { ... });
+
+// ルータ側の適用例
+export const menuRouter = new Hono<AuthEnv>().use(requireStore).get(...);
+```
+
+- `getCookie(c, ACCESS_TOKEN_COOKIE)` でクッキーを読み、`getStoreByAccessToken` で store を解決
+- 成功時は `c.var.store.id` でテナント ID を取得し、全 DB クエリに `store_id` フィルタを付与
+
+### メニュー管理 API（Step 3 実装済み）
+
+| メソッド | URL | 用途 |
+|---|---|---|
+| GET | `/api/menu/categories` | カテゴリ一覧（`sort_order` 昇順） |
+| POST | `/api/menu/categories` | カテゴリ作成 → 201 |
+| PATCH | `/api/menu/categories/:id` | カテゴリ更新 → 200 / 404 |
+| DELETE | `/api/menu/categories/:id` | カテゴリ削除 → 200 / 404 |
+| GET | `/api/menu/items` | 商品一覧（`sort_order` 昇順） |
+| POST | `/api/menu/items` | 商品作成 → 201 |
+| PATCH | `/api/menu/items/:id` | 商品更新 → 200 / 404 |
+| DELETE | `/api/menu/items/:id` | 商品削除 → 200 / 404 / 409 |
+
 ---
 
 ## 8. デプロイ構成
