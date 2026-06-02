@@ -1,0 +1,265 @@
+---
+/**
+ * ② 管理画面 — 座席管理・QR 発行（/admin/seats）
+ *
+ * Auth is handled by src/middleware.ts; Astro.locals.store is guaranteed non-null here.
+ * Renders the SolidJS SeatManager Island for seat CRUD and QR code display.
+ */
+import SeatManager from "../../components/admin/SeatManager";
+
+// store is guaranteed by src/middleware.ts for all /admin/* routes.
+// The guard below should never trigger; it exists to surface misconfiguration clearly.
+const store = Astro.locals.store;
+if (!store) return Astro.redirect("/register");
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{store.name} — 座席管理</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 0;
+        background: #f5f5f5;
+        min-height: 100dvh;
+      }
+
+      header {
+        background: #6366f1;
+        color: #fff;
+        padding: 1rem 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      header h1 {
+        margin: 0;
+        font-size: 1.2rem;
+      }
+
+      .badge {
+        font-size: 0.75rem;
+        background: rgb(255 255 255 / 0.2);
+        padding: 0.2rem 0.5rem;
+        border-radius: 99px;
+      }
+
+      .nav-link {
+        margin-left: auto;
+        color: rgb(255 255 255 / 0.8);
+        text-decoration: none;
+        font-size: 0.875rem;
+      }
+
+      .nav-link:hover {
+        color: #fff;
+      }
+
+      main {
+        padding: 2rem 1.5rem;
+        max-width: 960px;
+        margin: 0 auto;
+      }
+
+      /* ── SeatManager Island styles ── */
+      .seat-manager {
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+      }
+
+      .seat-error {
+        background: #fef2f2;
+        border: 1px solid #fca5a5;
+        color: #b91c1c;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        margin: 0;
+      }
+
+      .seat-section {
+        background: #fff;
+        border-radius: 12px;
+        padding: 1.5rem;
+      }
+
+      .seat-section h2 {
+        margin: 0 0 1.25rem;
+        font-size: 1rem;
+        font-weight: 600;
+        color: #111827;
+      }
+
+      .seat-form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: flex-end;
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        min-width: 200px;
+      }
+
+      .field label {
+        font-size: 0.8rem;
+        color: #6b7280;
+        font-weight: 500;
+      }
+
+      .field input {
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        padding: 0.4rem 0.6rem;
+        font-size: 0.9rem;
+        width: 100%;
+      }
+
+      .field input:focus {
+        outline: 2px solid #6366f1;
+        outline-offset: 1px;
+        border-color: transparent;
+      }
+
+      .seat-form button[type="submit"] {
+        background: #6366f1;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 0.45rem 1rem;
+        font-size: 0.9rem;
+        cursor: pointer;
+        white-space: nowrap;
+        align-self: flex-end;
+      }
+
+      .seat-form button[type="submit"]:hover:not(:disabled) {
+        background: #4f46e5;
+      }
+
+      .seat-form button[type="submit"]:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .empty {
+        color: #9ca3af;
+        text-align: center;
+        padding: 1rem 0;
+        margin: 0;
+      }
+
+      .seat-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .seat-list-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1rem;
+        background: #f9fafb;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        flex-wrap: wrap;
+      }
+
+      .seat-info {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+      }
+
+      .item-name {
+        font-weight: 600;
+        color: #111827;
+        font-size: 1rem;
+      }
+
+      .seat-url {
+        color: #6366f1;
+        font-size: 0.8rem;
+        word-break: break-all;
+        text-decoration: none;
+      }
+
+      .seat-url:hover {
+        text-decoration: underline;
+      }
+
+      .seat-qr img {
+        display: block;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+      }
+
+      .seat-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        justify-content: flex-start;
+      }
+
+      .btn-secondary {
+        background: #f3f4f6;
+        color: #374151;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        padding: 0.3rem 0.65rem;
+        font-size: 0.8rem;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .btn-secondary:hover {
+        background: #e5e7eb;
+      }
+
+      .btn-danger {
+        background: #fef2f2;
+        color: #dc2626;
+        border: 1px solid #fca5a5;
+        border-radius: 6px;
+        padding: 0.3rem 0.65rem;
+        font-size: 0.8rem;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .btn-danger:hover {
+        background: #fee2e2;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>{store.name}</h1>
+      <span class="badge">座席管理</span>
+      <a href="/admin" class="nav-link">← 管理トップ</a>
+    </header>
+
+    <main>
+      <SeatManager client:load />
+    </main>
+  </body>
+</html>

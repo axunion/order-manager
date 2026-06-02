@@ -76,16 +76,18 @@ if (!store) return Astro.redirect("/register");
     </header>
 
     <main>
-      <!--
-        Step 4〜6 で座席管理・注文ボードをここに追加する。
-      -->
       <div class="placeholder">
         <p>
           <a href="/admin/menu" style="color: #6366f1; font-weight: 600;">
             📋 メニュー管理
           </a>
         </p>
-        <p style="margin-top: 0.5rem; color: #9ca3af;">座席管理・注文確認は順次追加されます。</p>
+        <p style="margin-top: 0.5rem;">
+          <a href="/admin/seats" style="color: #6366f1; font-weight: 600;">
+            🪑 座席管理・QR 発行
+          </a>
+        </p>
+        <p style="margin-top: 0.5rem; color: #9ca3af;">注文確認・会計は順次追加されます。</p>
       </div>
     </main>
   </body>

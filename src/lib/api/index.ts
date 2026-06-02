@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { menuRouter } from "./menu";
+import { seatsRouter } from "./seats";
 import { storesRouter } from "./stores";
 
 /**
@@ -10,5 +11,6 @@ const app = new Hono<{ Bindings: Env }>();
 
 app.route("/api/stores", storesRouter);
 app.route("/api/menu", menuRouter);
+app.route("/api/seats", seatsRouter);
 
 export { app };
