@@ -53,7 +53,7 @@ Step 6. ② 管理画面 - 注文確認・提供管理（/admin/orders）✅
         └─ ポーリングで新規注文を取得・表示（GET /api/admin/orders?since=）
         └─ 明細ごとに「提供済み」マーク（PATCH /api/admin/orders/items/:id/serve）
 
-Step 7. ④ 会計・レジ画面（/admin/checkout）
+Step 7. ④ 会計・レジ画面（/admin/checkout）✅
         └─ 会計要求中の伝票一覧表示
         └─ 伝票の注文明細と合計金額の表示
         └─ 「会計完了」ボタン（POST /api/payments）
