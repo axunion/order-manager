@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { createDb, schema } from "../../db/client";
 import { newId } from "../id";
 import { app } from "./index";
+import { jsonInit } from "./test-helpers";
 
 // ---------------------------------------------------------------------------
 // Seed helpers
@@ -70,23 +71,6 @@ async function seedCategory(storeId: string, name: string): Promise<string> {
     sort_order: 0,
   });
   return id;
-}
-
-/** Sends a JSON request. */
-function jsonInit(
-  method: string,
-  body: unknown,
-  extra: RequestInit = {},
-): RequestInit {
-  return {
-    ...extra,
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(extra.headers as Record<string, string> | undefined),
-    },
-    body: JSON.stringify(body),
-  };
 }
 
 // ---------------------------------------------------------------------------

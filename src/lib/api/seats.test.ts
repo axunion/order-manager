@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { createDb, schema } from "../../db/client";
 import { newId } from "../id";
 import { app } from "./index";
+import { jsonInit, withAuth } from "./test-helpers";
 
 // ---------------------------------------------------------------------------
 // Seed helpers
@@ -24,34 +25,6 @@ async function seedStore(name: string): Promise<SeedStore> {
     access_token,
   });
   return { id, access_token };
-}
-
-/** Returns request init with Cookie header set to the given access_token. */
-function withAuth(access_token: string, extra: RequestInit = {}): RequestInit {
-  return {
-    ...extra,
-    headers: {
-      ...(extra.headers as Record<string, string> | undefined),
-      Cookie: `access_token=${access_token}`,
-    },
-  };
-}
-
-/** Sends a JSON request. */
-function jsonInit(
-  method: string,
-  body: unknown,
-  extra: RequestInit = {},
-): RequestInit {
-  return {
-    ...extra,
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(extra.headers as Record<string, string> | undefined),
-    },
-    body: JSON.stringify(body),
-  };
 }
 
 // ---------------------------------------------------------------------------

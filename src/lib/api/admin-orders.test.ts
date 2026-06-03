@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createDb, schema } from "../../db/client";
 import { newId } from "../id";
 import { app } from "./index";
+import { withAuth } from "./test-helpers";
 
 // ---------------------------------------------------------------------------
 // Seed helpers
@@ -52,17 +53,6 @@ async function seedMenuItem(
     sort_order: 0,
   });
   return id;
-}
-
-/** Returns RequestInit with the admin access_token Cookie. */
-function withAuth(access_token: string, extra: RequestInit = {}): RequestInit {
-  return {
-    ...extra,
-    headers: {
-      ...(extra.headers as Record<string, string> | undefined),
-      Cookie: `access_token=${access_token}`,
-    },
-  };
 }
 
 // ---------------------------------------------------------------------------
