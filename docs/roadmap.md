@@ -49,9 +49,9 @@ Step 5. ③ 顧客注文画面（/order/:seatToken）
         └─ 自分の注文履歴と合計金額の表示
         └─ 「会計をお願いする」ボタン（PATCH /api/orders/:id/request-payment）
 
-Step 6. ② 管理画面 - 注文確認・提供管理（/admin の OrderBoard）
-        └─ ポーリングで新規注文を取得・表示（GET /api/orders?since=）
-        └─ 明細ごとに「提供済み」マーク（PATCH /api/orders/items/:id/serve）
+Step 6. ② 管理画面 - 注文確認・提供管理（/admin/orders）✅
+        └─ ポーリングで新規注文を取得・表示（GET /api/admin/orders?since=）
+        └─ 明細ごとに「提供済み」マーク（PATCH /api/admin/orders/items/:id/serve）
 
 Step 7. ④ 会計・レジ画面（/admin/checkout）
         └─ 会計要求中の伝票一覧表示
