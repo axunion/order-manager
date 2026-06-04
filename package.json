@@ -41,6 +41,7 @@
     "drizzle-kit": "^0.31.10",
     "happy-dom": "^20.9.0",
     "lefthook": "^2.1.9",
+    "lightningcss": "^1.32.0",
     "typescript": "^6.0.3",
     "vite-plugin-solid": "^2.11.12",
     "vitest": "^4.1.7",

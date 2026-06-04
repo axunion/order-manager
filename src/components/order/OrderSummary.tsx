@@ -1,5 +1,6 @@
 import { createSignal, For, Show } from "solid-js";
 import type { Order } from "./OrderScreen";
+import styles from "./OrderSummary.module.css";
 
 // ---------------------------------------------------------------------------
 // OrderSummary — shows current order items, total, and payment request button
@@ -31,26 +32,26 @@ export default function OrderSummary(props: {
   }
 
   return (
-    <section class="order-summary">
-      <h2>ご注文内容</h2>
+    <section class={styles.section}>
+      <h2 class={styles.heading}>ご注文内容</h2>
 
       <Show when={error()}>
-        <p class="summary-error" role="alert">
+        <p class={styles.alertError} role="alert">
           {error()}
         </p>
       </Show>
 
       <Show
         when={props.order && props.order.items.length > 0}
-        fallback={<p class="empty">注文がまだありません</p>}
+        fallback={<p class={styles.empty}>注文がまだありません</p>}
       >
-        <ul class="order-items">
+        <ul class={styles.items}>
           <For each={props.order?.items ?? []}>
             {(item) => (
-              <li class="order-item">
-                <span class="order-item-name">{item.name_snapshot}</span>
-                <span class="order-item-qty">× {item.quantity}</span>
-                <span class="order-item-price">
+              <li class={styles.item}>
+                <span class={styles.itemName}>{item.name_snapshot}</span>
+                <span class={styles.itemQty}>× {item.quantity}</span>
+                <span class={styles.itemPrice}>
                   ¥{(item.unit_price_snapshot * item.quantity).toLocaleString()}
                 </span>
               </li>
@@ -58,9 +59,9 @@ export default function OrderSummary(props: {
           </For>
         </ul>
 
-        <div class="order-total">
+        <div class={styles.total}>
           <span>合計</span>
-          <span class="total-amount">
+          <span class={styles.totalAmount}>
             ¥{(props.order?.total ?? 0).toLocaleString()}
           </span>
         </div>
@@ -70,7 +71,7 @@ export default function OrderSummary(props: {
           fallback={
             <button
               type="button"
-              class="btn-payment"
+              class={styles.btnPayment}
               onClick={handleRequestPayment}
               disabled={requesting()}
             >
@@ -78,7 +79,7 @@ export default function OrderSummary(props: {
             </button>
           }
         >
-          <p class="payment-requested-msg" aria-live="polite">
+          <p class={styles.paymentRequestedMsg} aria-live="polite">
             会計をお待ちください。スタッフが参ります。
           </p>
         </Show>

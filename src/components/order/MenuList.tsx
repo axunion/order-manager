@@ -1,4 +1,5 @@
 import { createSignal, For, Show } from "solid-js";
+import styles from "./MenuList.module.css";
 import type { AddItemsInput, Category, MenuItem } from "./OrderScreen";
 
 // ---------------------------------------------------------------------------
@@ -114,44 +115,44 @@ export default function MenuList(props: {
   // ---------------------------------------------------------------------------
 
   return (
-    <section class="menu-section">
-      <h2>メニュー</h2>
+    <section class={styles.section}>
+      <h2 class={styles.heading}>メニュー</h2>
 
       <Show when={error()}>
-        <p class="menu-error" role="alert">
+        <p class={styles.alertError} role="alert">
           {error()}
         </p>
       </Show>
 
       <Show when={success()}>
-        <p class="menu-success" aria-live="polite">
+        <p class={styles.alertSuccess} aria-live="polite">
           {success()}
         </p>
       </Show>
 
       <Show
         when={props.items.length > 0}
-        fallback={<p class="empty">メニューがまだ登録されていません</p>}
+        fallback={<p class={styles.empty}>メニューがまだ登録されていません</p>}
       >
         <For each={groupedItems()}>
           {(group) => (
-            <div class="menu-group">
-              <h3 class="menu-category">{group.categoryName}</h3>
-              <ul class="menu-list">
+            <div class={styles.group}>
+              <h3 class={styles.categoryLabel}>{group.categoryName}</h3>
+              <ul class={styles.list}>
                 <For each={group.items}>
                   {(item) => (
-                    <li class="menu-item">
-                      <div class="menu-item-info">
-                        <span class="menu-item-name">{item.name}</span>
-                        <span class="menu-item-price">
+                    <li class={styles.item}>
+                      <div class={styles.itemInfo}>
+                        <span class={styles.itemName}>{item.name}</span>
+                        <span class={styles.itemPrice}>
                           ¥{item.price.toLocaleString()}
                         </span>
                       </div>
-                      <div class="menu-item-order">
-                        <div class="quantity-control">
+                      <div class={styles.itemOrder}>
+                        <div class={styles.quantityControl}>
                           <button
                             type="button"
-                            class="qty-btn"
+                            class={styles.qtyBtn}
                             aria-label={`${item.name}の数量を減らす`}
                             onClick={() =>
                               setQuantity(item.id, getQuantity(item.id) - 1)
@@ -160,10 +161,12 @@ export default function MenuList(props: {
                           >
                             −
                           </button>
-                          <span class="qty-value">{getQuantity(item.id)}</span>
+                          <span class={styles.qtyValue}>
+                            {getQuantity(item.id)}
+                          </span>
                           <button
                             type="button"
-                            class="qty-btn"
+                            class={styles.qtyBtn}
                             aria-label={`${item.name}の数量を増やす`}
                             onClick={() =>
                               setQuantity(item.id, getQuantity(item.id) + 1)
@@ -175,7 +178,7 @@ export default function MenuList(props: {
                         </div>
                         <button
                           type="button"
-                          class="btn-order"
+                          class={styles.btnOrder}
                           aria-label={`${item.name}を注文する`}
                           onClick={() => handleOrderItem(item.id)}
                           disabled={submitting()}

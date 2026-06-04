@@ -13,6 +13,7 @@
 | **ORM** | Drizzle ORM | Cloudflare D1 用の型安全なクエリビルダ |
 | **テスト** | Vitest (2 プロジェクト) | node プロジェクト（happy-dom）: ユニット・コンポーネントテスト。workers プロジェクト（@cloudflare/vitest-pool-workers）: API 結合テスト |
 | **Lint / Format** | Biome | コードスタイルの統一 |
+| **CSS** | CSS Modules + lightningcss | コンポーネント共置スタイル・高速変換・自動プレフィックス |
 | **パッケージマネージャ** | pnpm | 高速な依存関係管理 |
 
 設定ファイルの参照:
@@ -46,10 +47,13 @@ src/
 │   │   ├── SeatManager.tsx
 │   │   ├── OrderBoard.tsx   # リアルタイム注文一覧
 │   │   └── CheckoutPanel.tsx
-│   ├── order/               # 顧客注文画面専用
-│   │   ├── MenuList.tsx
-│   │   └── OrderSummary.tsx
-│   └── ui/                  # 共通 UI 部品
+│   ├── order/               # 顧客注文画面専用（各 .tsx に .module.css を共置）
+│   │   ├── OrderScreen.tsx + OrderScreen.module.css
+│   │   ├── MenuList.tsx + MenuList.module.css
+│   │   └── OrderSummary.tsx + OrderSummary.module.css
+│   ├── register/            # 申込み画面専用
+│   │   └── RegisterForm.tsx + RegisterForm.module.css
+│   └── ui/                  # 共通 UI 部品（Button / Field / Card）
 │
 ├── db/
 │   ├── schema.ts            # Drizzle スキーマ定義（D1/SQLite）
@@ -68,12 +72,58 @@ src/
 │       ├── index.ts         # インターフェース定義
 │       └── polling.ts       # ポーリング実装
 │
+├── styles/
+│   ├── tokens.css           # デザイントークン（CSS 変数・単一の真実）
+│   └── global.css           # グローバルベース（リセット・body）
 └── env.d.ts                 # 型定義（Cloudflare Workers 型）
 ```
 
 ---
 
-## 3. マルチテナント設計
+## 3. スタイリング方針
+
+### 採用構成
+
+| 技術 | 役割 |
+|---|---|
+| **CSS Modules** (`.module.css`) | コンポーネントとスタイルを同ディレクトリに共置。スコープ付きクラス名でコンフリクトを防ぐ |
+| **lightningcss** | Vite の CSS トランスフォーマとして動作。CSS nesting・自動プレフィックス・高速ミニファイ |
+| **`src/styles/tokens.css`** | 全デザイン値の単一の真実。CSS カスタムプロパティ（`--color-*`・`--space-*` 等）として定義 |
+| **`src/styles/global.css`** | `tokens.css` を import してグローバルリセット・body スタイルを適用 |
+| **`src/components/ui/`** | `Button` / `Field` / `Card` など再利用可能な共通コンポーネント。SolidJS `.tsx` + 共置 `.module.css` |
+
+### ルール
+
+- **生の色・px・rem 値は `tokens.css` の `:root` にのみ書く。** 他のすべての CSS ファイルは `var(--...)` でトークンを参照する。
+- CSS Modules ファイル内では `var(--color-primary)` などのトークン参照のみ許可。hex コードや数値の直書きは禁止。
+- SolidJS コンポーネント (`.tsx`) は同ディレクトリに `.module.css` を持ち、`import styles from './Foo.module.css'` → `class={styles.foo}` 形式で参照する。
+- `.astro` ページが持つ `<style>` ブロックはページシェル（ヘッダー・レイアウト）のみを対象とし、コンポーネント固有のスタイルは `.module.css` に置く。
+
+### CSS Modules 移行ステータス
+
+| ファイル / コンポーネント | 状態 |
+|---|---|
+| `src/styles/tokens.css` + `global.css` | ✅ 新規作成済み |
+| `src/layouts/Layout.astro` | ✅ global.css を読み込む形に整備済み |
+| `src/components/ui/` (Button / Field / Card) | ✅ 新規作成済み |
+| `register.astro` + `RegisterForm.tsx` | ✅ CSS Modules 移行済み |
+| `order/[seatToken].astro` + OrderScreen / MenuList / OrderSummary | ✅ CSS Modules 移行済み |
+| `admin/index.astro` | ⬜ 旧 `<style>` ブロックのまま |
+| `admin/orders.astro` + `OrderBoard.tsx` | ⬜ 旧 `<style>` ブロックのまま |
+| `admin/menu.astro` + `MenuManager.tsx` | ⬜ 旧 `<style>` ブロックのまま |
+| `admin/seats.astro` + `SeatManager.tsx` | ⬜ 旧 `<style>` ブロックのまま |
+| `admin/checkout.astro` + `CheckoutPanel.tsx` | ⬜ 旧 `<style>` ブロックのまま |
+
+移行手順と完了基準は `docs/roadmap.md` の「スタイリング基盤 Follow-up」節を参照。
+
+### Phase 3 テーマ対応の布石
+
+- プライマリカラーは `--color-primary` 系のトークンに集約済み。
+- Phase 3 で `stores.theme_color` を取得後、`<html style="--color-primary: ...">` のようなインラインスタイルで上書きするだけでテーマが反映される設計。
+
+---
+
+## 4. マルチテナント設計
 
 ### 基本方針
 

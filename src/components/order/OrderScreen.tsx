@@ -1,6 +1,7 @@
 import { createSignal, onMount, Show } from "solid-js";
 import { apiFetch, jsonFetch } from "../../lib/client";
 import MenuList from "./MenuList";
+import styles from "./OrderScreen.module.css";
 import OrderSummary from "./OrderSummary";
 
 // ---------------------------------------------------------------------------
@@ -139,15 +140,15 @@ export default function OrderScreen(props: {
   // ---------------------------------------------------------------------------
 
   return (
-    <div class="order-screen">
+    <div class={styles.screen}>
       <Show when={loading()}>
-        <p class="order-loading" aria-live="polite">
+        <p class={styles.loading} aria-live="polite">
           読み込み中...
         </p>
       </Show>
 
       <Show when={!loading() && error()}>
-        <p class="order-error" role="alert">
+        <p class={styles.error} role="alert">
           {error()}
         </p>
       </Show>

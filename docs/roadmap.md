@@ -67,9 +67,69 @@ Step 8. 業務サイクルの結合テスト
 
 - [x] 申込みから会計完了まで一通りの業務サイクルが動作する
 - [x] 異なる 2 店舗のデータが互いに見えないこと（マルチテナント分離）
-- [ ] 顧客注文画面がモバイルで正常に表示・操作できること
+- [x] 顧客注文画面がモバイルで正常に表示・操作できること（CSS Modules + トークンで整備済み）
 - [x] ポーリングで注文が管理画面に届くこと（最大 5 秒以内）
 - [x] `pnpm check` と `pnpm test` が通ること
+
+---
+
+## スタイリング基盤 Follow-up（Phase 2 着手前に完了推奨）
+
+**目標**: CSS Modules + デザイントークンへの移行を admin 画面まで完了させ、ハードコードされた色を全廃する。
+
+### 背景と現状
+
+前セッションでスタイリング基盤（lightningcss・`src/styles/tokens.css`・CSS Modules）を整備し、2 画面で参照実装を完了した。
+
+| 画面ファイル | SolidJS コンポーネント | 状態 |
+|---|---|---|
+| `src/pages/register.astro` | `RegisterForm.tsx + .module.css` | ✅ 完了 |
+| `src/pages/order/[seatToken].astro` | `OrderScreen / MenuList / OrderSummary + .module.css` | ✅ 完了 |
+| `src/pages/admin/index.astro` | なし（純 Astro） | ⬜ 未対応 |
+| `src/pages/admin/orders.astro` | `components/admin/OrderBoard.tsx` | ⬜ 未対応 |
+| `src/pages/admin/menu.astro` | `components/admin/MenuManager.tsx` | ⬜ 未対応 |
+| `src/pages/admin/seats.astro` | `components/admin/SeatManager.tsx` | ⬜ 未対応 |
+| `src/pages/admin/checkout.astro` | `components/admin/CheckoutPanel.tsx` | ⬜ 未対応 |
+
+### 移行パターン（完了済み画面を参考にすること）
+
+1. **`.astro` ページの `<style>` を読む** — どのクラスが SolidJS コンポーネント側で使われているか確認する
+2. **`.module.css` を `components/admin/` に新規作成** — すべての値を `var(--...)` トークン参照に置換（`src/styles/tokens.css` を参照）
+3. **`.tsx` を更新** — `import styles from './Foo.module.css'` を追加し、`class="foo-bar"` → `class={styles.fooBar}` に置換
+4. **`.astro` の `<style>` を縮小** — ページシェル（header / main のレイアウト）のみ残し、コンポーネント固有スタイルは削除。変数はすでに `Layout.astro` 経由でグローバルに読み込まれているので `var(--...)` が使える
+5. **`pnpm check && pnpm test`** で確認
+
+共通 UI (`src/components/ui/Button`, `Field`, `Card`) は必要に応じて管理画面でも流用してよい。
+
+### 完了基準
+
+- `src/` 全体で `#6366f1` / `#4f46e5`（旧インディゴ）がゼロ件になること（`grep -r "#6366f1" src/` で確認）
+- `pnpm check && pnpm test` が通ること
+
+---
+
+## Kobalte 導入（admin アクセシビリティ強化）
+
+**目標**: admin 画面の `<select>` やダイアログ的 UI を、アクセシブルなヘッドレスコンポーネントに置き換える。
+
+### 背景
+
+admin 画面（MenuManager / SeatManager 等）にはネイティブ `<select>` や独自実装のモーダル相当の UI がある。Kobalte はアンスタイルドの SolidJS 用ヘッドレス UI ライブラリで、ARIA・キーボード操作を自動で提供しつつ、スタイルは CSS Modules + トークンで完全制御できる。
+
+### 実装方針
+
+1. `pnpm add @kobalte/core` でインストール
+2. コンポーネント固有の `.module.css` に `data-*` 属性セレクタでスタイルを当てる（Kobalte のスタイリング仕様）
+   ```css
+   /* 例: Select */
+   .trigger[data-expanded] { border-color: var(--color-primary); }
+   .item[data-highlighted]  { background: var(--color-primary); color: var(--color-primary-foreground); }
+   ```
+3. 対象コンポーネントを特定し、1 コンポーネントずつ置き換える
+
+### 着手前の前提
+
+スタイリング基盤 Follow-up（admin CSS Modules 移行）が完了していること。
 
 ---
 
@@ -103,7 +163,7 @@ Phase 1 の DB スキーマ設計時点で `order_items` に `option_groups` へ
 
 ### 前提
 
-- 顧客注文画面が Phase 1 から CSS 変数ベースで実装されていること
+- 顧客注文画面が Phase 1 から CSS 変数ベースで実装されていること ✅（`src/styles/tokens.css` + CSS Modules で完備済み）
 - 画像ストレージ（Cloudflare R2 など）の検討が必要
 
 ---

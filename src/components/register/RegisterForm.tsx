@@ -1,4 +1,7 @@
 import { createSignal } from "solid-js";
+import Button from "../ui/Button";
+import Field from "../ui/Field";
+import styles from "./RegisterForm.module.css";
 
 /**
  * Store registration form (申込み画面).
@@ -21,13 +24,19 @@ export default function RegisterForm() {
         body: JSON.stringify({ name: name() }),
       });
 
-      const body = (await res.json()) as
-        | { data: { id: string; name: string; slug: string } }
-        | { error: { code: string; message: string } };
-
       if (!res.ok) {
-        const errBody = body as { error: { code: string; message: string } };
-        setError(errBody.error?.message ?? "登録に失敗しました");
+        // Parse the error body separately so a non-JSON infrastructure error
+        // (e.g. a Cloudflare HTML 503 page) doesn't mask the HTTP status.
+        let message = "登録に失敗しました";
+        try {
+          const errBody = (await res.json()) as {
+            error: { code: string; message: string };
+          };
+          message = errBody.error?.message ?? message;
+        } catch {
+          // non-JSON error body — keep the fallback message
+        }
+        setError(message);
         return;
       }
 
@@ -41,30 +50,21 @@ export default function RegisterForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} class="register-form">
-      <div class="field">
-        <label for="store-name">店舗名</label>
-        <input
-          id="store-name"
-          type="text"
-          value={name()}
-          onInput={(e) => setName(e.currentTarget.value)}
-          placeholder="例：山田珈琲店"
-          required
-          maxLength={100}
-          disabled={submitting()}
-        />
-      </div>
-
-      {error() && (
-        <p class="error" role="alert">
-          {error()}
-        </p>
-      )}
-
-      <button type="submit" disabled={submitting()}>
+    <form onSubmit={handleSubmit} class={styles.form}>
+      <Field
+        id="store-name"
+        label="店舗名"
+        value={name()}
+        onInput={(e) => setName(e.currentTarget.value)}
+        placeholder="例：山田珈琲店"
+        required
+        maxLength={100}
+        disabled={submitting()}
+        error={error()}
+      />
+      <Button type="submit" fullWidth disabled={submitting()}>
         {submitting() ? "登録中..." : "登録する"}
-      </button>
+      </Button>
     </form>
   );
 }
