@@ -1,0 +1,80 @@
+---
+/**
+ * Shared layout for all admin pages.
+ *
+ * Wraps Layout.astro (inheriting charset, viewport, favicon, generator meta).
+ * Provides: admin header with store name + badge, optional back-navigation link,
+ * and a centred <main> container. Component-specific content via <slot />.
+ */
+import Layout from "./Layout.astro";
+
+interface Props {
+  /** Browser tab title (store name will be prepended automatically). */
+  title: string;
+  /** Store display name shown in the header. */
+  storeName: string;
+  /** Short label shown as a pill badge next to the store name. */
+  badge: string;
+  /** Optional href for the back-navigation link (e.g. "/admin"). */
+  backHref?: string;
+  /** Optional label for the back-navigation link (e.g. "← 管理トップ"). */
+  backLabel?: string;
+}
+
+const { title, storeName, badge, backHref, backLabel } = Astro.props;
+---
+
+<Layout title={`${storeName} — ${title}`}>
+  <header>
+    <h1>{storeName}</h1>
+    <span class="badge">{badge}</span>
+    {backHref && backLabel && (
+      <a href={backHref} class="nav-link">{backLabel}</a>
+    )}
+  </header>
+
+  <main>
+    <slot />
+  </main>
+</Layout>
+
+<style>
+  header {
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
+    padding: var(--space-4) var(--space-6);
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  header h1 {
+    margin: 0;
+    font-size: var(--text-xl);
+    font-weight: var(--font-semibold);
+  }
+
+  .badge {
+    font-size: var(--text-xs);
+    background: rgb(255 255 255 / 0.2);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-full);
+  }
+
+  .nav-link {
+    margin-left: auto;
+    color: rgb(255 255 255 / 0.8);
+    text-decoration: none;
+    font-size: var(--text-sm);
+  }
+
+  .nav-link:hover {
+    color: var(--color-primary-foreground);
+  }
+
+  main {
+    padding: var(--space-8) var(--space-6);
+    max-width: 960px;
+    margin: 0 auto;
+  }
+</style>

@@ -58,6 +58,11 @@
   --color-success-border: hsl(152 60% 66%);
   --color-success-fg: hsl(160 84% 22%);
 
+  /* Solid-fill action green (for success-variant buttons). Follows .primary pattern. */
+  --color-success: hsl(160 84% 31%);
+  --color-success-hover: hsl(160 85% 25%);
+  --color-success-active: hsl(160 87% 19%);
+
   /* ── Spacing scale (rem) ──────────────────────────────────────────────── */
   --space-1: 0.25rem; /*  4px */
   --space-2: 0.5rem; /*  8px */

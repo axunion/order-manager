@@ -1,5 +1,8 @@
 import { createSignal, For, onMount, Show } from "solid-js";
 import { apiFetch, jsonFetch } from "../../lib/client";
+import Button from "../ui/Button";
+import ErrorAlert from "../ui/ErrorAlert";
+import styles from "./MenuManager.module.css";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -174,21 +177,19 @@ export default function MenuManager() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div class="menu-manager">
+    <div class={styles.menuManager}>
       {/* Global error */}
       <Show when={error()}>
-        <p class="menu-error" role="alert">
-          {error()}
-        </p>
+        <ErrorAlert>{error()}</ErrorAlert>
       </Show>
 
       {/* ── Categories ── */}
-      <section class="menu-section">
+      <section class={styles.menuSection}>
         <h2>メニューカテゴリ</h2>
 
         {/* Add category form */}
-        <form onSubmit={handleCategorySubmit} class="menu-form">
-          <div class="field">
+        <form onSubmit={handleCategorySubmit} class={styles.menuForm}>
+          <div class={styles.field}>
             <label for="cat-name">カテゴリ名</label>
             <input
               id="cat-name"
@@ -201,7 +202,7 @@ export default function MenuManager() {
               disabled={catSubmitting()}
             />
           </div>
-          <div class="field">
+          <div class={styles.field}>
             <label for="cat-sort">表示順</label>
             <input
               id="cat-sort"
@@ -212,30 +213,30 @@ export default function MenuManager() {
               disabled={catSubmitting()}
             />
           </div>
-          <button type="submit" disabled={catSubmitting()}>
+          <Button type="submit" disabled={catSubmitting()}>
             {catSubmitting() ? "追加中..." : "カテゴリを追加"}
-          </button>
+          </Button>
         </form>
 
         {/* Category list */}
         <Show
           when={categories().length > 0}
-          fallback={<p class="empty">カテゴリがまだありません</p>}
+          fallback={<p class={styles.empty}>カテゴリがまだありません</p>}
         >
-          <ul class="menu-list">
+          <ul class={styles.menuList}>
             <For each={categories()}>
               {(cat) => (
-                <li class="menu-list-item">
-                  <span class="item-name">{cat.name}</span>
-                  <span class="item-sort">順: {cat.sort_order}</span>
-                  <button
-                    type="button"
-                    class="btn-danger"
+                <li class={styles.menuListItem}>
+                  <span class={styles.itemName}>{cat.name}</span>
+                  <span class={styles.itemSort}>順: {cat.sort_order}</span>
+                  <Button
+                    variant="danger"
+                    size="sm"
                     aria-label={`削除 ${cat.name}`}
                     onClick={() => handleCategoryDelete(cat.id, cat.name)}
                   >
                     削除
-                  </button>
+                  </Button>
                 </li>
               )}
             </For>
@@ -244,12 +245,12 @@ export default function MenuManager() {
       </section>
 
       {/* ── Items ── */}
-      <section class="menu-section">
+      <section class={styles.menuSection}>
         <h2>メニュー商品</h2>
 
         {/* Add item form */}
-        <form onSubmit={handleItemSubmit} class="menu-form">
-          <div class="field">
+        <form onSubmit={handleItemSubmit} class={styles.menuForm}>
+          <div class={styles.field}>
             <label for="item-name">商品名</label>
             <input
               id="item-name"
@@ -262,7 +263,7 @@ export default function MenuManager() {
               disabled={itemSubmitting()}
             />
           </div>
-          <div class="field">
+          <div class={styles.field}>
             <label for="item-price">価格（円）</label>
             <input
               id="item-price"
@@ -275,7 +276,7 @@ export default function MenuManager() {
               disabled={itemSubmitting()}
             />
           </div>
-          <div class="field">
+          <div class={styles.field}>
             <label for="item-category">カテゴリ</label>
             <select
               id="item-category"
@@ -289,7 +290,7 @@ export default function MenuManager() {
               </For>
             </select>
           </div>
-          <div class="field field-check">
+          <div class={[styles.field, styles.fieldCheck].join(" ")}>
             <label>
               <input
                 type="checkbox"
@@ -300,7 +301,7 @@ export default function MenuManager() {
               提供中
             </label>
           </div>
-          <div class="field">
+          <div class={styles.field}>
             <label for="item-sort">表示順</label>
             <input
               id="item-sort"
@@ -311,17 +312,17 @@ export default function MenuManager() {
               disabled={itemSubmitting()}
             />
           </div>
-          <button type="submit" disabled={itemSubmitting()}>
+          <Button type="submit" disabled={itemSubmitting()}>
             {itemSubmitting() ? "追加中..." : "商品を追加"}
-          </button>
+          </Button>
         </form>
 
         {/* Item list */}
         <Show
           when={items().length > 0}
-          fallback={<p class="empty">商品がまだありません</p>}
+          fallback={<p class={styles.empty}>商品がまだありません</p>}
         >
-          <ul class="menu-list">
+          <ul class={styles.menuList}>
             <For each={items()}>
               {(item) => {
                 const catName = () =>
@@ -329,32 +330,39 @@ export default function MenuManager() {
                   "なし";
                 return (
                   <li
-                    class="menu-list-item"
-                    classList={{ unavailable: !item.is_available }}
+                    class={styles.menuListItem}
+                    classList={{
+                      [styles.menuListItemUnavailable]: !item.is_available,
+                    }}
                   >
-                    <span class="item-name">{item.name}</span>
-                    <span class="item-price">
+                    <span class={styles.itemName}>{item.name}</span>
+                    <span class={styles.itemPrice}>
                       ¥{item.price.toLocaleString()}
                     </span>
-                    <span class="item-category">{catName()}</span>
-                    <span class="item-status">
+                    <span class={styles.itemCategory}>{catName()}</span>
+                    <span
+                      class={styles.itemStatus}
+                      classList={{
+                        [styles.itemStatusUnavailable]: !item.is_available,
+                      }}
+                    >
                       {item.is_available ? "提供中" : "提供停止"}
                     </span>
-                    <button
-                      type="button"
-                      class="btn-secondary"
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => handleToggleAvailability(item)}
                     >
                       {item.is_available ? "停止" : "再開"}
-                    </button>
-                    <button
-                      type="button"
-                      class="btn-danger"
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
                       aria-label={`削除 ${item.name}`}
                       onClick={() => handleItemDelete(item.id)}
                     >
                       削除
-                    </button>
+                    </Button>
                   </li>
                 );
               }}

@@ -5,6 +5,7 @@
  * Auth is handled by src/middleware.ts; Astro.locals.store is guaranteed non-null here.
  * Subsequent steps (Step 3〜6) add menu/seat/order management to this page.
  */
+import AdminLayout from "../../layouts/AdminLayout.astro";
 
 // store is guaranteed by src/middleware.ts for all /admin/* routes.
 // The guard below should never trigger; it exists to surface misconfiguration clearly.
@@ -12,92 +13,48 @@ const store = Astro.locals.store;
 if (!store) return Astro.redirect("/register");
 ---
 
-<!doctype html>
-<html lang="ja">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{store.name} — 管理画面</title>
-    <style>
-      *,
-      *::before,
-      *::after {
-        box-sizing: border-box;
-      }
+<AdminLayout title="管理画面" storeName={store.name} badge="管理画面">
+  <div class="placeholder">
+    <p>
+      <a href="/admin/menu" class="menu-link">📋 メニュー管理</a>
+    </p>
+    <p>
+      <a href="/admin/seats" class="menu-link">🪑 座席管理・QR 発行</a>
+    </p>
+    <p>
+      <a href="/admin/orders" class="menu-link">🍽️ 注文確認・提供管理</a>
+    </p>
+    <p>
+      <a href="/admin/checkout" class="menu-link">💰 会計・レジ</a>
+    </p>
+  </div>
+</AdminLayout>
 
-      body {
-        font-family: system-ui, sans-serif;
-        margin: 0;
-        background: #f5f5f5;
-        min-height: 100dvh;
-      }
+<style>
+  .placeholder {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    padding: var(--space-8);
+    border: 2px dashed var(--color-border);
+    color: var(--color-subtle-foreground);
+    text-align: center;
+  }
 
-      header {
-        background: #6366f1;
-        color: #fff;
-        padding: 1rem 1.5rem;
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-      }
+  .placeholder p {
+    margin: 0;
+  }
 
-      header h1 {
-        margin: 0;
-        font-size: 1.2rem;
-      }
+  .placeholder p + p {
+    margin-top: var(--space-2);
+  }
 
-      .badge {
-        font-size: 0.75rem;
-        background: rgb(255 255 255 / 0.2);
-        padding: 0.2rem 0.5rem;
-        border-radius: 99px;
-      }
+  .menu-link {
+    color: var(--color-primary);
+    font-weight: var(--font-semibold);
+    text-decoration: none;
+  }
 
-      main {
-        padding: 2rem 1.5rem;
-        max-width: 960px;
-        margin: 0 auto;
-      }
-
-      .placeholder {
-        background: #fff;
-        border-radius: 12px;
-        padding: 2rem;
-        border: 2px dashed #e5e7eb;
-        color: #9ca3af;
-        text-align: center;
-      }
-    </style>
-  </head>
-  <body>
-    <header>
-      <h1>{store.name}</h1>
-      <span class="badge">管理画面</span>
-    </header>
-
-    <main>
-      <div class="placeholder">
-        <p>
-          <a href="/admin/menu" style="color: #6366f1; font-weight: 600;">
-            📋 メニュー管理
-          </a>
-        </p>
-        <p style="margin-top: 0.5rem;">
-          <a href="/admin/seats" style="color: #6366f1; font-weight: 600;">
-            🪑 座席管理・QR 発行
-          </a>
-        </p>
-        <p style="margin-top: 0.5rem;">
-          <a href="/admin/orders" style="color: #6366f1; font-weight: 600;">
-            🍽️ 注文確認・提供管理
-          </a>
-        </p>
-        <p style="margin-top: 0.5rem;">
-          <a href="/admin/checkout" style="color: #6366f1; font-weight: 600;">
-            💰 会計・レジ
-          </a>
-        </p>
-      </div>
-    </main>
-  </body>
-</html>
+  .menu-link:hover {
+    text-decoration: underline;
+  }
+</style>

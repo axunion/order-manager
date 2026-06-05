@@ -1,5 +1,8 @@
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { apiFetch } from "../../lib/client";
+import Button from "../ui/Button";
+import ErrorAlert from "../ui/ErrorAlert";
+import styles from "./OrderBoard.module.css";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -97,61 +100,70 @@ export default function OrderBoard() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div class="order-board">
+    <div class={styles.orderBoard}>
       {/* Global error */}
       <Show when={error()}>
-        <p class="order-board-error" role="alert">
-          {error()}
-        </p>
+        <ErrorAlert>{error()}</ErrorAlert>
       </Show>
 
       {/* Empty state */}
       <Show when={orders().length === 0 && !error()}>
-        <div class="order-board-empty">
+        <div class={styles.orderBoardEmpty}>
           <p>アクティブな注文はありません</p>
         </div>
       </Show>
 
       {/* Order list */}
-      <div class="order-list">
+      <div class={styles.orderList}>
         <For each={orders()}>
           {(order) => (
             <article
-              class={`order-card${order.status === "payment_requested" ? " order-card--pay-requested" : ""}`}
+              class={styles.orderCard}
+              classList={{
+                [styles.orderCardPayRequested]:
+                  order.status === "payment_requested",
+              }}
             >
               {/* Order header */}
-              <div class="order-card-header">
-                <span class="order-seat-name">{order.seat_name}</span>
+              <div class={styles.orderCardHeader}>
+                <span class={styles.orderSeatName}>{order.seat_name}</span>
                 <Show when={order.status === "payment_requested"}>
-                  <span class="order-badge-pay">会計要求中</span>
+                  <span class={styles.orderBadgePay}>会計要求中</span>
                 </Show>
-                <span class="order-total">{formatCurrency(order.total)}</span>
+                <span class={styles.orderTotal}>
+                  {formatCurrency(order.total)}
+                </span>
               </div>
 
               {/* Line items */}
-              <ul class="order-items">
+              <ul class={styles.orderItems}>
                 <For each={order.items}>
                   {(item) => (
                     <li
-                      class={`order-item${item.status === "served" ? " order-item--served" : ""}`}
+                      class={styles.orderItem}
+                      classList={{
+                        [styles.orderItemServed]: item.status === "served",
+                      }}
                     >
-                      <span class="order-item-name">{item.name_snapshot}</span>
-                      <span class="order-item-qty">× {item.quantity}</span>
-                      <span class="order-item-price">
+                      <span class={styles.orderItemName}>
+                        {item.name_snapshot}
+                      </span>
+                      <span class={styles.orderItemQty}>× {item.quantity}</span>
+                      <span class={styles.orderItemPrice}>
                         {formatCurrency(
                           item.unit_price_snapshot * item.quantity,
                         )}
                       </span>
-                      <button
-                        type="button"
-                        class="btn-serve"
+                      <Button
+                        variant="success"
+                        size="sm"
                         disabled={
                           item.status === "served" || serving().has(item.id)
                         }
                         onClick={() => handleServe(item.id)}
                       >
                         {serving().has(item.id) ? "処理中..." : "提供済み"}
-                      </button>
+                      </Button>
                     </li>
                   )}
                 </For>

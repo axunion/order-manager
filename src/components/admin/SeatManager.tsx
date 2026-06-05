@@ -1,6 +1,9 @@
 import QRCode from "qrcode";
 import { createSignal, For, onMount, Show } from "solid-js";
 import { apiFetch, jsonFetch } from "../../lib/client";
+import Button from "../ui/Button";
+import ErrorAlert from "../ui/ErrorAlert";
+import styles from "./SeatManager.module.css";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -136,19 +139,17 @@ export default function SeatManager() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div class="seat-manager">
+    <div class={styles.seatManager}>
       {/* Global error */}
       <Show when={error()}>
-        <p class="seat-error" role="alert">
-          {error()}
-        </p>
+        <ErrorAlert>{error()}</ErrorAlert>
       </Show>
 
       {/* ── Add seat form ── */}
-      <section class="seat-section">
+      <section class={styles.seatSection}>
         <h2>座席を追加</h2>
-        <form onSubmit={handleSubmit} class="seat-form">
-          <div class="field">
+        <form onSubmit={handleSubmit} class={styles.seatForm}>
+          <div class={styles.field}>
             <label for="seat-name">座席名</label>
             <input
               id="seat-name"
@@ -161,30 +162,30 @@ export default function SeatManager() {
               disabled={submitting()}
             />
           </div>
-          <button type="submit" disabled={submitting()}>
+          <Button type="submit" disabled={submitting()}>
             {submitting() ? "追加中..." : "座席を追加"}
-          </button>
+          </Button>
         </form>
       </section>
 
       {/* ── Seat list ── */}
-      <section class="seat-section">
+      <section class={styles.seatSection}>
         <h2>座席一覧</h2>
         <Show
           when={seats().length > 0}
-          fallback={<p class="empty">座席がまだありません</p>}
+          fallback={<p class={styles.empty}>座席がまだありません</p>}
         >
-          <ul class="seat-list">
+          <ul class={styles.seatList}>
             <For each={seats()}>
               {(seat) => {
                 const orderUrl = () =>
                   `${window.location.origin}/order/${seat.qr_token}`;
                 return (
-                  <li class="seat-list-item">
-                    <div class="seat-info">
-                      <span class="item-name">{seat.name}</span>
+                  <li class={styles.seatListItem}>
+                    <div class={styles.seatInfo}>
+                      <span class={styles.itemName}>{seat.name}</span>
                       <a
-                        class="seat-url"
+                        class={styles.seatUrl}
                         href={orderUrl()}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -193,7 +194,7 @@ export default function SeatManager() {
                       </a>
                     </div>
                     <Show when={qrUrls()[seat.id]}>
-                      <div class="seat-qr">
+                      <div class={styles.seatQr}>
                         <img
                           src={qrUrls()[seat.id]}
                           alt={`QR ${seat.name}`}
@@ -202,22 +203,22 @@ export default function SeatManager() {
                         />
                       </div>
                     </Show>
-                    <div class="seat-actions">
-                      <button
-                        type="button"
-                        class="btn-secondary"
+                    <div class={styles.seatActions}>
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => handleCopyUrl(seat.qr_token)}
                       >
                         URLをコピー
-                      </button>
-                      <button
-                        type="button"
-                        class="btn-danger"
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
                         aria-label={`削除 ${seat.name}`}
                         onClick={() => handleDelete(seat.id)}
                       >
                         削除
-                      </button>
+                      </Button>
                     </div>
                   </li>
                 );

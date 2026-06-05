@@ -85,11 +85,11 @@ Step 8. 業務サイクルの結合テスト
 |---|---|---|
 | `src/pages/register.astro` | `RegisterForm.tsx + .module.css` | ✅ 完了 |
 | `src/pages/order/[seatToken].astro` | `OrderScreen / MenuList / OrderSummary + .module.css` | ✅ 完了 |
-| `src/pages/admin/index.astro` | なし（純 Astro） | ⬜ 未対応 |
-| `src/pages/admin/orders.astro` | `components/admin/OrderBoard.tsx` | ⬜ 未対応 |
-| `src/pages/admin/menu.astro` | `components/admin/MenuManager.tsx` | ⬜ 未対応 |
-| `src/pages/admin/seats.astro` | `components/admin/SeatManager.tsx` | ⬜ 未対応 |
-| `src/pages/admin/checkout.astro` | `components/admin/CheckoutPanel.tsx` | ⬜ 未対応 |
+| `src/pages/admin/index.astro` | なし（純 Astro） | ✅ 完了 |
+| `src/pages/admin/orders.astro` | `components/admin/OrderBoard.tsx` | ✅ 完了 |
+| `src/pages/admin/menu.astro` | `components/admin/MenuManager.tsx` | ✅ 完了 |
+| `src/pages/admin/seats.astro` | `components/admin/SeatManager.tsx` | ✅ 完了 |
+| `src/pages/admin/checkout.astro` | `components/admin/CheckoutPanel.tsx` | ✅ 完了 |
 
 ### 移行パターン（完了済み画面を参考にすること）
 

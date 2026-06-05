@@ -1,5 +1,8 @@
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { apiFetch, jsonFetch } from "../../lib/client";
+import Button from "../ui/Button";
+import ErrorAlert from "../ui/ErrorAlert";
+import styles from "./CheckoutPanel.module.css";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -111,52 +114,50 @@ export default function CheckoutPanel() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div class="checkout-panel">
+    <div class={styles.checkoutPanel}>
       {/* Action error (会計失敗) — persists until next action, not cleared by poll */}
       <Show when={actionError()}>
-        <p class="checkout-panel-error" role="alert">
-          {actionError()}
-        </p>
+        <ErrorAlert>{actionError()}</ErrorAlert>
       </Show>
 
       {/* Poll error (GET failure) — shown only when there is no action error */}
       <Show when={pollError() && !actionError()}>
-        <p class="checkout-panel-error" role="alert">
-          {pollError()}
-        </p>
+        <ErrorAlert>{pollError()}</ErrorAlert>
       </Show>
 
       {/* Empty state */}
       <Show when={orders().length === 0 && !pollError() && !actionError()}>
-        <div class="checkout-panel-empty">
+        <div class={styles.checkoutPanelEmpty}>
           <p>会計待ちの伝票はありません</p>
         </div>
       </Show>
 
       {/* Pending order list */}
-      <div class="checkout-list">
+      <div class={styles.checkoutList}>
         <For each={orders()}>
           {(order) => (
-            <article class="checkout-card">
+            <article class={styles.checkoutCard}>
               {/* Bill header */}
-              <div class="checkout-card-header">
-                <span class="checkout-seat-name">{order.seat_name}</span>
-                <span class="checkout-badge-pay">会計要求中</span>
-                <span class="checkout-total">
+              <div class={styles.checkoutCardHeader}>
+                <span class={styles.checkoutSeatName}>{order.seat_name}</span>
+                <span class={styles.checkoutBadgePay}>会計要求中</span>
+                <span class={styles.checkoutTotal}>
                   {formatCurrency(order.total)}
                 </span>
               </div>
 
               {/* Line items */}
-              <ul class="checkout-items">
+              <ul class={styles.checkoutItems}>
                 <For each={order.items}>
                   {(item) => (
-                    <li class="checkout-item">
-                      <span class="checkout-item-name">
+                    <li class={styles.checkoutItem}>
+                      <span class={styles.checkoutItemName}>
                         {item.name_snapshot}
                       </span>
-                      <span class="checkout-item-qty">× {item.quantity}</span>
-                      <span class="checkout-item-price">
+                      <span class={styles.checkoutItemQty}>
+                        × {item.quantity}
+                      </span>
+                      <span class={styles.checkoutItemPrice}>
                         {formatCurrency(
                           item.unit_price_snapshot * item.quantity,
                         )}
@@ -167,15 +168,14 @@ export default function CheckoutPanel() {
               </ul>
 
               {/* Checkout action */}
-              <div class="checkout-card-footer">
-                <button
-                  type="button"
-                  class="btn-checkout"
+              <div class={styles.checkoutCardFooter}>
+                <Button
+                  variant="success"
                   disabled={processing().has(order.id)}
                   onClick={() => handleCheckout(order.id)}
                 >
                   {processing().has(order.id) ? "処理中..." : "会計完了"}
-                </button>
+                </Button>
               </div>
             </article>
           )}
