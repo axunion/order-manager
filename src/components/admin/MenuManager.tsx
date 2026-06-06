@@ -1,7 +1,9 @@
 import { createSignal, For, onMount, Show } from "solid-js";
 import { apiFetch, jsonFetch } from "../../lib/client";
 import Button from "../ui/Button";
+import ConfirmDialog from "../ui/ConfirmDialog";
 import ErrorAlert from "../ui/ErrorAlert";
+import Select from "../ui/Select";
 import styles from "./MenuManager.module.css";
 
 // ---------------------------------------------------------------------------
@@ -229,14 +231,13 @@ export default function MenuManager() {
                 <li class={styles.menuListItem}>
                   <span class={styles.itemName}>{cat.name}</span>
                   <span class={styles.itemSort}>順: {cat.sort_order}</span>
-                  <Button
-                    variant="danger"
-                    size="sm"
+                  <ConfirmDialog
+                    triggerLabel="削除"
                     aria-label={`削除 ${cat.name}`}
-                    onClick={() => handleCategoryDelete(cat.id, cat.name)}
-                  >
-                    削除
-                  </Button>
+                    title="カテゴリの削除"
+                    description={`「${cat.name}」を削除しますか？この操作は元に戻せません。`}
+                    onConfirm={() => handleCategoryDelete(cat.id, cat.name)}
+                  />
                 </li>
               )}
             </For>
@@ -278,17 +279,17 @@ export default function MenuManager() {
           </div>
           <div class={styles.field}>
             <label for="item-category">カテゴリ</label>
-            <select
+            <Select
               id="item-category"
-              value={itemCategoryId()}
-              onChange={(e) => setItemCategoryId(e.currentTarget.value)}
+              options={categories().map((c) => ({
+                value: c.id,
+                label: c.name,
+              }))}
+              value={itemCategoryId() || null}
+              onChange={setItemCategoryId}
+              placeholder="-- なし --"
               disabled={itemSubmitting()}
-            >
-              <option value="">-- なし --</option>
-              <For each={categories()}>
-                {(cat) => <option value={cat.id}>{cat.name}</option>}
-              </For>
-            </select>
+            />
           </div>
           <div class={[styles.field, styles.fieldCheck].join(" ")}>
             <label>
@@ -355,14 +356,13 @@ export default function MenuManager() {
                     >
                       {item.is_available ? "停止" : "再開"}
                     </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
+                    <ConfirmDialog
+                      triggerLabel="削除"
                       aria-label={`削除 ${item.name}`}
-                      onClick={() => handleItemDelete(item.id)}
-                    >
-                      削除
-                    </Button>
+                      title="商品の削除"
+                      description={`「${item.name}」を削除しますか？この操作は元に戻せません。`}
+                      onConfirm={() => handleItemDelete(item.id)}
+                    />
                   </li>
                 );
               }}

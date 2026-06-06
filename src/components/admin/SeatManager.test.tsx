@@ -1,4 +1,4 @@
-import { render } from "@solidjs/testing-library";
+import { render, screen } from "@solidjs/testing-library";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import SeatManager from "./SeatManager";
@@ -128,7 +128,7 @@ describe("SeatManager", () => {
     );
   });
 
-  it("sends DELETE to /api/seats/:id when delete is clicked", async () => {
+  it("sends DELETE to /api/seats/:id when delete is confirmed", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch([
       {
@@ -154,11 +154,15 @@ describe("SeatManager", () => {
     ]);
     vi.stubGlobal("fetch", fetchMock);
 
-    const { findByRole } = render(() => <SeatManager />);
-    const deleteBtn = await findByRole("button", {
+    render(() => <SeatManager />);
+    const deleteBtn = await screen.findByRole("button", {
       name: /削除.*To Delete|To Delete.*削除/,
     });
     await user.click(deleteBtn);
+
+    // Confirm in the dialog
+    const confirmBtn = await screen.findByRole("button", { name: "削除する" });
+    await user.click(confirmBtn);
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/seats/s3",
@@ -228,13 +232,17 @@ describe("SeatManager", () => {
     ]);
     vi.stubGlobal("fetch", fetchMock);
 
-    const { findByRole } = render(() => <SeatManager />);
-    const deleteBtn = await findByRole("button", {
+    render(() => <SeatManager />);
+    const deleteBtn = await screen.findByRole("button", {
       name: /削除.*Busy Seat|Busy Seat.*削除/,
     });
     await user.click(deleteBtn);
 
-    const alert = await findByRole("alert");
+    // Confirm in the dialog
+    const confirmBtn = await screen.findByRole("button", { name: "削除する" });
+    await user.click(confirmBtn);
+
+    const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("削除できません");
   });
 });

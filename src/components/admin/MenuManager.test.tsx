@@ -1,4 +1,4 @@
-import { render } from "@solidjs/testing-library";
+import { render, screen } from "@solidjs/testing-library";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import MenuManager from "./MenuManager";
@@ -157,7 +157,7 @@ describe("MenuManager", () => {
     );
   });
 
-  it("sends DELETE to /api/menu/categories/:id when delete is clicked", async () => {
+  it("sends DELETE to /api/menu/categories/:id when delete is confirmed", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch([
       {
@@ -178,11 +178,15 @@ describe("MenuManager", () => {
     ]);
     vi.stubGlobal("fetch", fetchMock);
 
-    const { findByRole } = render(() => <MenuManager />);
-    const deleteBtn = await findByRole("button", {
+    render(() => <MenuManager />);
+    const deleteBtn = await screen.findByRole("button", {
       name: /削除.*To Delete|To Delete.*削除/,
     });
     await user.click(deleteBtn);
+
+    // Confirm in the dialog
+    const confirmBtn = await screen.findByRole("button", { name: "削除する" });
+    await user.click(confirmBtn);
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/menu/categories/c3",
@@ -190,7 +194,7 @@ describe("MenuManager", () => {
     );
   });
 
-  it("sends DELETE to /api/menu/items/:id when delete is clicked", async () => {
+  it("sends DELETE to /api/menu/items/:id when delete is confirmed", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch([
       { url: "/api/menu/categories", method: "GET", json: { data: [] } },
@@ -219,11 +223,15 @@ describe("MenuManager", () => {
     ]);
     vi.stubGlobal("fetch", fetchMock);
 
-    const { findByRole } = render(() => <MenuManager />);
-    const deleteBtn = await findByRole("button", {
+    render(() => <MenuManager />);
+    const deleteBtn = await screen.findByRole("button", {
       name: /削除.*To Delete Item|To Delete Item.*削除/,
     });
     await user.click(deleteBtn);
+
+    // Confirm in the dialog
+    const confirmBtn = await screen.findByRole("button", { name: "削除する" });
+    await user.click(confirmBtn);
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/menu/items/i3",

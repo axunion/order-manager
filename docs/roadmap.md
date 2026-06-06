@@ -112,24 +112,19 @@ Step 8. 業務サイクルの結合テスト
 
 **目標**: admin 画面の `<select>` やダイアログ的 UI を、アクセシブルなヘッドレスコンポーネントに置き換える。
 
-### 背景
+### 完了内容
 
-admin 画面（MenuManager / SeatManager 等）にはネイティブ `<select>` や独自実装のモーダル相当の UI がある。Kobalte はアンスタイルドの SolidJS 用ヘッドレス UI ライブラリで、ARIA・キーボード操作を自動で提供しつつ、スタイルは CSS Modules + トークンで完全制御できる。
+- [x] `@kobalte/core 0.13.11` インストール
+- [x] `src/components/ui/Select.tsx` — Kobalte Select をラップした汎用コンポーネント（`data-*` 属性スタイリング・トークン参照）
+- [x] `src/components/ui/ConfirmDialog.tsx` — Kobalte AlertDialog をラップした削除確認ダイアログ（`role="alertdialog"`・ARIA 完備）
+- [x] `MenuManager.tsx` — カテゴリ `<select>` を `ui/Select` に置換、カテゴリ/商品の削除を `ConfirmDialog` 経由に変更
+- [x] `SeatManager.tsx` — 座席の削除を `ConfirmDialog` 経由に変更
+- [x] `pnpm check` と `pnpm test`（node 126 件 + workers 120 件）通過
 
-### 実装方針
+### 実装メモ
 
-1. `pnpm add @kobalte/core` でインストール
-2. コンポーネント固有の `.module.css` に `data-*` 属性セレクタでスタイルを当てる（Kobalte のスタイリング仕様）
-   ```css
-   /* 例: Select */
-   .trigger[data-expanded] { border-color: var(--color-primary); }
-   .item[data-highlighted]  { background: var(--color-primary); color: var(--color-primary-foreground); }
-   ```
-3. 対象コンポーネントを特定し、1 コンポーネントずつ置き換える
-
-### 着手前の前提
-
-スタイリング基盤 Follow-up（admin CSS Modules 移行）が完了していること。
+- Kobalte の Presence コンポーネントは happy-dom でアンマウントが非同期になるため、`AlertDialog` は SolidJS の `Show` でラップして即時マウント制御する設計を採用した。
+- テスト間の DOM 汚染を防ぐため、`@solidjs/testing-library` の `cleanup` を各テストファイルの `afterEach` で明示的に呼び出すパターンを標準化した。
 
 ---
 

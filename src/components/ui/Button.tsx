@@ -2,8 +2,8 @@ import type { JSX } from "solid-js";
 import { splitProps } from "solid-js";
 import styles from "./Button.module.css";
 
-type Variant = "primary" | "secondary" | "danger" | "ghost" | "success";
-type Size = "sm" | "md" | "lg";
+export type Variant = "primary" | "secondary" | "danger" | "ghost" | "success";
+export type Size = "sm" | "md" | "lg";
 
 interface ButtonProps extends JSX.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;

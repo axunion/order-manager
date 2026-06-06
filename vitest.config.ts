@@ -22,6 +22,7 @@ export default defineConfig({
         test: {
           name: "node",
           environment: "happy-dom",
+          setupFiles: ["./test/setup-node.ts"],
           include: [
             "src/db/**/*.test.ts",
             // glob covers all current and future src/lib/*.test.ts except api/

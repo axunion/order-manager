@@ -2,6 +2,7 @@ import QRCode from "qrcode";
 import { createSignal, For, onMount, Show } from "solid-js";
 import { apiFetch, jsonFetch } from "../../lib/client";
 import Button from "../ui/Button";
+import ConfirmDialog from "../ui/ConfirmDialog";
 import ErrorAlert from "../ui/ErrorAlert";
 import styles from "./SeatManager.module.css";
 
@@ -211,14 +212,13 @@ export default function SeatManager() {
                       >
                         URLをコピー
                       </Button>
-                      <Button
-                        variant="danger"
-                        size="sm"
+                      <ConfirmDialog
+                        triggerLabel="削除"
                         aria-label={`削除 ${seat.name}`}
-                        onClick={() => handleDelete(seat.id)}
-                      >
-                        削除
-                      </Button>
+                        title="座席の削除"
+                        description={`「${seat.name}」を削除しますか？この操作は元に戻せません。`}
+                        onConfirm={() => handleDelete(seat.id)}
+                      />
                     </div>
                   </li>
                 );
