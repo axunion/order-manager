@@ -1,9 +1,9 @@
 {
-	"mcpServers": {
-		"context7": {
-			"type": "stdio",
-			"command": "pnpx",
-			"args": ["@upstash/context7-mcp@3.0.0"]
-		}
-	}
+  "mcpServers": {
+    "context7": {
+      "type": "stdio",
+      "command": "pnpx",
+      "args": ["@upstash/context7-mcp@3.0.0"]
+    }
+  }
 }

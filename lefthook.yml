@@ -5,10 +5,7 @@ pre-commit:
       glob: "**/*.{js,ts,jsx,tsx,astro,json,jsonc}"
       run: pnpm biome check --write {staged_files}
       stage_fixed: true
-    - name: test
-      run: pnpm test
-
-pre-push:
-  jobs:
     - name: typecheck
       run: pnpm astro check
+    - name: test
+      run: pnpm test
