@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENT.md
 
 ## Language
 - Code comments, `CLAUDE.md`, `README.md`, and all AI-readable config files must be written in **English**.

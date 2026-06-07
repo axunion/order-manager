@@ -2,8 +2,17 @@
   "name": "order-manager",
   "type": "module",
   "version": "0.0.1",
-  "engines": {
-    "node": ">=22.12.0"
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "24.16.0",
+      "onFail": "warn"
+    },
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.5.2",
+      "onFail": "warn"
+    }
   },
   "scripts": {
     "dev": "astro dev",
