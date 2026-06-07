@@ -54,6 +54,7 @@ CREATE TABLE `orders` (
 --> statement-breakpoint
 CREATE INDEX `idx_orders_seat` ON `orders` (`seat_id`,`status`);--> statement-breakpoint
 CREATE INDEX `idx_orders_store` ON `orders` (`store_id`,`status`);--> statement-breakpoint
+CREATE UNIQUE INDEX `idx_one_active_order_per_seat` ON `orders` (`seat_id`) WHERE "orders"."status" IN ('open', 'payment_requested');--> statement-breakpoint
 CREATE TABLE `payments` (
 	`id` text PRIMARY KEY NOT NULL,
 	`store_id` text NOT NULL,

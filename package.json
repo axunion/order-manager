@@ -25,6 +25,8 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "wrangler d1 migrations apply order-manager --local",
+    "db:reset": "rm -rf .wrangler/state/v3/d1 && pnpm db:migrate",
+    "db:rebuild": "rm -rf drizzle/*.sql drizzle/meta && pnpm db:generate && pnpm db:reset",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

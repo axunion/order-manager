@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f39fa9ca-5392-4530-bb99-505bdd00dbb1",
+  "id": "400c6dc1-595d-427d-85c1-99a997612e4c",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "menu_categories": {
@@ -321,6 +321,12 @@
           "name": "idx_orders_store",
           "columns": ["store_id", "status"],
           "isUnique": false
+        },
+        "idx_one_active_order_per_seat": {
+          "name": "idx_one_active_order_per_seat",
+          "columns": ["seat_id"],
+          "isUnique": true,
+          "where": "\"orders\".\"status\" IN ('open', 'payment_requested')"
         }
       },
       "foreignKeys": {

@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX `idx_one_active_order_per_seat` ON `orders` (`seat_id`) WHERE "orders"."status" IN ('open', 'payment_requested');

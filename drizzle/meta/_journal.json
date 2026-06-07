@@ -5,15 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1780319150428,
-      "tag": "0000_busy_nekra",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1780412166518,
-      "tag": "0001_spotty_magneto",
+      "when": 1780831964540,
+      "tag": "0000_sour_zarek",
       "breakpoints": true
     }
   ]
