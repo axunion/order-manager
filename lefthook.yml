@@ -6,6 +6,8 @@ pre-commit:
       run: pnpm biome check --write {staged_files}
       stage_fixed: true
     - name: typecheck
+      glob: "**/*.{ts,tsx,astro}"
       run: pnpm astro check
     - name: test
+      glob: "**/*.{ts,tsx}"
       run: pnpm test

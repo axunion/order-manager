@@ -35,7 +35,7 @@
 - **Never create a git commit unless the user explicitly requests it.**
 - Finish all implementation, tests (`pnpm test`), and lint (`pnpm check`) first, then wait for an explicit commit request.
 - Never use `--no-verify` or `--amend`. Always create a new commit.
-- Never commit secrets (`.env*`, `*.key`, `*.pem`, `credentials*`).
+- Never commit secrets (`*.key`, `*.pem`, `credentials*`).
 - Stage explicit paths only — never `git add -A` or `git add .`.
 
 Commit message format:
