@@ -31,6 +31,9 @@ src/
 ├── pages/                   # Astro のファイルベースルーティング
 │   ├── index.astro          # (リダイレクト用 or ランディング)
 │   ├── register.astro       # ① 申込み画面
+│   ├── register/
+│   │   └── check-email.astro  # 申込み後「メールを確認してください」案内
+│   ├── login.astro          # ⑤ Magic Link ログイン画面
 │   ├── admin/
 │   │   ├── index.astro      # ② 店舗管理画面（ダッシュボード）
 │   │   ├── menu.astro       # ② メニュー管理
@@ -61,12 +64,13 @@ src/
 │
 ├── lib/
 │   ├── api/                 # Hono アプリ（ルーター定義）
-│   │   ├── stores.ts
+│   │   ├── auth.ts          # Magic Link 認証 API（/api/stores, /api/auth/*）
 │   │   ├── menu.ts
 │   │   ├── seats.ts
 │   │   ├── orders.ts
 │   │   └── payments.ts
-│   ├── auth.ts              # 簡易トークン検証
+│   ├── auth.ts              # セッション検証（getStoreBySession・SESSION_TOKEN_COOKIE）
+│   ├── email.ts             # メール送信（Resend 経由）
 │   ├── qr.ts                # QR コードトークン生成・検証
 │   └── notification/        # 注文通知の抽象層（将来の WebSocket 移行に対応）
 │       ├── index.ts         # インターフェース定義
@@ -135,7 +139,7 @@ src/
 
 ```
 管理画面アクセス時:
-  Cookie("access_token") → stores テーブルで照合 → store_id を確定 → 以降すべての DB クエリに store_id を付与
+  Cookie("session_token") → sessions テーブルで照合 → store_id を確定 → 以降すべての DB クエリに store_id を付与
 
 顧客注文画面アクセス時:
   URL パラメータ(:seatToken) → seats テーブルで照合 → seat.store_id を確定 → 以降すべての DB クエリに store_id を付与
@@ -143,28 +147,39 @@ src/
 
 ---
 
-## 4. 画面とルーティングの対応
+## 5. 画面とルーティングの対応
 
 | 画面 | URL | アクセス制御 | 備考 |
 |---|---|---|---|
-| ① 申込み画面 | `/register` | 公開 | 店舗登録フォーム |
-| ② 管理画面 | `/admin` | 簡易トークン（Cookie） | SSR でトークン検証 |
+| ① 申込み画面 | `/register` | 公開 | 店舗名＋メール登録フォーム |
+| メール確認案内 | `/register/check-email` | 公開 | 申込み後の案内ページ（リダイレクト先） |
+| ⑤ ログイン画面 | `/login` | 公開 | Magic Link 送信フォーム |
+| ② 管理画面 | `/admin` | session_token Cookie | Astro middleware で検証 |
 | ③ 顧客注文画面 | `/order/:seatToken` | QR トークン（URL パラメータ） | `seatToken` で席と店舗を識別 |
-| ④ 会計・レジ画面 | `/admin/checkout` | 簡易トークン（Cookie） | 管理画面と同一の保護 |
+| ④ 会計・レジ画面 | `/admin/checkout` | session_token Cookie | 管理画面と同一の保護 |
+
+### API エンドポイント（認証系）
+
+| メソッド | URL | 用途 |
+|---|---|---|
+| POST | `/api/stores` | 申込み（店舗作成・Magic Link 送信） → 201 |
+| GET | `/api/auth/verify` | Magic Link 検証・session 発行 → リダイレクト |
+| POST | `/api/auth/login` | ログイン Magic Link 送信 → 200 |
+| POST | `/api/auth/logout` | session 削除・Cookie クリア → 200 |
 
 ### 管理画面の保護フロー（Astro SSR ミドルウェア）
 
+詳細は `docs/onboarding.md` 4 節（セッション設計 > セッション検証フロー）を参照。概要:
+
 ```
-1. `/admin` へのリクエスト
-2. Cookie から access_token を取得
-3. `stores` テーブルで access_token を検索
-4. 存在しない → `/register` にリダイレクト
-5. 存在する → store_id をページに渡して表示
+/admin リクエスト → session_token Cookie 確認 → sessions テーブル検索・期限確認
+→ stores.status = "active" 確認 → store_id を確定してページへ渡す
+（Cookie なし / 期限切れ → /login、pending → /register/check-email）
 ```
 
 ---
 
-## 5. リアルタイム注文通知（両論併記）
+## 6. リアルタイム注文通知（両論併記）
 
 管理画面が「新規注文をリアルタイムで受け取る」仕組みについて、2 案を検討する。初期フェーズでの採用は **案 A（ポーリング）**を推奨とし、将来的な案 B への移行を可能にする設計とする。
 
@@ -213,25 +228,55 @@ src/
 
 ---
 
-## 6. 認証設計
+## 7. 認証設計
 
-### 初期フェーズ: 簡易トークン
+### Magic Link 認証（管理画面）
+
+店舗オーナーはパスワードなしに Magic Link メールで認証する。詳細フローは `docs/onboarding.md` を参照。
 
 | 用途 | トークン | 保存場所 |
 |---|---|---|
-| 管理画面ログイン | `stores.access_token`（UUID v4） | HTTP-only Cookie |
+| 申込み・ログイン | `magic_link_tokens.token`（UUID v4、15 分・一回限り） | D1（短命レコード）→ メールに URL 埋め込み |
+| 管理画面セッション | `sessions.session_token`（UUID v4、30 日） | HttpOnly Cookie |
 | 顧客注文画面の席識別 | `seats.qr_token`（UUID v4） | URL パラメータ（QR コードに埋め込み） |
 
-- `access_token` は申込み完了時に自動生成。スタッフはトークン入りの URL をブックマークして管理画面にアクセスする。
-- セキュリティリスク: URL 流出によるなりすまし。飲食店の業務用途では許容範囲と判断（MVP 段階）。
+- Magic Link のリンク形式: `https://<host>/api/auth/verify?token=<token>`
+- session_token Cookie 属性: `HttpOnly; SameSite=Lax; Path=/`（本番のみ `Secure`）
+- セキュリティ: トークン不正・期限切れ・purpose 不一致はすべて `INVALID_TOKEN` で返し、エラー内容でメール存在有無を漏らさない
 
-### 将来フェーズ: 本格認証への拡張ポイント
+### 顧客認証（変更なし）
 
-`stores` テーブルに `email` / `password_hash` カラムを追加し、ログインフォームとセッション管理を追加することで本格認証に移行可能。または Cloudflare Access や Magic Link パターンへの置き換えも可能。
+`seats.qr_token` を URL パラメータ（QR コードに埋め込み）に使う方式は変更なし。`requireSeat` ミドルウェアが seat + store_id を解決する。
+
+### 実装ファイル
+
+| ファイル | 責務 |
+|---|---|
+| `src/lib/auth.ts` | `getStoreBySession`（sessions JOIN + 期限チェック + status チェック）、`SESSION_TOKEN_COOKIE` 定数 |
+| `src/lib/api/auth.ts` | `POST /api/stores`（申込み）、`GET /api/auth/verify`、`POST /api/auth/login`、`POST /api/auth/logout` |
+| `src/lib/api/middleware.ts` | `requireStore`（session_token Cookie → getStoreBySession → c.var.store）、`requireSeat`（変更なし） |
+| `src/middleware.ts` | Astro SSR ミドルウェア: `/admin/*` 保護（session 検証 → /login リダイレクト） |
 
 ---
 
-## 7. API 設計方針
+## 8. メール基盤
+
+Cloudflare Workers は外部 SMTP を直接使えないため、HTTP API 経由のメール送信サービスが必要。
+
+**採用候補: Resend**（`resend.com`）—— Cloudflare Workers との相性がよく、シンプルな REST API で利用できる。
+
+| 項目 | 内容 |
+|---|---|
+| **環境変数** | `RESEND_API_KEY`（`.dev.vars` に記載、本番は Cloudflare Workers シークレット） |
+| **送信元アドレス** | `noreply@<ドメイン>` |
+| **実装位置** | `src/lib/email.ts`（送信ロジックを集約し、API ルータから直接 fetch しない） |
+| **送信失敗の扱い** | メール送信失敗は `500 INTERNAL_ERROR` を返す。stores レコードはロールバックせず `status = "pending"` で保持する。オーナーは `/login` でメールアドレスを入力することでリカバリできる（`POST /api/auth/login` は `pending` 店舗に対して `signup` purpose の Magic Link を再送する） |
+
+> **注意**: 実装時は context7 MCP で Resend SDK の最新 API を確認すること。`@resend/node` は Node.js 向けのため Workers では Fetch API で直接 Resend REST API を呼ぶか、Workers 対応の SDK を選ぶ。
+
+---
+
+## 9. API 設計方針
 
 ### Hono アプリの構成
 
@@ -266,7 +311,8 @@ Astro 側のファイルを増やさずに済む。
 | コード | HTTP | 説明 |
 |---|---|---|
 | `VALIDATION_ERROR` | 400 | リクエストボディのバリデーション失敗 |
-| `UNAUTHORIZED` | 401 | `access_token` クッキーが未設定または無効 |
+| `INVALID_TOKEN` | 400 | Magic Link トークンが不正・期限切れ・使用済み |
+| `UNAUTHORIZED` | 401 | `session_token` クッキーが未設定または無効（セッション切れ含む） |
 | `NOT_FOUND` | 404 | リソースが存在しない、または他テナントのリソース（テナント越境防止のため 403 でなく 404 を返す） |
 | `CONFLICT` | 409 | 操作が他のデータと競合（例: 過去の注文から参照されている商品の削除） |
 | `INTERNAL_ERROR` | 500 | サーバー内部エラー |
@@ -284,8 +330,9 @@ export const requireStore = createMiddleware<AuthEnv>(async (c, next) => { ... }
 export const menuRouter = new Hono<AuthEnv>().use(requireStore).get(...);
 ```
 
-- `getCookie(c, ACCESS_TOKEN_COOKIE)` でクッキーを読み、`getStoreByAccessToken` で store を解決
+- `getCookie(c, SESSION_TOKEN_COOKIE)` でクッキーを読み、`getStoreBySession` で store を解決
 - 成功時は `c.var.store.id` でテナント ID を取得し、全 DB クエリに `store_id` フィルタを付与
+- session の有効期限と `stores.status = "active"` も検証する
 
 ### メニュー管理 API（Step 3 実装済み）
 
@@ -312,9 +359,9 @@ export const menuRouter = new Hono<AuthEnv>().use(requireStore).get(...);
 
 ---
 
-## 8. デプロイ構成
+## 10. デプロイ構成
 
-### 8.1 コマンド早見表
+### 10.1 コマンド早見表
 
 | 目的 | コマンド | 実行場所 |
 |---|---|---|
@@ -325,7 +372,7 @@ export const menuRouter = new Hono<AuthEnv>().use(requireStore).get(...);
 
 ---
 
-### 8.2 DB マイグレーション戦略
+### 10.2 DB マイグレーション戦略
 
 #### ローカル開発
 
@@ -356,19 +403,20 @@ main ブランチへ push / PR マージ
 
 ---
 
-### 8.3 環境変数・シークレット管理
+### 10.3 環境変数・シークレット管理
 
 | 変数 | ローカル（`.dev.vars`） | 本番（Cloudflare シークレット / GitHub Actions）|
 |---|---|---|
 | `CLOUDFLARE_API_TOKEN` | **書かない** | GitHub Actions Secret |
 | `CLOUDFLARE_ACCOUNT_ID` | **書かない** | GitHub Actions Secret |
-| アプリ固有のシークレット | `.dev.vars`（gitignore 済み） | Cloudflare Workers シークレット |
+| `RESEND_API_KEY` | `.dev.vars`（gitignore 済み） | Cloudflare Workers シークレット |
+| その他アプリ固有のシークレット | `.dev.vars`（gitignore 済み） | Cloudflare Workers シークレット |
 
 > `.dev.vars` は `.gitignore` に含まれているが、本番認証情報を書く習慣自体を禁止する。
 
 ---
 
-### 8.4 CI/CD ワークフロー（リリース前に追加予定）
+### 10.4 CI/CD ワークフロー（リリース前に追加予定）
 
 リリース前に `.github/workflows/deploy.yml` を追加する。想定フロー:
 
@@ -389,6 +437,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
 ```
 
 マイグレーションはデプロイより先に実行し、ロールバック時は古いコードが新スキーマで動作できることを事前に確認する（後方互換マイグレーション戦略）。

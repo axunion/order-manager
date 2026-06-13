@@ -5,9 +5,10 @@
 | フェーズ | テーマ | 前提 |
 |---|---|---|
 | **Phase 1** | MVP（一連業務サイクルの完成） | なし |
+| **オンボーディング刷新** | Magic Link 認証・セッション管理・メール基盤 | Phase 1 完了 |
 | **Phase 2** | メニューオプション（トッピング・大盛り） | Phase 1 完了 |
 | **Phase 3** | 店舗テーマ（ロゴ・カラー） | Phase 1 完了 |
-| **Phase 4** | オンライン決済・WebSocket・本格認証 | Phase 1〜3 完了 |
+| **Phase 4** | オンライン決済・WebSocket | Phase 1〜3 完了 |
 
 ---
 
@@ -19,7 +20,7 @@
 
 - 4 画面すべて（申込み・管理・注文・会計）
 - ポーリング方式によるリアルタイム注文通知
-- 簡易トークン認証（`access_token` の Cookie 管理）
+- 簡易トークン認証（`access_token` の Cookie 管理）—— **オンボーディング刷新フェーズで Magic Link + session 方式に置き換える**
 
 ### Phase 1 の実装着手順
 
@@ -70,6 +71,36 @@ Step 8. 業務サイクルの結合テスト
 - [x] 顧客注文画面がモバイルで正常に表示・操作できること（CSS Modules + トークンで整備済み）
 - [x] ポーリングで注文が管理画面に届くこと（最大 5 秒以内）
 - [x] `pnpm check` と `pnpm test` が通ること
+
+---
+
+## オンボーディング刷新（Magic Link 認証・セッション管理）
+
+**目標**: 現行の「店舗名のみで即時登録・`access_token` URL ブックマーク」方式を廃止し、メールアドレス認証と proper なセッション管理を導入する。
+
+詳細設計は `docs/onboarding.md` を参照。
+
+### 実装内容
+
+- `stores` テーブルに `email`・`status`・`activated_at` を追加、`access_token` を廃止
+- `magic_link_tokens` テーブルの追加（短命・一回限りの認証トークン）
+- `sessions` テーブルの追加（30 日間のセッション管理）
+- `/api/stores`（申込み）・`/api/auth/verify`・`/api/auth/login`・`/api/auth/logout` の実装（`src/lib/api/auth.ts`）
+- `src/lib/email.ts` の追加（Resend 経由のメール送信）
+- `src/lib/auth.ts` の `getStoreBySession` への置き換え（`SESSION_TOKEN_COOKIE` 定数）
+- Astro middleware・Hono `requireStore` の session_token 参照への切り替え
+- `/login.astro`・`/register/check-email.astro` ページの追加
+- `scripts/seed-dev.ts` の追加（ローカル開発用シードアカウント・本番不適用ガード付き）
+
+### 完了基準
+
+- [ ] 申込み → Magic Link メール → 認証 → 管理画面入室の一連フローが動作する
+- [ ] ログイン（再訪）フローが動作する
+- [ ] ログアウトでセッションが削除される
+- [ ] `stores.status = "pending"` の店舗は `/admin` にアクセスできないこと
+- [ ] 期限切れ・使用済みトークンが拒否されること
+- [ ] `pnpm seed:dev` でシードアカウントを使って管理画面にアクセスできること（ローカルのみ）
+- [ ] `pnpm check` と `pnpm test` が通ること
 
 ---
 
@@ -163,7 +194,7 @@ Phase 1 の DB スキーマ設計時点で `order_items` に `option_groups` へ
 
 ---
 
-## Phase 4: オンライン決済・WebSocket・本格認証
+## Phase 4: オンライン決済・WebSocket
 
 **目標**: SaaS としての商用グレードの機能を揃える。
 
@@ -181,15 +212,9 @@ Phase 1 の DB スキーマ設計時点で `order_items` に `option_groups` へ
 - `src/lib/notification/websocket.ts` を追加し、管理画面の `OrderBoard.tsx` でポーリングから WebSocket に切り替え
 - Phase 1 の通知層抽象化が移行コストを最小化する
 
-#### 4c. 本格認証
-
-- `stores` テーブルに `email` / `password_hash` を追加（または Cloudflare Access / Magic Link パターン）
-- ログイン・ログアウトフロー
-- セッション管理（現行の access_token Cookie を維持しつつ上位互換で実装）
-
 ### 前提
 
-- Phase 1〜3 の完了
+- Phase 1〜3 の完了（Magic Link 認証はオンボーディング刷新フェーズで完了済み）
 - Durable Objects の有効化（Cloudflare プランの確認が必要）
 - PSP のアカウント契約・API キーの取得
 

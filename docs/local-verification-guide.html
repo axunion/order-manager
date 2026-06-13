@@ -224,6 +224,7 @@
     <div class="diagram-wrap">
       <figure>
         <svg viewBox="0 0 860 420" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, Hiragino Sans, sans-serif">
+          <title>図1：認証経路とルーティングの全体像</title>
 
           <!-- 背景レーン -->
           <rect x="10" y="60" width="420" height="340" rx="12" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5"/>
@@ -244,15 +245,15 @@
           <!-- POST /api/stores -->
           <rect x="55" y="165" width="170" height="36" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
           <text x="140" y="182" text-anchor="middle" font-size="12" fill="#7c3aed" font-weight="600">POST /api/stores</text>
-          <text x="140" y="196" text-anchor="middle" font-size="11" fill="#6d28d9">stores レコード作成 + Cookie 発行</text>
+          <text x="140" y="196" text-anchor="middle" font-size="11" fill="#6d28d9">stores レコード作成（status=pending）+ Magic Link メール送信</text>
 
           <!-- arrow down -->
           <line x1="140" y1="201" x2="140" y2="227" stroke="#7c3aed" stroke-width="2" marker-end="url(#arrowPurple)"/>
 
-          <!-- Cookie set -->
+          <!-- check-email page -->
           <rect x="40" y="230" width="200" height="46" rx="8" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
-          <text x="140" y="250" text-anchor="middle" font-size="12" fill="#92400e" font-weight="700">🍪 access_token Cookie</text>
-          <text x="140" y="265" text-anchor="middle" font-size="11" fill="#b45309">HttpOnly · SameSite=Lax</text>
+          <text x="140" y="250" text-anchor="middle" font-size="12" fill="#92400e" font-weight="700">📧 /register/check-email</text>
+          <text x="140" y="265" text-anchor="middle" font-size="11" fill="#b45309">「メールを確認してください」案内</text>
 
           <!-- arrow down -->
           <line x1="140" y1="276" x2="140" y2="302" stroke="#4f46e5" stroke-width="2" marker-end="url(#arrowIndigo)"/>
@@ -260,12 +261,12 @@
           <!-- middleware check -->
           <polygon points="140,305 240,330 140,355 40,330" fill="#e0e7ff" stroke="#4f46e5" stroke-width="1.5"/>
           <text x="140" y="327" text-anchor="middle" font-size="12" fill="#3730a3" font-weight="600">middleware.ts</text>
-          <text x="140" y="342" text-anchor="middle" font-size="11" fill="#4338ca">Cookie 検証</text>
+          <text x="140" y="342" text-anchor="middle" font-size="11" fill="#4338ca">session_token Cookie 検証</text>
 
-          <!-- arrow: no cookie → register -->
+          <!-- arrow: no cookie → login -->
           <line x1="40" y1="330" x2="20" y2="330" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="4,3"/>
           <line x1="20" y1="330" x2="20" y2="113" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowRed)"/>
-          <text x="13" y="225" text-anchor="middle" font-size="10" fill="#dc2626" transform="rotate(-90,13,225)">Cookie なし → /register へ</text>
+          <text x="13" y="225" text-anchor="middle" font-size="10" fill="#dc2626" transform="rotate(-90,13,225)">Cookie なし → /login へ</text>
 
           <!-- arrow: valid → /admin -->
           <line x1="140" y1="355" x2="140" y2="382" stroke="#16a34a" stroke-width="2" marker-end="url(#arrowGreen)"/>
@@ -334,10 +335,12 @@
 
     <div class="info-box info">
       <div class="label">ポイント</div>
-      <strong>店舗登録は全操作の前提です。</strong>
-      管理画面（<code>/admin/*</code>）にアクセスするには有効な <code>access_token</code> Cookie が必要であり、
-      この Cookie は店舗登録（<code>POST /api/stores</code>）の成功時にのみ発行されます。
-      Cookie なし・無効トークンの場合は自動的に <code>/register</code> にリダイレクトされます。
+      <strong>店舗登録・認証が全操作の前提です。</strong>
+      管理画面（<code>/admin/*</code>）にアクセスするには有効な <code>session_token</code> Cookie が必要です。
+      この Cookie は Magic Link メールのリンクをクリックして認証が完了した時点で発行されます（<code>GET /api/auth/verify</code>）。
+      Cookie なし・無効トークンの場合は自動的に <code>/login</code> にリダイレクトされます。
+      <br><br>
+      <strong>ローカル開発での近道:</strong> <code>pnpm seed:dev</code> を実行するとメールなしで管理画面に入れるシードアカウントが作成されます（→ ステップ①参照）。
     </div>
   </section>
 
@@ -353,10 +356,12 @@
         <h3>🔐 管理画面の認証（Cookie 方式）</h3>
         <p>リクエストが <code>/admin/*</code> に来るたびに <strong>middleware.ts</strong> が動作します。</p>
         <ol style="padding-left:18px;margin-top:10px;">
-          <li style="margin:6px 0"><code>access_token</code> Cookie を読む</li>
-          <li style="margin:6px 0">D1 DB で <code>stores</code> テーブルを検索</li>
-          <li style="margin:6px 0">ヒットした場合 → <code>Astro.locals.store</code> にセット</li>
-          <li style="margin:6px 0">ヒットしない / Cookie なし → <code>/register</code> へリダイレクト</li>
+          <li style="margin:6px 0"><code>session_token</code> Cookie を読む</li>
+          <li style="margin:6px 0">D1 DB で <code>sessions</code> テーブルを検索・有効期限確認</li>
+          <li style="margin:6px 0"><code>stores.status = "active"</code> を確認</li>
+          <li style="margin:6px 0">有効 → <code>Astro.locals.store</code> にセット</li>
+          <li style="margin:6px 0">Cookie なし / 無効 / 期限切れ → <code>/login</code> へリダイレクト</li>
+          <li style="margin:6px 0">status = "pending" → <code>/register/check-email</code> へリダイレクト</li>
         </ol>
         <div class="info-box success" style="margin-top:14px">
           <div class="label">セキュリティ</div>
@@ -384,6 +389,7 @@
     <div class="diagram-wrap">
       <figure>
         <svg viewBox="0 0 860 200" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, Hiragino Sans, sans-serif">
+          <title>図2：データの依存関係（左から右へ順番に作成が必要）</title>
           <!-- パスの依存関係図 -->
 
           <!-- ノード: /register -->
@@ -396,8 +402,8 @@
           <!-- stores テーブル -->
           <rect x="190" y="68" width="150" height="64" rx="8" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.5"/>
           <text x="265" y="90" text-anchor="middle" font-size="12" fill="#374151" font-weight="700">stores テーブル</text>
-          <text x="265" y="107" text-anchor="middle" font-size="11" fill="#6b7280">id, name, slug</text>
-          <text x="265" y="122" text-anchor="middle" font-size="11" fill="#6b7280">access_token</text>
+          <text x="265" y="107" text-anchor="middle" font-size="11" fill="#6b7280">id, name, email, slug</text>
+          <text x="265" y="122" text-anchor="middle" font-size="11" fill="#6b7280">status, sessions テーブル</text>
 
           <line x1="340" y1="100" x2="378" y2="100" stroke="#4b5563" stroke-width="2" marker-end="url(#arrowGray)"/>
 
@@ -495,25 +501,49 @@
     </div>
 
     <div class="info-box danger">
-      <div class="label">前提：この手順を完了しないと管理画面にアクセスできません</div>
-      <code>/admin</code> に直接アクセスしても <code>/register</code> にリダイレクトされます。
-      店舗登録が <strong>すべての操作の起点</strong> です。
+      <div class="label">前提：認証を完了しないと管理画面にアクセスできません</div>
+      <code>/admin</code> に直接アクセスしても <code>/login</code> にリダイレクトされます。
+      <strong>ローカル開発では <code>pnpm seed:dev</code>（近道）か、下記フローのどちらかで認証してください。</strong>
     </div>
 
     <div class="card">
-      <h3>操作手順</h3>
+      <h3>近道: ローカル開発用シードアカウント（推奨）</h3>
+      <div class="step-list">
+        <div class="step-item">
+          <div><code>pnpm seed:dev</code> を実行 → <code>dev@localhost</code> の店舗 + セッションが D1 に作成される</div>
+        </div>
+        <div class="step-item">
+          <div>出力された <code>session_token</code> 値を控える</div>
+        </div>
+        <div class="step-item">
+          <div>DevTools → Application → Cookies → <code>Name: session_token</code>、<code>Value: &lt;出力値&gt;</code>、<code>Path: /</code> で追加</div>
+        </div>
+        <div class="step-item">
+          <div><span class="url-chip">http://localhost:4321/admin</span> にアクセスして管理画面が表示されることを確認</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>本フロー: 申込み〜Magic Link 認証（本番同等の確認）</h3>
       <div class="step-list">
         <div class="step-item">
           <div>ブラウザで <span class="url-chip">http://localhost:4321/register</span> を開く</div>
         </div>
         <div class="step-item">
-          <div>「店舗名」フィールドに任意の名前（例：<strong>山田珈琲店</strong>）を入力する</div>
+          <div>「店舗名」と「メールアドレス」を入力する（例：<strong>山田珈琲店</strong> / 自分のメールアドレス）</div>
         </div>
         <div class="step-item">
           <div>「登録する」ボタンをクリック → <span class="url-chip"><span class="method post">POST</span> /api/stores</span> が実行される</div>
         </div>
         <div class="step-item">
-          <div>成功すると <code>access_token</code> Cookie がセットされ、自動的に <span class="url-chip">http://localhost:4321/admin</span> へリダイレクトされる</div>
+          <div>成功すると <span class="url-chip">http://localhost:4321/register/check-email</span> へリダイレクトされる（この時点で Cookie はまだ発行されない）</div>
+        </div>
+        <div class="step-item">
+          <div>受信した Magic Link メールのリンクをクリック → <span class="url-chip"><span class="method get">GET</span> /api/auth/verify?token=…</span> が実行される</div>
+        </div>
+        <div class="step-item">
+          <div>認証成功 → <code>session_token</code> Cookie が発行され、<span class="url-chip">http://localhost:4321/admin</span> へリダイレクトされる</div>
         </div>
       </div>
     </div>
@@ -521,6 +551,7 @@
     <div class="diagram-wrap">
       <figure>
         <svg viewBox="0 0 800 260" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, Hiragino Sans, sans-serif">
+          <title>図3：店舗登録フローの詳細（POST /api/stores の内部処理）</title>
 
           <!-- ブラウザ -->
           <rect x="20" y="30" width="160" height="200" rx="10" fill="#f9fafb" stroke="#d1d5db" stroke-width="1.5"/>
@@ -547,17 +578,17 @@
           <!-- API サーバー -->
           <rect x="250" y="70" width="180" height="160" rx="10" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5"/>
           <text x="340" y="95" text-anchor="middle" font-size="12" font-weight="700" fill="#6d28d9">API サーバー</text>
-          <text x="340" y="113" text-anchor="middle" font-size="10" fill="#7c3aed">storesRouter.post("/")</text>
+          <text x="340" y="113" text-anchor="middle" font-size="10" fill="#7c3aed">authRouter.post("/stores")</text>
 
           <!-- 処理ボックス群 -->
           <rect x="268" y="122" width="144" height="18" rx="4" fill="#ede9fe"/>
           <text x="340" y="134" text-anchor="middle" font-size="10" fill="#5b21b6">① slug 生成（重複チェック）</text>
           <rect x="268" y="146" width="144" height="18" rx="4" fill="#ede9fe"/>
-          <text x="340" y="158" text-anchor="middle" font-size="10" fill="#5b21b6">② id / access_token 生成</text>
+          <text x="340" y="158" text-anchor="middle" font-size="10" fill="#5b21b6">② stores INSERT（status=pending）</text>
           <rect x="268" y="170" width="144" height="18" rx="4" fill="#ede9fe"/>
-          <text x="340" y="182" text-anchor="middle" font-size="10" fill="#5b21b6">③ stores に INSERT</text>
+          <text x="340" y="182" text-anchor="middle" font-size="10" fill="#5b21b6">③ magic_link_tokens INSERT</text>
           <rect x="268" y="194" width="144" height="22" rx="4" fill="#fef3c7" stroke="#d97706" stroke-width="1"/>
-          <text x="340" y="208" text-anchor="middle" font-size="10" fill="#92400e" font-weight="700">④ Set-Cookie ヘッダーをセット</text>
+          <text x="340" y="208" text-anchor="middle" font-size="10" fill="#92400e" font-weight="700">④ Resend でメール送信</text>
 
           <!-- 矢印 2: DB書き込み -->
           <line x1="430" y1="170" x2="488" y2="170" stroke="#6b7280" stroke-width="1.5" marker-end="url(#arrowGray2)"/>
@@ -567,18 +598,18 @@
           <ellipse cx="540" cy="145" rx="55" ry="18" fill="#e0e7ff" stroke="#4f46e5" stroke-width="1.5"/>
           <rect x="485" y="145" width="110" height="40" fill="#e0e7ff"/>
           <ellipse cx="540" cy="185" rx="55" ry="18" fill="#c7d2fe" stroke="#4f46e5" stroke-width="1.5"/>
-          <text x="540" y="150" text-anchor="middle" font-size="11" fill="#3730a3" font-weight="700">D1 (stores)</text>
-          <text x="540" y="167" text-anchor="middle" font-size="10" fill="#4338ca">id, name, slug</text>
-          <text x="540" y="181" text-anchor="middle" font-size="10" fill="#4338ca">access_token</text>
+          <text x="540" y="150" text-anchor="middle" font-size="11" fill="#3730a3" font-weight="700">D1 (stores + magic_link_tokens)</text>
+          <text x="540" y="167" text-anchor="middle" font-size="10" fill="#4338ca">status=pending</text>
+          <text x="540" y="181" text-anchor="middle" font-size="10" fill="#4338ca">token（15分・一回限り）</text>
 
-          <!-- 矢印 3: レスポンス + Cookie -->
+          <!-- 矢印 3: レスポンス -->
           <line x1="250" y1="205" x2="182" y2="195" stroke="#16a34a" stroke-width="2" marker-end="url(#arrowGrn2)"/>
-          <text x="216" y="195" text-anchor="middle" font-size="9" fill="#16a34a">201 + Set-Cookie</text>
-          <text x="216" y="207" text-anchor="middle" font-size="9" fill="#6b7280">access_token=xxx</text>
+          <text x="216" y="195" text-anchor="middle" font-size="9" fill="#16a34a">201（Cookie なし）</text>
+          <text x="216" y="207" text-anchor="middle" font-size="9" fill="#6b7280">Magic Link メール送信済み</text>
 
           <!-- 矢印 4: リダイレクト -->
           <line x1="100" y1="230" x2="100" y2="248" stroke="#4f46e5" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowBlue)"/>
-          <text x="100" y="260" text-anchor="middle" font-size="10" fill="#4f46e5">→ /admin へリダイレクト</text>
+          <text x="100" y="260" text-anchor="middle" font-size="10" fill="#4f46e5">→ /register/check-email へリダイレクト</text>
 
           <defs>
             <marker id="arrowBlue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
@@ -602,19 +633,24 @@
         <thead><tr><th>確認事項</th><th>確認方法</th><th>期待値</th></tr></thead>
         <tbody>
           <tr>
-            <td>Cookie が発行されているか</td>
-            <td>DevTools → Application → Cookies</td>
-            <td><code>access_token</code> が存在し、<code>HttpOnly</code> にチェックが入っている</td>
-          </tr>
-          <tr>
-            <td>管理画面にリダイレクトされたか</td>
+            <td>申込み後に案内ページへ遷移したか</td>
             <td>URL バーを確認</td>
-            <td><code>/admin</code> が表示されている</td>
+            <td><code>/register/check-email</code> が表示されている（Cookie はまだない）</td>
           </tr>
           <tr>
             <td>API レスポンスが 201 か</td>
             <td>DevTools → Network → /api/stores</td>
-            <td>Status: <strong>201</strong>、body に <code>{data: {id, name, slug}}</code></td>
+            <td>Status: <strong>201</strong>、body に <code>{data: {id, name, slug}}</code>。<code>Set-Cookie</code> ヘッダーはない</td>
+          </tr>
+          <tr>
+            <td>Magic Link 認証後に Cookie が発行されるか</td>
+            <td>メールのリンクをクリック後 → DevTools → Application → Cookies</td>
+            <td><code>session_token</code> が存在し、<code>HttpOnly</code> にチェックが入っている</td>
+          </tr>
+          <tr>
+            <td>認証後に管理画面へ遷移したか</td>
+            <td>URL バーを確認</td>
+            <td><code>/admin</code> が表示されている</td>
           </tr>
         </tbody>
       </table>
@@ -635,6 +671,7 @@
     <div class="diagram-wrap">
       <figure>
         <svg viewBox="0 0 820 220" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, Hiragino Sans, sans-serif">
+          <title>図4：管理画面のサブページ（左2つが事前準備、右2つが運用時に使用）</title>
 
           <!-- /admin ハブ -->
           <rect x="330" y="80" width="160" height="60" rx="10" fill="#4f46e5"/>
@@ -705,7 +742,7 @@
     <div class="info-box info">
       <div class="label">重要：middleware.ts による保護の確認</div>
       <strong>シークレットウィンドウ（Cookie なし）</strong>で <code>http://localhost:4321/admin</code> に直接アクセスしてください。
-      <code>/register</code> へリダイレクトされれば認証が正しく動作しています。
+      <code>/login</code> へリダイレクトされれば認証が正しく動作しています。
     </div>
   </section>
 
@@ -746,6 +783,7 @@
     <div class="diagram-wrap">
       <figure>
         <svg viewBox="0 0 860 300" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, Hiragino Sans, sans-serif">
+          <title>図5：業務サイクル全体（5ステップの流れ）</title>
 
           <!-- タイムライン -->
           <line x1="50" y1="260" x2="810" y2="260" stroke="#e5e7eb" stroke-width="2"/>
@@ -836,10 +874,11 @@
     <div class="diagram-wrap">
       <figure>
         <svg viewBox="0 0 820 280" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, Hiragino Sans, sans-serif">
+          <title>図6：セキュリティ設計の3層構造</title>
 
           <!-- 中央: Cookie -->
           <rect x="300" y="100" width="220" height="80" rx="10" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
-          <text x="410" y="128" text-anchor="middle" font-size="14" font-weight="700" fill="#92400e">🍪 access_token Cookie</text>
+          <text x="410" y="128" text-anchor="middle" font-size="14" font-weight="700" fill="#92400e">🍪 session_token Cookie</text>
           <text x="410" y="148" text-anchor="middle" font-size="11" fill="#b45309">HttpOnly</text>
           <text x="410" y="164" text-anchor="middle" font-size="11" fill="#b45309">SameSite=Lax  ·  Path=/</text>
 
@@ -884,20 +923,26 @@
         <tr>
           <td><span class="pill secure">HttpOnly Cookie</span></td>
           <td>DevTools Console で <code>document.cookie</code> を実行</td>
-          <td><code>access_token</code> が表示されない</td>
+          <td><code>session_token</code> が表示されない</td>
           <td>XSS によるトークン盗用</td>
         </tr>
         <tr>
           <td><span class="pill secure">未認証アクセス拒否</span></td>
           <td>シークレットウィンドウで <code>/admin</code> に直接アクセス</td>
-          <td><code>/register</code> にリダイレクトされる</td>
+          <td><code>/login</code> にリダイレクトされる</td>
           <td>Cookie なし直接アクセス</td>
         </tr>
         <tr>
           <td><span class="pill secure">無効トークン拒否</span></td>
           <td>DevTools で Cookie の値を書き換えてから <code>/admin</code> にアクセス</td>
-          <td><code>/register</code> にリダイレクトされる</td>
+          <td><code>/login</code> にリダイレクトされる</td>
           <td>トークン偽造</td>
+        </tr>
+        <tr>
+          <td><span class="pill secure">未認証店舗のアクセス拒否</span></td>
+          <td><code>stores.status = "pending"</code> のセッションで <code>/admin</code> にアクセス</td>
+          <td><code>/register/check-email</code> にリダイレクトされる</td>
+          <td>メール未確認状態での管理画面進入</td>
         </tr>
         <tr>
           <td><span class="pill secure">無効 QR トークン</span></td>
@@ -911,19 +956,13 @@
           <td>自店舗のデータのみ返却される</td>
           <td>他テナントデータ漏洩</td>
         </tr>
-        <tr>
-          <td><span class="pill secure">アクセストークン非露出</span></td>
-          <td><code>GET /api/stores</code> のレスポンスを確認</td>
-          <td><code>access_token</code> フィールドがレスポンスに含まれない</td>
-          <td>トークン情報漏洩</td>
-        </tr>
       </tbody>
     </table>
 
     <div class="info-box warning">
       <div class="label">ローカル環境の注意点</div>
       ローカル dev（<code>wrangler dev</code>）は HTTP で動作するため、Cookie の <code>Secure</code> 属性が付与されません（本番 HTTPS では自動付与）。
-      これは意図的な設計です（<code>src/lib/auth.ts</code> の <code>buildAuthCookie</code> 参照）。
+      これは意図的な設計です（<code>src/lib/auth.ts</code> の <code>SESSION_TOKEN_COOKIE</code> 定数参照）。
     </div>
   </section>
 
@@ -940,9 +979,9 @@
       </thead>
       <tbody>
         <tr>
-          <td>/admin を開くたびに /register に戻る</td>
-          <td>Cookie が発行されていない、または DB がリセットされてトークンが無効になった</td>
-          <td><code>pnpm db:reset</code> → 再度 <code>/register</code> から登録し直す</td>
+          <td>/admin を開くたびに /login に戻る</td>
+          <td><code>session_token</code> Cookie がない、または DB がリセットされてセッションが無効になった</td>
+          <td><code>pnpm db:reset &amp;&amp; pnpm seed:dev</code> → 出力されたトークンを Cookie にセット</td>
         </tr>
         <tr>
           <td>顧客注文画面に「ページが見つかりません」</td>

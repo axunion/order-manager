@@ -5,6 +5,9 @@
 ```
 stores
   │
+  ├── magic_link_tokens（短命・認証用）
+  ├── sessions（管理画面セッション）
+  │
   ├── menu_categories ──── menu_items
   │
   ├── seats
@@ -28,16 +31,60 @@ stores
 |---|---|---|
 | `id` | TEXT (UUID) | PK |
 | `name` | TEXT | 店舗名 |
+| `email` | TEXT UNIQUE | オーナーのメールアドレス（Magic Link 送信先） |
+| `status` | TEXT | アカウント状態（下記参照）。DEFAULT `'pending'` |
 | `slug` | TEXT UNIQUE | URL フレンドリーな識別子（将来の URL 表示用）。生成ルール: `slugify(店舗名) + "-" + 5 文字ランダム英数字`（例: `my-cafe-x4k2p`）。日本語のみの場合は `"store"` にフォールバック |
-| `access_token` | TEXT UNIQUE | 管理画面保護用トークン（UUID v4） |
+| `activated_at` | INTEGER (Unix ms) \| NULL | メール認証完了日時 |
 | `created_at` | INTEGER (Unix ms) | 登録日時 |
 | ~~`logo_url`~~ | TEXT（将来追加） | 店舗ロゴの URL |
 | ~~`theme_color`~~ | TEXT（将来追加） | テーマカラー（例: `#FF5733`） |
 
+`stores.status` の状態遷移と詳細フローは [`docs/onboarding.md`](./onboarding.md) を参照。
+
+| 値 | 意味 |
+|---|---|
+| `pending` | メール認証前。管理画面へのアクセス不可 |
+| `active` | 認証済み・有効 |
+| `suspended` | 利用停止（将来追加） |
+| ~~`pending_payment`~~ | 決済ゲート導入時に追加（将来追加） |
+
 ```sql
 -- Drizzle スキーマのイメージ
-stores: id, name, slug, access_token, created_at
+stores: id, name, email, status, slug, activated_at, created_at
 ```
+
+---
+
+### `magic_link_tokens`（Magic Link 認証トークン）
+
+短命・一回限りのトークン。申込み時（`signup`）とログイン時（`login`）の両方に使用する。
+
+| カラム | 型 | 説明 |
+|---|---|---|
+| `id` | TEXT (UUID) | PK |
+| `store_id` | TEXT | FK → stores.id |
+| `token` | TEXT UNIQUE | ランダムトークン（UUID v4）。メール URL に埋め込む |
+| `purpose` | TEXT | 用途（`signup` \| `login`） |
+| `expires_at` | INTEGER (Unix ms) | 有効期限（発行から 15 分） |
+| `used_at` | INTEGER (Unix ms) \| NULL | 消費日時。NULL = 未使用、非 NULL = 使用済み |
+| `created_at` | INTEGER (Unix ms) | 発行日時 |
+
+> **設計メモ**: `used_at` を消費管理に使うことで、同一トークンの再利用を防ぐ（DELETE より監査ログとして残る）。同一 `store_id` かつ同一 `purpose` の未使用トークンを DELETE してから新規 INSERT する（古いリンクを無効化。`signup` / `login` をまたいで削除しない）。
+
+---
+
+### `sessions`（管理画面セッション）
+
+認証済みセッション。1 店舗に複数のセッションが共存できる（複数デバイス対応）。
+
+| カラム | 型 | 説明 |
+|---|---|---|
+| `id` | TEXT (UUID) | PK |
+| `store_id` | TEXT | FK → stores.id |
+| `session_token` | TEXT UNIQUE | Cookie に保存するセッショントークン（UUID v4） |
+| `expires_at` | INTEGER (Unix ms) | 有効期限（発行から 30 日） |
+| `created_at` | INTEGER (Unix ms) | 発行日時 |
+| ~~`last_used_at`~~ | INTEGER (Unix ms)（将来追加） | スライディングウィンドウ延長用 |
 
 ---
 
@@ -228,6 +275,12 @@ order_item_options: id, order_item_id, option_id, name_snapshot, price_delta_sna
 パフォーマンスに影響するクエリのために以下のインデックスを初期から設定する:
 
 ```sql
+-- 認証テーブル（ホットパス: リクエストごとに検索）
+CREATE UNIQUE INDEX idx_magic_link_tokens_token  ON magic_link_tokens(token);
+CREATE UNIQUE INDEX idx_sessions_token           ON sessions(session_token);
+CREATE UNIQUE INDEX idx_stores_email             ON stores(email);
+
+-- 業務データテーブル
 CREATE INDEX idx_menu_items_store   ON menu_items(store_id);
 CREATE INDEX idx_seats_store        ON seats(store_id);
 CREATE INDEX idx_orders_seat        ON orders(seat_id, status);
