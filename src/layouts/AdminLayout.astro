@@ -31,6 +31,9 @@ const { title, storeName, badge, backHref, backLabel } = Astro.props;
     {backHref && backLabel && (
       <a href={backHref} class="nav-link">{backLabel}</a>
     )}
+    <form method="post" action="/api/auth/logout" class="logout-form">
+      <button type="submit" class="logout-btn">ログアウト</button>
+    </form>
   </header>
 
   <main>
@@ -69,6 +72,30 @@ const { title, storeName, badge, backHref, backLabel } = Astro.props;
   }
 
   .nav-link:hover {
+    color: var(--color-primary-foreground);
+  }
+
+  .logout-form {
+    margin-left: auto;
+  }
+
+  /* When both backHref and logout are present, push logout to the right */
+  .nav-link ~ .logout-form {
+    margin-left: var(--space-4);
+  }
+
+  .logout-btn {
+    background: none;
+    border: 1px solid rgb(255 255 255 / 0.4);
+    border-radius: var(--radius-sm);
+    color: rgb(255 255 255 / 0.8);
+    cursor: pointer;
+    font-size: var(--text-sm);
+    padding: var(--space-1) var(--space-3);
+  }
+
+  .logout-btn:hover {
+    border-color: var(--color-primary-foreground);
     color: var(--color-primary-foreground);
   }
 

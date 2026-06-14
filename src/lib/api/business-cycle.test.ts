@@ -5,17 +5,74 @@
  * These tests drive the full workflow exclusively via HTTP API calls — no direct
  * DB seeding — to verify that all steps are connected end-to-end:
  *
- *   Store registration → Menu setup → Seat/QR issuance →
- *   Customer orders → Admin polling → Serve items →
+ *   Store registration → Magic Link verification → Menu setup →
+ *   Seat/QR issuance → Customer orders → Admin polling → Serve items →
  *   Payment request → Checkout → Post-payment state
  *
- * Also verifies multi-tenant data isolation between two stores running the
- * same cycle concurrently.
+ * Also verifies multi-tenant data isolation between two stores running
+ * the same cycle concurrently.
  */
 import { env } from "cloudflare:workers";
+import { and, eq, isNull } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
+import { createDb, schema } from "../../db/client";
 import { app } from "./index";
-import { extractAccessToken, jsonInit, withAuth } from "./test-helpers";
+import { extractSessionToken, jsonInit, withAuth } from "./test-helpers";
+
+// ---------------------------------------------------------------------------
+// Shared setup helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Registers a store via HTTP, then follows the Magic Link verification flow
+ * to obtain an active session_token.
+ *
+ * The magic link token is read directly from D1 because in tests the
+ * RESEND_API_KEY is absent and email delivery falls back to console.log only.
+ */
+async function registerAndVerify(
+  storeName: string,
+  email: string,
+): Promise<string> {
+  const storeRes = await app.request(
+    "/api/stores",
+    jsonInit("POST", { name: storeName, email }),
+    env,
+  );
+  if (storeRes.status !== 201)
+    throw new Error(`Store registration failed: ${storeRes.status}`);
+
+  // The store body is consumed above; read the store id from D1
+  const body = (await storeRes.json()) as { data: { id: string } };
+  const storeId = body.data.id;
+
+  // Retrieve the signup magic link token from D1
+  const db = createDb(env.DB);
+  const tokenRow = await db
+    .select()
+    .from(schema.magicLinkTokens)
+    .where(
+      and(
+        eq(schema.magicLinkTokens.store_id, storeId),
+        eq(schema.magicLinkTokens.purpose, "signup"),
+        isNull(schema.magicLinkTokens.used_at),
+      ),
+    )
+    .then((rows) => rows[0]);
+
+  if (!tokenRow) throw new Error("Signup magic_link_token not found");
+
+  // Verify the token to activate the store and create a session
+  const verifyRes = await app.request(
+    `/api/auth/verify?token=${tokenRow.token}`,
+    {},
+    env,
+  );
+  if (verifyRes.status !== 302)
+    throw new Error(`Verify failed: ${verifyRes.status}`);
+
+  return extractSessionToken(verifyRes);
+}
 
 // ---------------------------------------------------------------------------
 // Scenario 1: Full business cycle — happy path
@@ -23,20 +80,12 @@ import { extractAccessToken, jsonInit, withAuth } from "./test-helpers";
 
 describe("Business cycle: full happy path (申込み → 会計完了)", () => {
   it("completes a full order-to-payment cycle end-to-end", async () => {
-    // ── Step 1: Store registration ──────────────────────────────────────────
-    // The access_token is issued only via Set-Cookie, not in the response body.
-    const storeRes = await app.request(
-      "/api/stores",
-      jsonInit("POST", { name: "結合テスト食堂" }),
-      env,
+    // ── Step 1: Store registration + Magic Link verification ────────────────
+    const token = await registerAndVerify(
+      "結合テスト食堂",
+      `cycle-${crypto.randomUUID()}@test.internal`,
     );
-    expect(storeRes.status).toBe(201);
-    const token = extractAccessToken(storeRes);
     expect(token).toBeTruthy();
-    const storeBody = (await storeRes.json()) as {
-      data: { id: string; name: string };
-    };
-    expect(storeBody.data.name).toBe("結合テスト食堂");
 
     // ── Step 2: Create a menu category ─────────────────────────────────────
     const catRes = await app.request(
@@ -91,7 +140,6 @@ describe("Business cycle: full happy path (申込み → 会計完了)", () => {
     expect(qrToken).toBeTruthy();
 
     // ── Step 5: Customer views the menu via QR token ─────────────────────────
-    // No Cookie needed — authenticated via the qr_token URL parameter.
     const bootstrapRes = await app.request(`/api/order/${qrToken}`, {}, env);
     expect(bootstrapRes.status).toBe(200);
     const bootstrapBody = (await bootstrapRes.json()) as {
@@ -144,7 +192,6 @@ describe("Business cycle: full happy path (申込み → 会計完了)", () => {
     const orderId = orderBody.data.order.id;
 
     // ── Step 7: Admin polls for new orders ──────────────────────────────────
-    // Verifies that the polling endpoint delivers the order placed in step 6.
     const adminOrdersRes = await app.request(
       "/api/admin/orders",
       withAuth(token),
@@ -172,16 +219,12 @@ describe("Business cycle: full happy path (申込み → 会計完了)", () => {
     expect(adminOrder?.status).toBe("open");
     expect(adminOrder?.total).toBe(1600);
     expect(adminOrder?.items).toHaveLength(2);
-    // All items should be in 'ordered' state before serving
     for (const item of adminOrder?.items ?? []) {
       expect(item.status).toBe("ordered");
     }
 
     // ── Step 7b: Verify ?since= polling filter ────────────────────────────
-    // The real admin board calls GET /api/admin/orders?since=<last_ts> to
-    // receive only new orders without re-delivering already-seen ones.
     const orderCreatedAt = adminOrder?.created_at ?? 0;
-    // since = (created_at - 1): order's timestamp is strictly greater → appears
     const sinceBeforeRes = await app.request(
       `/api/admin/orders?since=${orderCreatedAt - 1}`,
       withAuth(token),
@@ -193,7 +236,6 @@ describe("Business cycle: full happy path (申込み → 会計完了)", () => {
     };
     expect(sinceBeforeBody.data.map((o) => o.id)).toContain(orderId);
 
-    // since = created_at: order is NOT strictly greater → filtered out
     const sinceEqualRes = await app.request(
       `/api/admin/orders?since=${orderCreatedAt}`,
       withAuth(token),
@@ -214,9 +256,7 @@ describe("Business cycle: full happy path (申込み → 会計完了)", () => {
         env,
       );
       expect(serveRes.status).toBe(200);
-      const serveBody = (await serveRes.json()) as {
-        data: { status: string };
-      };
+      const serveBody = (await serveRes.json()) as { data: { status: string } };
       expect(serveBody.data.status).toBe("served");
     }
 
@@ -241,12 +281,7 @@ describe("Business cycle: full happy path (申込み → 会計完了)", () => {
     );
     expect(pendingRes.status).toBe(200);
     const pendingBody = (await pendingRes.json()) as {
-      data: {
-        id: string;
-        seat_name: string;
-        status: string;
-        total: number;
-      }[];
+      data: { id: string; seat_name: string; status: string; total: number }[];
     };
     const pendingOrder = pendingBody.data.find((o) => o.id === orderId);
     expect(pendingOrder).toBeDefined();
@@ -274,12 +309,8 @@ describe("Business cycle: full happy path (申込み → 会計完了)", () => {
     expect(payBody.data.total_amount).toBe(1600);
     expect(payBody.data.method).toBe("cash");
     expect(typeof payBody.data.paid_at).toBe("number");
-    // Note: orders.closed_at is set atomically by the payments handler (batch UPDATE),
-    // but is an internal DB field not exposed by any public API endpoint.
-    // Its persistence is verified via direct DB access in payments.test.ts.
 
     // ── Step 12: Post-payment state verification ──────────────────────────────
-    // The admin order board no longer shows the paid order (status 'paid' is not active).
     const adminOrdersAfterRes = await app.request(
       "/api/admin/orders",
       withAuth(token),
@@ -293,7 +324,6 @@ describe("Business cycle: full happy path (申込み → 会計完了)", () => {
       adminOrdersAfterBody.data.find((o) => o.id === orderId),
     ).toBeUndefined();
 
-    // The customer order screen shows no active order (paid order is inactive).
     const bootstrapAfterRes = await app.request(
       `/api/order/${qrToken}`,
       {},
@@ -306,14 +336,9 @@ describe("Business cycle: full happy path (申込み → 会計完了)", () => {
     expect(bootstrapAfterBody.data.order).toBeNull();
 
     // ── Step 13: New order on the same seat after payment ────────────────────
-    // The partial unique index idx_one_active_order_per_seat enforces at most one
-    // active order per seat WHERE status IN ('open','payment_requested'). Once an
-    // order is paid (status='paid'), the index allows a new order on the same seat.
     const reorderRes = await app.request(
       `/api/order/${qrToken}/items`,
-      jsonInit("POST", {
-        items: [{ menu_item_id: menuItemId1, quantity: 1 }],
-      }),
+      jsonInit("POST", { items: [{ menu_item_id: menuItemId1, quantity: 1 }] }),
       env,
     );
     expect(reorderRes.status).toBe(201);
@@ -330,9 +355,8 @@ describe("Business cycle: full happy path (申込み → 会計完了)", () => {
 // ---------------------------------------------------------------------------
 
 /**
- * Sets up a store with one menu item, one seat, and one order in
- * 'payment_requested' state using only HTTP API calls.
- * Returns the tokens and IDs needed for cross-tenant assertions.
+ * Registers a store via HTTP (with Magic Link verification), then sets up
+ * a menu item, a seat, and a payment_requested order using only HTTP API calls.
  */
 async function setupStoreWithOrder(storeName: string): Promise<{
   token: string;
@@ -341,17 +365,9 @@ async function setupStoreWithOrder(storeName: string): Promise<{
   orderId: string;
   orderItemId: string;
 }> {
-  // Register store — access_token is in Set-Cookie only
-  const storeRes = await app.request(
-    "/api/stores",
-    jsonInit("POST", { name: storeName }),
-    env,
-  );
-  if (storeRes.status !== 201)
-    throw new Error(`Store creation failed: ${storeRes.status}`);
-  const token = extractAccessToken(storeRes);
+  const email = `store-${crypto.randomUUID()}@test.internal`;
+  const token = await registerAndVerify(storeName, email);
 
-  // Create a menu item
   const itemRes = await app.request(
     "/api/menu/items",
     withAuth(token, jsonInit("POST", { name: `${storeName}商品`, price: 300 })),
@@ -362,7 +378,6 @@ async function setupStoreWithOrder(storeName: string): Promise<{
   const itemBody = (await itemRes.json()) as { data: { id: string } };
   const menuItemId = itemBody.data.id;
 
-  // Create a seat
   const seatRes = await app.request(
     "/api/seats",
     withAuth(token, jsonInit("POST", { name: "テーブル1" })),
@@ -373,7 +388,6 @@ async function setupStoreWithOrder(storeName: string): Promise<{
   const seatBody = (await seatRes.json()) as { data: { qr_token: string } };
   const qrToken = seatBody.data.qr_token;
 
-  // Place an order (lazy order creation via customer API)
   const orderRes = await app.request(
     `/api/order/${qrToken}/items`,
     jsonInit("POST", { items: [{ menu_item_id: menuItemId, quantity: 1 }] }),
@@ -390,7 +404,6 @@ async function setupStoreWithOrder(storeName: string): Promise<{
     throw new Error("Order response contained no items — unexpected API state");
   const orderItemId = firstItem.id;
 
-  // Request payment so the order is in payment_requested state
   const payReqRes = await app.request(
     `/api/order/${qrToken}/request-payment`,
     { method: "PATCH" },
@@ -410,7 +423,6 @@ describe("Business cycle: multi-tenant isolation (2店舗データ分離)", () =
     ]);
 
     // ── Admin order board isolation ──────────────────────────────────────────
-    // A's token sees only A's orders; B's order ID must not appear.
     const adminARes = await app.request(
       "/api/admin/orders",
       withAuth(storeA.token),
@@ -422,7 +434,6 @@ describe("Business cycle: multi-tenant isolation (2店舗データ分離)", () =
     expect(adminAIds).toContain(storeA.orderId);
     expect(adminAIds).not.toContain(storeB.orderId);
 
-    // B's token sees only B's orders; A's order ID must not appear.
     const adminBRes = await app.request(
       "/api/admin/orders",
       withAuth(storeB.token),
@@ -458,7 +469,6 @@ describe("Business cycle: multi-tenant isolation (2店舗データ分離)", () =
     expect(pendingBBody.data.map((o) => o.id)).not.toContain(storeA.orderId);
 
     // ── Cross-tenant payment attempt → 404 ───────────────────────────────────
-    // A's admin token attempting to check out B's order must be rejected.
     const crossPayRes = await app.request(
       "/api/payments",
       withAuth(storeA.token, jsonInit("POST", { order_id: storeB.orderId })),
@@ -471,7 +481,6 @@ describe("Business cycle: multi-tenant isolation (2店舗データ分離)", () =
     expect(crossPayBody.error.code).toBe("NOT_FOUND");
 
     // ── Cross-tenant serve attempt → 404 ─────────────────────────────────────
-    // A's admin token attempting to mark B's order item as served must be rejected.
     const crossServeRes = await app.request(
       `/api/admin/orders/items/${storeB.orderItemId}/serve`,
       withAuth(storeA.token, { method: "PATCH" }),
@@ -480,7 +489,6 @@ describe("Business cycle: multi-tenant isolation (2店舗データ分離)", () =
     expect(crossServeRes.status).toBe(404);
 
     // ── Customer order screen isolation ──────────────────────────────────────
-    // A's seat QR token must not return B's menu items (and vice versa).
     const bootstrapARes = await app.request(
       `/api/order/${storeA.qrToken}`,
       {},

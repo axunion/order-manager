@@ -6,6 +6,10 @@
 // Note: Astro.locals.runtime.env was removed in Astro v6.
 interface Env {
   DB: D1Database;
+  /** Resend API key for Magic Link email delivery. Unset in local dev → console fallback. */
+  RESEND_API_KEY: string;
+  /** Sender address used in outgoing emails (e.g. noreply@yourdomain.com). */
+  MAIL_FROM: string;
 }
 
 // Augment Cloudflare.Env so that `env.DB` is typed when using
@@ -13,6 +17,8 @@ interface Env {
 declare namespace Cloudflare {
   interface Env {
     DB: D1Database;
+    RESEND_API_KEY: string;
+    MAIL_FROM: string;
   }
 }
 

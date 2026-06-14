@@ -12,7 +12,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 // store is guaranteed by src/middleware.ts for all /admin/* routes.
 // The guard below should never trigger; it exists to surface misconfiguration clearly.
 const store = Astro.locals.store;
-if (!store) return Astro.redirect("/register");
+if (!store) return Astro.redirect("/login");
 ---
 
 <AdminLayout

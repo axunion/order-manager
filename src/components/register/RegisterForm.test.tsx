@@ -13,12 +13,17 @@ describe("RegisterForm", () => {
     expect(getByLabelText(/店舗名/)).toBeTruthy();
   });
 
-  it("renders a submit button", () => {
-    const { getByRole } = render(() => <RegisterForm />);
-    expect(getByRole("button", { name: /登録/ })).toBeTruthy();
+  it("renders an email input", () => {
+    const { getByLabelText } = render(() => <RegisterForm />);
+    expect(getByLabelText(/メールアドレス/)).toBeTruthy();
   });
 
-  it("calls POST /api/stores with the entered name on submit", async () => {
+  it("renders a submit button", () => {
+    const { getByRole } = render(() => <RegisterForm />);
+    expect(getByRole("button", { name: /申し込む/ })).toBeTruthy();
+  });
+
+  it("calls POST /api/stores with name and email on submit", async () => {
     const user = userEvent.setup();
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -30,7 +35,8 @@ describe("RegisterForm", () => {
 
     const { getByLabelText, getByRole } = render(() => <RegisterForm />);
     await user.type(getByLabelText(/店舗名/), "My Cafe");
-    await user.click(getByRole("button", { name: /登録/ }));
+    await user.type(getByLabelText(/メールアドレス/), "owner@example.com");
+    await user.click(getByRole("button", { name: /申し込む/ }));
 
     expect(mockFetch).toHaveBeenCalledWith(
       "/api/stores",
@@ -39,7 +45,7 @@ describe("RegisterForm", () => {
         headers: expect.objectContaining({
           "Content-Type": "application/json",
         }),
-        body: JSON.stringify({ name: "My Cafe" }),
+        body: JSON.stringify({ name: "My Cafe", email: "owner@example.com" }),
       }),
     );
   });
@@ -60,7 +66,8 @@ describe("RegisterForm", () => {
       <RegisterForm />
     ));
     await user.type(getByLabelText(/店舗名/), "Fail Shop");
-    await user.click(getByRole("button", { name: /登録/ }));
+    await user.type(getByLabelText(/メールアドレス/), "fail@example.com");
+    await user.click(getByRole("button", { name: /申し込む/ }));
 
     expect(await findByText(/server failed/)).toBeTruthy();
   });

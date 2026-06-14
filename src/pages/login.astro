@@ -1,0 +1,61 @@
+---
+/**
+ * Login page for returning store owners.
+ * No authentication required. Sends a Magic Link to the provided email address.
+ */
+
+import LoginForm from "../components/login/LoginForm";
+import Card from "../components/ui/Card";
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="ログイン | オーダーマネージャー">
+  <main class="login-page">
+    <Card style="width: min(var(--container-mobile), 100%); padding: var(--space-10) var(--space-8)">
+      <h1>ログイン</h1>
+      <p class="subtitle">
+        登録済みのメールアドレスを入力してください。ログインリンクをお送りします。
+      </p>
+      <LoginForm client:load />
+      <p class="register-link">
+        アカウントをお持ちでない方は<a href="/register">こちらから登録</a>
+      </p>
+    </Card>
+  </main>
+</Layout>
+
+<style>
+  .login-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100dvh;
+    padding: var(--space-4);
+  }
+
+  h1 {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-semibold);
+    margin: 0 0 var(--space-2);
+    color: var(--color-foreground);
+  }
+
+  .subtitle {
+    color: var(--color-muted-foreground);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    margin: 0 0 var(--space-6);
+  }
+
+  .register-link {
+    color: var(--color-muted-foreground);
+    font-size: var(--text-sm);
+    margin: var(--space-4) 0 0;
+    text-align: center;
+  }
+
+  a {
+    color: var(--color-primary);
+    text-underline-offset: 2px;
+  }
+</style>

@@ -1,3 +1,17 @@
+CREATE TABLE `magic_link_tokens` (
+	`id` text PRIMARY KEY NOT NULL,
+	`store_id` text NOT NULL,
+	`token` text NOT NULL,
+	`purpose` text NOT NULL,
+	`expires_at` integer NOT NULL,
+	`used_at` integer,
+	`created_at` integer NOT NULL,
+	FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON UPDATE no action ON DELETE no action,
+	CONSTRAINT "magic_link_tokens_purpose_chk" CHECK("magic_link_tokens"."purpose" IN ('signup', 'login'))
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `magic_link_tokens_token_unique` ON `magic_link_tokens` (`token`);--> statement-breakpoint
+CREATE INDEX `idx_magic_link_tokens_store` ON `magic_link_tokens` (`store_id`);--> statement-breakpoint
 CREATE TABLE `menu_categories` (
 	`id` text PRIMARY KEY NOT NULL,
 	`store_id` text NOT NULL,
@@ -79,13 +93,28 @@ CREATE TABLE `seats` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `seats_qr_token_unique` ON `seats` (`qr_token`);--> statement-breakpoint
 CREATE INDEX `idx_seats_store` ON `seats` (`store_id`);--> statement-breakpoint
+CREATE TABLE `sessions` (
+	`id` text PRIMARY KEY NOT NULL,
+	`store_id` text NOT NULL,
+	`session_token` text NOT NULL,
+	`expires_at` integer NOT NULL,
+	`last_used_at` integer,
+	`created_at` integer NOT NULL,
+	FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `sessions_session_token_unique` ON `sessions` (`session_token`);--> statement-breakpoint
+CREATE INDEX `idx_sessions_store` ON `sessions` (`store_id`);--> statement-breakpoint
 CREATE TABLE `stores` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
 	`slug` text NOT NULL,
-	`access_token` text NOT NULL,
-	`created_at` integer NOT NULL
+	`email` text NOT NULL,
+	`status` text DEFAULT 'pending' NOT NULL,
+	`activated_at` integer,
+	`created_at` integer NOT NULL,
+	CONSTRAINT "stores_status_chk" CHECK("stores"."status" IN ('pending', 'active', 'suspended'))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `stores_slug_unique` ON `stores` (`slug`);--> statement-breakpoint
-CREATE UNIQUE INDEX `stores_access_token_unique` ON `stores` (`access_token`);
+CREATE UNIQUE INDEX `stores_email_unique` ON `stores` (`email`);

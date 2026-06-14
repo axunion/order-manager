@@ -2,9 +2,10 @@ import { getCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import { createDb } from "../../db/client";
 import {
-  ACCESS_TOKEN_COOKIE,
+  deleteSession,
   getSeatByQrToken,
-  getStoreByAccessToken,
+  getStoreBySession,
+  SESSION_TOKEN_COOKIE,
   type SeatSession,
   type StoreSession,
 } from "../auth";
@@ -25,19 +26,33 @@ export type AuthEnv = { Bindings: Env; Variables: { store: StoreSession } };
 export type SeatEnv = { Bindings: Env; Variables: { seat: SeatSession } };
 
 /**
- * Hono middleware that resolves the admin access_token cookie to a StoreSession.
- * Sets c.var.store on success; returns 401 if the token is missing or invalid.
+ * Hono middleware that resolves the session_token cookie to a StoreSession.
+ *
+ * Rejects with 401 if:
+ *   - the cookie is absent
+ *   - the session does not exist or is expired (expired sessions are deleted)
+ *   - the store is not in "active" status
+ *
+ * Sets c.var.store on success.
  *
  * Usage: router.use(requireStore) — applies to all subsequent handlers.
  */
 export const requireStore = createMiddleware<AuthEnv>(async (c, next) => {
-  const token = getCookie(c, ACCESS_TOKEN_COOKIE)?.trim() ?? "";
+  const token = getCookie(c, SESSION_TOKEN_COOKIE)?.trim() ?? "";
   if (!token) {
     return errorResponse("UNAUTHORIZED", "Authentication required", 401);
   }
 
-  const store = await getStoreByAccessToken(createDb(c.env.DB), token);
+  const db = createDb(c.env.DB);
+  const store = await getStoreBySession(db, token);
+
   if (!store) {
+    // Session missing or expired — clean up if the token was a real (but expired) session.
+    await deleteSession(db, token);
+    return errorResponse("UNAUTHORIZED", "Authentication required", 401);
+  }
+
+  if (store.status !== "active") {
     return errorResponse("UNAUTHORIZED", "Authentication required", 401);
   }
 

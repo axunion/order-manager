@@ -27,7 +27,8 @@
     "db:migrate": "wrangler d1 migrations apply order-manager --local",
     "db:reset": "rm -rf .wrangler/state/v3/d1 && pnpm db:migrate",
     "db:rebuild": "rm -rf drizzle/*.sql drizzle/meta && pnpm db:generate && pnpm db:reset",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "seed:dev": "npx tsx scripts/seed-dev.ts"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^13.6.0",

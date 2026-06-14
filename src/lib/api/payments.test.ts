@@ -5,27 +5,13 @@ import { describe, expect, it } from "vitest";
 import { createDb, schema } from "../../db/client";
 import { newId } from "../id";
 import { app } from "./index";
-import { jsonInit, withAuth } from "./test-helpers";
+import { jsonInit, seedStore, withAuth } from "./test-helpers";
 
 // ---------------------------------------------------------------------------
 // Seed helpers
 // ---------------------------------------------------------------------------
 
-type SeedStore = { id: string; access_token: string };
 type SeedSeat = { id: string };
-
-async function seedStore(name: string): Promise<SeedStore> {
-  const db = createDb(env.DB);
-  const id = newId();
-  const access_token = newId();
-  await db.insert(schema.stores).values({
-    id,
-    name,
-    slug: newId(),
-    access_token,
-  });
-  return { id, access_token };
-}
 
 async function seedSeat(storeId: string, name: string): Promise<SeedSeat> {
   const db = createDb(env.DB);
@@ -118,7 +104,7 @@ describe("GET /api/payments/pending", () => {
     const store = await seedStore("Payments Pending Empty");
     const res = await app.request(
       "/api/payments/pending",
-      withAuth(store.access_token),
+      withAuth(store.session_token),
       env,
     );
     expect(res.status).toBe(200);
@@ -139,7 +125,7 @@ describe("GET /api/payments/pending", () => {
 
     const res = await app.request(
       "/api/payments/pending",
-      withAuth(store.access_token),
+      withAuth(store.session_token),
       env,
     );
     expect(res.status).toBe(200);
@@ -178,7 +164,7 @@ describe("GET /api/payments/pending", () => {
 
     const res = await app.request(
       "/api/payments/pending",
-      withAuth(store.access_token),
+      withAuth(store.session_token),
       env,
     );
     expect(res.status).toBe(200);
@@ -193,7 +179,7 @@ describe("GET /api/payments/pending", () => {
 
     const res = await app.request(
       "/api/payments/pending",
-      withAuth(store.access_token),
+      withAuth(store.session_token),
       env,
     );
     expect(res.status).toBe(200);
@@ -209,7 +195,7 @@ describe("GET /api/payments/pending", () => {
 
     const res = await app.request(
       "/api/payments/pending",
-      withAuth(storeA.access_token),
+      withAuth(storeA.session_token),
       env,
     );
     expect(res.status).toBe(200);
@@ -236,7 +222,7 @@ describe("POST /api/payments", () => {
     const store = await seedStore("Payments Post Validation");
     const res = await app.request(
       "/api/payments",
-      withAuth(store.access_token, jsonInit("POST", {})),
+      withAuth(store.session_token, jsonInit("POST", {})),
       env,
     );
     expect(res.status).toBe(400);
@@ -248,7 +234,7 @@ describe("POST /api/payments", () => {
     const store = await seedStore("Payments Post 404");
     const res = await app.request(
       "/api/payments",
-      withAuth(store.access_token, jsonInit("POST", { order_id: newId() })),
+      withAuth(store.session_token, jsonInit("POST", { order_id: newId() })),
       env,
     );
     expect(res.status).toBe(404);
@@ -264,7 +250,7 @@ describe("POST /api/payments", () => {
 
     const res = await app.request(
       "/api/payments",
-      withAuth(storeA.access_token, jsonInit("POST", { order_id: orderIdB })),
+      withAuth(storeA.session_token, jsonInit("POST", { order_id: orderIdB })),
       env,
     );
     expect(res.status).toBe(404);
@@ -280,7 +266,7 @@ describe("POST /api/payments", () => {
 
     const res = await app.request(
       "/api/payments",
-      withAuth(store.access_token, jsonInit("POST", { order_id: orderId })),
+      withAuth(store.session_token, jsonInit("POST", { order_id: orderId })),
       env,
     );
     expect(res.status).toBe(409);
@@ -295,7 +281,7 @@ describe("POST /api/payments", () => {
 
     const res = await app.request(
       "/api/payments",
-      withAuth(store.access_token, jsonInit("POST", { order_id: orderId })),
+      withAuth(store.session_token, jsonInit("POST", { order_id: orderId })),
       env,
     );
     expect(res.status).toBe(409);
@@ -316,7 +302,7 @@ describe("POST /api/payments", () => {
 
     const res = await app.request(
       "/api/payments",
-      withAuth(store.access_token, jsonInit("POST", { order_id: orderId })),
+      withAuth(store.session_token, jsonInit("POST", { order_id: orderId })),
       env,
     );
     expect(res.status).toBe(201);
@@ -374,7 +360,7 @@ describe("POST /api/payments", () => {
 
     const res = await app.request(
       "/api/payments",
-      withAuth(store.access_token, jsonInit("POST", { order_id: orderId })),
+      withAuth(store.session_token, jsonInit("POST", { order_id: orderId })),
       env,
     );
     expect(res.status).toBe(201);
@@ -396,7 +382,7 @@ describe("POST /api/payments", () => {
     // First payment — should succeed
     const res1 = await app.request(
       "/api/payments",
-      withAuth(store.access_token, jsonInit("POST", { order_id: orderId })),
+      withAuth(store.session_token, jsonInit("POST", { order_id: orderId })),
       env,
     );
     expect(res1.status).toBe(201);
@@ -404,7 +390,7 @@ describe("POST /api/payments", () => {
     // Second payment — should be rejected
     const res2 = await app.request(
       "/api/payments",
-      withAuth(store.access_token, jsonInit("POST", { order_id: orderId })),
+      withAuth(store.session_token, jsonInit("POST", { order_id: orderId })),
       env,
     );
     expect(res2.status).toBe(409);

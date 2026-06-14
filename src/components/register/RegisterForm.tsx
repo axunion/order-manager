@@ -1,14 +1,18 @@
 import { createSignal } from "solid-js";
+import { jsonFetch } from "../../lib/client";
 import Button from "../ui/Button";
 import Field from "../ui/Field";
 import styles from "./RegisterForm.module.css";
 
 /**
  * Store registration form (申込み画面).
- * Submits POST /api/stores and redirects to /admin on success.
+ * Submits POST /api/stores; on success redirects to /register/check-email.
+ * No cookie is set here — the session is created when the owner clicks the
+ * Magic Link email.
  */
 export default function RegisterForm() {
   const [name, setName] = createSignal("");
+  const [email, setEmail] = createSignal("");
   const [error, setError] = createSignal("");
   const [submitting, setSubmitting] = createSignal(false);
 
@@ -18,30 +22,17 @@ export default function RegisterForm() {
     setSubmitting(true);
 
     try {
-      const res = await fetch("/api/stores", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name() }),
+      const result = await jsonFetch("/api/stores", "POST", {
+        name: name(),
+        email: email(),
       });
 
-      if (!res.ok) {
-        // Parse the error body separately so a non-JSON infrastructure error
-        // (e.g. a Cloudflare HTML 503 page) doesn't mask the HTTP status.
-        let message = "登録に失敗しました";
-        try {
-          const errBody = (await res.json()) as {
-            error: { code: string; message: string };
-          };
-          message = errBody.error?.message ?? message;
-        } catch {
-          // non-JSON error body — keep the fallback message
-        }
-        setError(message);
+      if (!result.ok) {
+        setError(result.message ?? "登録に失敗しました");
         return;
       }
 
-      // Cookie is already set by the Set-Cookie response header.
-      window.location.href = "/admin";
+      window.location.href = "/register/check-email";
     } catch {
       setError("通信エラーが発生しました。再度お試しください。");
     } finally {
@@ -60,10 +51,24 @@ export default function RegisterForm() {
         required
         maxLength={100}
         disabled={submitting()}
-        error={error()}
       />
+      <Field
+        id="store-email"
+        label="メールアドレス"
+        type="email"
+        value={email()}
+        onInput={(e) => setEmail(e.currentTarget.value)}
+        placeholder="例：owner@example.com"
+        required
+        disabled={submitting()}
+      />
+      {error() && (
+        <p class={styles.formError} role="alert">
+          {error()}
+        </p>
+      )}
       <Button type="submit" fullWidth disabled={submitting()}>
-        {submitting() ? "登録中..." : "登録する"}
+        {submitting() ? "送信中..." : "申し込む"}
       </Button>
     </form>
   );

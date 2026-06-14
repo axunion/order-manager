@@ -1,12 +1,14 @@
 import { getTableConfig, type SQLiteTable } from "drizzle-orm/sqlite-core";
 import { describe, expect, it } from "vitest";
 import {
+  magicLinkTokens,
   menuCategories,
   menuItems,
   orderItems,
   orders,
   payments,
   seats,
+  sessions,
   stores,
 } from "./schema";
 
@@ -22,8 +24,69 @@ describe("stores", () => {
   it("table name", () => expect(getTableConfig(stores).name).toBe("stores"));
   it("columns", () =>
     expect(colNames(stores)).toEqual(
-      new Set(["id", "name", "slug", "access_token", "created_at"]),
+      new Set([
+        "id",
+        "name",
+        "slug",
+        "email",
+        "status",
+        "activated_at",
+        "created_at",
+      ]),
     ));
+  it("status default is 'pending'", () => {
+    const col = findCol(stores, "status");
+    expect(col?.default).toBe("pending");
+  });
+  it("activated_at is nullable", () => {
+    const col = findCol(stores, "activated_at");
+    expect(col?.notNull).toBe(false);
+  });
+});
+
+describe("sessions", () => {
+  it("table name", () =>
+    expect(getTableConfig(sessions).name).toBe("sessions"));
+  it("columns", () =>
+    expect(colNames(sessions)).toEqual(
+      new Set([
+        "id",
+        "store_id",
+        "session_token",
+        "expires_at",
+        "last_used_at",
+        "created_at",
+      ]),
+    ));
+  it("last_used_at is nullable", () => {
+    const col = findCol(sessions, "last_used_at");
+    expect(col?.notNull).toBe(false);
+  });
+});
+
+describe("magic_link_tokens", () => {
+  it("table name", () =>
+    expect(getTableConfig(magicLinkTokens).name).toBe("magic_link_tokens"));
+  it("columns", () =>
+    expect(colNames(magicLinkTokens)).toEqual(
+      new Set([
+        "id",
+        "store_id",
+        "token",
+        "purpose",
+        "expires_at",
+        "used_at",
+        "created_at",
+      ]),
+    ));
+  it("purpose enum values", () => {
+    const col = findCol(magicLinkTokens, "purpose");
+    expect(col?.enumValues).toEqual(["signup", "login"]);
+  });
+  it("used_at is nullable", () => {
+    const col = findCol(magicLinkTokens, "used_at");
+    expect(col?.notNull).toBe(false);
+  });
 });
 
 describe("menu_categories", () => {

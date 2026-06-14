@@ -5,27 +5,13 @@ import { describe, expect, it } from "vitest";
 import { createDb, schema } from "../../db/client";
 import { newId } from "../id";
 import { app } from "./index";
-import { jsonInit } from "./test-helpers";
+import { jsonInit, seedStore } from "./test-helpers";
 
 // ---------------------------------------------------------------------------
 // Seed helpers
 // ---------------------------------------------------------------------------
 
-type SeedStore = { id: string; access_token: string };
 type SeedSeat = { id: string; qr_token: string };
-
-async function seedStore(name: string): Promise<SeedStore> {
-  const db = createDb(env.DB);
-  const id = newId();
-  const access_token = newId();
-  await db.insert(schema.stores).values({
-    id,
-    name,
-    slug: newId(),
-    access_token,
-  });
-  return { id, access_token };
-}
 
 async function seedSeat(storeId: string, name: string): Promise<SeedSeat> {
   const db = createDb(env.DB);

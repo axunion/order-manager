@@ -5,27 +5,7 @@ import { describe, expect, it } from "vitest";
 import { createDb, schema } from "../../db/client";
 import { newId } from "../id";
 import { app } from "./index";
-import { jsonInit, withAuth } from "./test-helpers";
-
-// ---------------------------------------------------------------------------
-// Seed helpers
-// ---------------------------------------------------------------------------
-
-type SeedStore = { id: string; access_token: string };
-
-/** Creates a store directly in D1 and returns id + access_token. */
-async function seedStore(name: string): Promise<SeedStore> {
-  const db = createDb(env.DB);
-  const id = newId();
-  const access_token = newId();
-  await db.insert(schema.stores).values({
-    id,
-    name,
-    slug: newId(), // unique slug (UUID is fine for tests)
-    access_token,
-  });
-  return { id, access_token };
-}
+import { jsonInit, seedStore, withAuth } from "./test-helpers";
 
 // ---------------------------------------------------------------------------
 // Categories
@@ -72,7 +52,7 @@ describe("GET /api/menu/categories", () => {
 
     const res = await app.request(
       "/api/menu/categories",
-      withAuth(storeA.access_token),
+      withAuth(storeA.session_token),
       env,
     );
     expect(res.status).toBe(200);
@@ -91,7 +71,7 @@ describe("POST /api/menu/categories", () => {
     const store = await seedStore("Cat Create");
     const res = await app.request(
       "/api/menu/categories",
-      withAuth(store.access_token, jsonInit("POST", { name: "Drinks" })),
+      withAuth(store.session_token, jsonInit("POST", { name: "Drinks" })),
       env,
     );
     expect(res.status).toBe(201);
@@ -108,7 +88,7 @@ describe("POST /api/menu/categories", () => {
     const store = await seedStore("Cat Persist");
     const res = await app.request(
       "/api/menu/categories",
-      withAuth(store.access_token, jsonInit("POST", { name: "Persist Cat" })),
+      withAuth(store.session_token, jsonInit("POST", { name: "Persist Cat" })),
       env,
     );
     const body = (await res.json()) as { data: { id: string } };
@@ -125,7 +105,7 @@ describe("POST /api/menu/categories", () => {
     const store = await seedStore("Cat Val1");
     const res = await app.request(
       "/api/menu/categories",
-      withAuth(store.access_token, jsonInit("POST", {})),
+      withAuth(store.session_token, jsonInit("POST", {})),
       env,
     );
     expect(res.status).toBe(400);
@@ -137,7 +117,7 @@ describe("POST /api/menu/categories", () => {
     const store = await seedStore("Cat Val2");
     const res = await app.request(
       "/api/menu/categories",
-      withAuth(store.access_token, jsonInit("POST", { name: "   " })),
+      withAuth(store.session_token, jsonInit("POST", { name: "   " })),
       env,
     );
     expect(res.status).toBe(400);
@@ -147,7 +127,10 @@ describe("POST /api/menu/categories", () => {
     const store = await seedStore("Cat Val3");
     const res = await app.request(
       "/api/menu/categories",
-      withAuth(store.access_token, jsonInit("POST", { name: "a".repeat(101) })),
+      withAuth(
+        store.session_token,
+        jsonInit("POST", { name: "a".repeat(101) }),
+      ),
       env,
     );
     expect(res.status).toBe(400);
@@ -178,7 +161,7 @@ describe("PATCH /api/menu/categories/:id", () => {
     const res = await app.request(
       `/api/menu/categories/${id}`,
       withAuth(
-        store.access_token,
+        store.session_token,
         jsonInit("PATCH", { name: "New Name", sort_order: 5 }),
       ),
       env,
@@ -196,7 +179,7 @@ describe("PATCH /api/menu/categories/:id", () => {
     const res = await app.request(
       `/api/menu/categories/${newId()}`,
       withAuth(
-        store.access_token,
+        store.session_token,
         jsonInit("PATCH", { name: "X", sort_order: 0 }),
       ),
       env,
@@ -221,7 +204,7 @@ describe("PATCH /api/menu/categories/:id", () => {
     const res = await app.request(
       `/api/menu/categories/${id}`,
       withAuth(
-        storeA.access_token,
+        storeA.session_token,
         jsonInit("PATCH", { name: "Hijack", sort_order: 0 }),
       ),
       env,
@@ -251,7 +234,7 @@ describe("PATCH /api/menu/categories/:id", () => {
 
     const res = await app.request(
       `/api/menu/categories/${id}`,
-      withAuth(store.access_token, jsonInit("PATCH", { name: "Renamed Cat" })),
+      withAuth(store.session_token, jsonInit("PATCH", { name: "Renamed Cat" })),
       env,
     );
     expect(res.status).toBe(200);
@@ -274,7 +257,7 @@ describe("DELETE /api/menu/categories/:id", () => {
 
     const res = await app.request(
       `/api/menu/categories/${id}`,
-      withAuth(store.access_token, { method: "DELETE" }),
+      withAuth(store.session_token, { method: "DELETE" }),
       env,
     );
     expect(res.status).toBe(200);
@@ -306,7 +289,7 @@ describe("DELETE /api/menu/categories/:id", () => {
 
     const res = await app.request(
       `/api/menu/categories/${catId}`,
-      withAuth(store.access_token, { method: "DELETE" }),
+      withAuth(store.session_token, { method: "DELETE" }),
       env,
     );
     expect(res.status).toBe(200);
@@ -331,7 +314,7 @@ describe("DELETE /api/menu/categories/:id", () => {
     const store = await seedStore("Cat Del 404");
     const res = await app.request(
       `/api/menu/categories/${newId()}`,
-      withAuth(store.access_token, { method: "DELETE" }),
+      withAuth(store.session_token, { method: "DELETE" }),
       env,
     );
     expect(res.status).toBe(404);
@@ -351,7 +334,7 @@ describe("DELETE /api/menu/categories/:id", () => {
 
     const res = await app.request(
       `/api/menu/categories/${id}`,
-      withAuth(storeA.access_token, { method: "DELETE" }),
+      withAuth(storeA.session_token, { method: "DELETE" }),
       env,
     );
     expect(res.status).toBe(404);
@@ -410,7 +393,7 @@ describe("GET /api/menu/items", () => {
 
     const res = await app.request(
       "/api/menu/items",
-      withAuth(storeA.access_token),
+      withAuth(storeA.session_token),
       env,
     );
     expect(res.status).toBe(200);
@@ -430,7 +413,7 @@ describe("POST /api/menu/items", () => {
     const res = await app.request(
       "/api/menu/items",
       withAuth(
-        store.access_token,
+        store.session_token,
         jsonInit("POST", { name: "Latte", price: 500 }),
       ),
       env,
@@ -468,7 +451,7 @@ describe("POST /api/menu/items", () => {
     const res = await app.request(
       "/api/menu/items",
       withAuth(
-        store.access_token,
+        store.session_token,
         jsonInit("POST", { name: "Sandwich", price: 800, category_id: catId }),
       ),
       env,
@@ -493,7 +476,7 @@ describe("POST /api/menu/items", () => {
     const res = await app.request(
       "/api/menu/items",
       withAuth(
-        storeA.access_token,
+        storeA.session_token,
         jsonInit("POST", { name: "X", price: 100, category_id: catId }),
       ),
       env,
@@ -508,7 +491,7 @@ describe("POST /api/menu/items", () => {
     const res = await app.request(
       "/api/menu/items",
       withAuth(
-        store.access_token,
+        store.session_token,
         jsonInit("POST", { name: "Free", price: 0 }),
       ),
       env,
@@ -520,7 +503,7 @@ describe("POST /api/menu/items", () => {
     const store = await seedStore("Item PriceNeg");
     const res = await app.request(
       "/api/menu/items",
-      withAuth(store.access_token, jsonInit("POST", { name: "X", price: -1 })),
+      withAuth(store.session_token, jsonInit("POST", { name: "X", price: -1 })),
       env,
     );
     expect(res.status).toBe(400);
@@ -531,7 +514,7 @@ describe("POST /api/menu/items", () => {
     const res = await app.request(
       "/api/menu/items",
       withAuth(
-        store.access_token,
+        store.session_token,
         jsonInit("POST", { name: "   ", price: 100 }),
       ),
       env,
@@ -553,7 +536,7 @@ describe("POST /api/menu/items", () => {
     const res = await app.request(
       "/api/menu/items",
       withAuth(
-        store.access_token,
+        store.session_token,
         jsonInit("POST", { name: "Espresso", price: 350 }),
       ),
       env,
@@ -585,7 +568,7 @@ describe("PATCH /api/menu/items/:id", () => {
     const res = await app.request(
       `/api/menu/items/${id}`,
       withAuth(
-        store.access_token,
+        store.session_token,
         jsonInit("PATCH", {
           name: "New",
           price: 200,
@@ -625,7 +608,7 @@ describe("PATCH /api/menu/items/:id", () => {
     const res = await app.request(
       `/api/menu/items/${id}`,
       withAuth(
-        store.access_token,
+        store.session_token,
         jsonInit("PATCH", {
           name: "Toggleable",
           price: 300,
@@ -662,7 +645,7 @@ describe("PATCH /api/menu/items/:id", () => {
     const res = await app.request(
       `/api/menu/items/${itemId}`,
       withAuth(
-        storeA.access_token,
+        storeA.session_token,
         jsonInit("PATCH", {
           name: "My Item",
           price: 200,
@@ -681,7 +664,7 @@ describe("PATCH /api/menu/items/:id", () => {
     const res = await app.request(
       `/api/menu/items/${newId()}`,
       withAuth(
-        store.access_token,
+        store.session_token,
         jsonInit("PATCH", {
           name: "X",
           price: 100,
@@ -709,7 +692,7 @@ describe("PATCH /api/menu/items/:id", () => {
     const res = await app.request(
       `/api/menu/items/${id}`,
       withAuth(
-        storeA.access_token,
+        storeA.session_token,
         jsonInit("PATCH", {
           name: "Hijack",
           price: 100,
@@ -759,7 +742,7 @@ describe("PATCH /api/menu/items/:id", () => {
     const res = await app.request(
       `/api/menu/items/${itemId}`,
       withAuth(
-        store.access_token,
+        store.session_token,
         jsonInit("PATCH", {
           name: "New Sandwich",
           price: 900,
@@ -800,7 +783,7 @@ describe("PATCH /api/menu/items/:id", () => {
     const res = await app.request(
       `/api/menu/items/${itemId}`,
       withAuth(
-        store.access_token,
+        store.session_token,
         jsonInit("PATCH", {
           name: "Latte",
           price: 500,
@@ -834,7 +817,7 @@ describe("PATCH /api/menu/items/:id", () => {
     const res = await app.request(
       `/api/menu/items/${id}`,
       withAuth(
-        store.access_token,
+        store.session_token,
         jsonInit("PATCH", {
           name: "Double Espresso",
           price: 400,
@@ -863,7 +846,7 @@ describe("DELETE /api/menu/items/:id", () => {
 
     const res = await app.request(
       `/api/menu/items/${id}`,
-      withAuth(store.access_token, { method: "DELETE" }),
+      withAuth(store.session_token, { method: "DELETE" }),
       env,
     );
     expect(res.status).toBe(200);
@@ -913,7 +896,7 @@ describe("DELETE /api/menu/items/:id", () => {
 
     const res = await app.request(
       `/api/menu/items/${itemId}`,
-      withAuth(store.access_token, { method: "DELETE" }),
+      withAuth(store.session_token, { method: "DELETE" }),
       env,
     );
     expect(res.status).toBe(409);
@@ -932,7 +915,7 @@ describe("DELETE /api/menu/items/:id", () => {
     const store = await seedStore("Item Del 404");
     const res = await app.request(
       `/api/menu/items/${newId()}`,
-      withAuth(store.access_token, { method: "DELETE" }),
+      withAuth(store.session_token, { method: "DELETE" }),
       env,
     );
     expect(res.status).toBe(404);
@@ -952,7 +935,7 @@ describe("DELETE /api/menu/items/:id", () => {
 
     const res = await app.request(
       `/api/menu/items/${id}`,
-      withAuth(storeA.access_token, { method: "DELETE" }),
+      withAuth(storeA.session_token, { method: "DELETE" }),
       env,
     );
     expect(res.status).toBe(404);

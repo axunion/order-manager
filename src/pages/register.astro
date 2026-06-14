@@ -1,8 +1,8 @@
 ---
 /**
- * ① 申込み画面
- * New store registration. No authentication required.
- * On success the API sets the access_token cookie and the form redirects to /admin.
+ * Store registration page.
+ * No authentication required. On success the form redirects to /register/check-email.
+ * The session is created later when the owner clicks the Magic Link in the email.
  */
 
 import RegisterForm from "../components/register/RegisterForm";
@@ -12,14 +12,10 @@ import Layout from "../layouts/Layout.astro";
 
 <Layout title="店舗登録 | オーダーマネージャー">
   <main class="register-page">
-    <!--
-      Card provides background, radius, and shadow.
-      Width and padding are overridden via inline style for this specific layout.
-    -->
     <Card style="width: min(var(--container-mobile), 100%); padding: var(--space-10) var(--space-8)">
       <h1>店舗登録</h1>
       <p class="subtitle">
-        店舗名を入力して申込みを完了してください。
+        店舗名とメールアドレスを入力してください。確認メールが届いたらリンクをクリックして登録を完了してください。
       </p>
       <RegisterForm client:load />
     </Card>
@@ -45,6 +41,7 @@ import Layout from "../layouts/Layout.astro";
   .subtitle {
     color: var(--color-muted-foreground);
     font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
     margin: 0 0 var(--space-6);
   }
 </style>

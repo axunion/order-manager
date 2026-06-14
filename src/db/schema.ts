@@ -13,19 +13,41 @@ import { now } from "../lib/time";
 // ---------------------------------------------------------------------------
 // stores — one record per tenant
 // ---------------------------------------------------------------------------
-export const stores = sqliteTable("stores", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => newId()),
-  name: text("name").notNull(),
-  /** URL-friendly identifier, reserved for future use */
-  slug: text("slug").notNull().unique(),
-  /** UUID v4 token stored in HttpOnly cookie for admin access */
-  access_token: text("access_token").notNull().unique(),
-  created_at: integer("created_at")
-    .notNull()
-    .$defaultFn(() => now()), // Unix ms
-});
+export const stores = sqliteTable(
+  "stores",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => newId()),
+    name: text("name").notNull(),
+    /** URL-friendly identifier */
+    slug: text("slug").notNull().unique(),
+    /** Owner email; used as the Magic Link delivery address */
+    email: text("email").notNull().unique(),
+    /**
+     * Lifecycle state:
+     *   pending    — registered, email not yet verified
+     *   active     — email verified; admin access granted
+     *   suspended  — future: account disabled
+     */
+    status: text("status", {
+      enum: ["pending", "active", "suspended"],
+    })
+      .notNull()
+      .default("pending"),
+    /** Set when status transitions to 'active' (Unix ms) */
+    activated_at: integer("activated_at"), // nullable
+    created_at: integer("created_at")
+      .notNull()
+      .$defaultFn(() => now()), // Unix ms
+  },
+  (table) => [
+    check(
+      "stores_status_chk",
+      sql`${table.status} IN ('pending', 'active', 'suspended')`,
+    ),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // menu_categories
@@ -66,6 +88,64 @@ export const menuItems = sqliteTable(
   (table) => [
     index("idx_menu_items_store").on(table.store_id),
     check("menu_items_price_positive_chk", sql`${table.price} > 0`),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// sessions — admin login sessions (one store can have many active sessions)
+// ---------------------------------------------------------------------------
+export const sessions = sqliteTable(
+  "sessions",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => newId()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    /** UUID v4 stored in HttpOnly session_token cookie */
+    session_token: text("session_token").notNull().unique(),
+    /** Unix ms; session is invalid after this timestamp */
+    expires_at: integer("expires_at").notNull(),
+    /** Reserved for future sliding-window expiry (nullable) */
+    last_used_at: integer("last_used_at"),
+    created_at: integer("created_at")
+      .notNull()
+      .$defaultFn(() => now()), // Unix ms
+  },
+  (table) => [index("idx_sessions_store").on(table.store_id)],
+);
+
+// ---------------------------------------------------------------------------
+// magic_link_tokens — short-lived one-time-use tokens for Magic Link auth
+// ---------------------------------------------------------------------------
+export const magicLinkTokens = sqliteTable(
+  "magic_link_tokens",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => newId()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    /** UUID v4 embedded in the Magic Link URL */
+    token: text("token").notNull().unique(),
+    /** 'signup' for first-time onboarding; 'login' for returning owners */
+    purpose: text("purpose", { enum: ["signup", "login"] }).notNull(),
+    /** Unix ms; token is invalid after this timestamp */
+    expires_at: integer("expires_at").notNull(),
+    /** Set when the token is consumed; kept for audit trail (not deleted) */
+    used_at: integer("used_at"), // nullable
+    created_at: integer("created_at")
+      .notNull()
+      .$defaultFn(() => now()), // Unix ms
+  },
+  (table) => [
+    index("idx_magic_link_tokens_store").on(table.store_id),
+    check(
+      "magic_link_tokens_purpose_chk",
+      sql`${table.purpose} IN ('signup', 'login')`,
+    ),
   ],
 );
 

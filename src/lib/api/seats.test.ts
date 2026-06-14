@@ -5,27 +5,7 @@ import { describe, expect, it } from "vitest";
 import { createDb, schema } from "../../db/client";
 import { newId } from "../id";
 import { app } from "./index";
-import { jsonInit, withAuth } from "./test-helpers";
-
-// ---------------------------------------------------------------------------
-// Seed helpers
-// ---------------------------------------------------------------------------
-
-type SeedStore = { id: string; access_token: string };
-
-/** Creates a store directly in D1 and returns id + access_token. */
-async function seedStore(name: string): Promise<SeedStore> {
-  const db = createDb(env.DB);
-  const id = newId();
-  const access_token = newId();
-  await db.insert(schema.stores).values({
-    id,
-    name,
-    slug: newId(),
-    access_token,
-  });
-  return { id, access_token };
-}
+import { jsonInit, seedStore, withAuth } from "./test-helpers";
 
 // ---------------------------------------------------------------------------
 // GET /api/seats
@@ -72,7 +52,7 @@ describe("GET /api/seats", () => {
 
     const res = await app.request(
       "/api/seats",
-      withAuth(storeA.access_token),
+      withAuth(storeA.session_token),
       env,
     );
     expect(res.status).toBe(200);
@@ -98,7 +78,7 @@ describe("GET /api/seats", () => {
 
     const res = await app.request(
       "/api/seats",
-      withAuth(store.access_token),
+      withAuth(store.session_token),
       env,
     );
     expect(res.status).toBe(200);
@@ -118,7 +98,7 @@ describe("POST /api/seats", () => {
     const store = await seedStore("Seat Create");
     const res = await app.request(
       "/api/seats",
-      withAuth(store.access_token, jsonInit("POST", { name: "Table A" })),
+      withAuth(store.session_token, jsonInit("POST", { name: "Table A" })),
       env,
     );
     expect(res.status).toBe(201);
@@ -142,7 +122,7 @@ describe("POST /api/seats", () => {
     const store = await seedStore("Seat QR Unique");
     const res = await app.request(
       "/api/seats",
-      withAuth(store.access_token, jsonInit("POST", { name: "QR Seat" })),
+      withAuth(store.session_token, jsonInit("POST", { name: "QR Seat" })),
       env,
     );
     const body = (await res.json()) as {
@@ -157,7 +137,7 @@ describe("POST /api/seats", () => {
     const store = await seedStore("Seat Persist");
     const res = await app.request(
       "/api/seats",
-      withAuth(store.access_token, jsonInit("POST", { name: "Persist Seat" })),
+      withAuth(store.session_token, jsonInit("POST", { name: "Persist Seat" })),
       env,
     );
     const body = (await res.json()) as { data: { id: string } };
@@ -175,7 +155,7 @@ describe("POST /api/seats", () => {
     const store = await seedStore("Seat Val1");
     const res = await app.request(
       "/api/seats",
-      withAuth(store.access_token, jsonInit("POST", {})),
+      withAuth(store.session_token, jsonInit("POST", {})),
       env,
     );
     expect(res.status).toBe(400);
@@ -187,7 +167,7 @@ describe("POST /api/seats", () => {
     const store = await seedStore("Seat Val2");
     const res = await app.request(
       "/api/seats",
-      withAuth(store.access_token, jsonInit("POST", { name: "   " })),
+      withAuth(store.session_token, jsonInit("POST", { name: "   " })),
       env,
     );
     expect(res.status).toBe(400);
@@ -197,7 +177,10 @@ describe("POST /api/seats", () => {
     const store = await seedStore("Seat Val3");
     const res = await app.request(
       "/api/seats",
-      withAuth(store.access_token, jsonInit("POST", { name: "a".repeat(101) })),
+      withAuth(
+        store.session_token,
+        jsonInit("POST", { name: "a".repeat(101) }),
+      ),
       env,
     );
     expect(res.status).toBe(400);
@@ -231,7 +214,7 @@ describe("DELETE /api/seats/:id", () => {
 
     const res = await app.request(
       `/api/seats/${id}`,
-      withAuth(store.access_token, { method: "DELETE" }),
+      withAuth(store.session_token, { method: "DELETE" }),
       env,
     );
     expect(res.status).toBe(200);
@@ -249,7 +232,7 @@ describe("DELETE /api/seats/:id", () => {
     const store = await seedStore("Seat Del 404");
     const res = await app.request(
       `/api/seats/${newId()}`,
-      withAuth(store.access_token, { method: "DELETE" }),
+      withAuth(store.session_token, { method: "DELETE" }),
       env,
     );
     expect(res.status).toBe(404);
@@ -271,7 +254,7 @@ describe("DELETE /api/seats/:id", () => {
 
     const res = await app.request(
       `/api/seats/${id}`,
-      withAuth(storeA.access_token, { method: "DELETE" }),
+      withAuth(storeA.session_token, { method: "DELETE" }),
       env,
     );
     expect(res.status).toBe(404);
@@ -297,7 +280,7 @@ describe("DELETE /api/seats/:id", () => {
 
     const res = await app.request(
       `/api/seats/${seatId}`,
-      withAuth(store.access_token, { method: "DELETE" }),
+      withAuth(store.session_token, { method: "DELETE" }),
       env,
     );
     expect(res.status).toBe(409);
@@ -332,7 +315,7 @@ describe("DELETE /api/seats/:id", () => {
 
     const res = await app.request(
       `/api/seats/${seatId}`,
-      withAuth(store.access_token, { method: "DELETE" }),
+      withAuth(store.session_token, { method: "DELETE" }),
       env,
     );
     expect(res.status).toBe(409);
@@ -363,7 +346,7 @@ describe("DELETE /api/seats/:id", () => {
 
     const res = await app.request(
       `/api/seats/${seatId}`,
-      withAuth(store.access_token, { method: "DELETE" }),
+      withAuth(store.session_token, { method: "DELETE" }),
       env,
     );
     expect(res.status).toBe(409);

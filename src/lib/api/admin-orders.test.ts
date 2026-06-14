@@ -4,27 +4,13 @@ import { describe, expect, it } from "vitest";
 import { createDb, schema } from "../../db/client";
 import { newId } from "../id";
 import { app } from "./index";
-import { withAuth } from "./test-helpers";
+import { seedStore, withAuth } from "./test-helpers";
 
 // ---------------------------------------------------------------------------
 // Seed helpers
 // ---------------------------------------------------------------------------
 
-type SeedStore = { id: string; access_token: string };
 type SeedSeat = { id: string; qr_token: string };
-
-async function seedStore(name: string): Promise<SeedStore> {
-  const db = createDb(env.DB);
-  const id = newId();
-  const access_token = newId();
-  await db.insert(schema.stores).values({
-    id,
-    name,
-    slug: newId(),
-    access_token,
-  });
-  return { id, access_token };
-}
 
 async function seedSeat(storeId: string, name: string): Promise<SeedSeat> {
   const db = createDb(env.DB);
@@ -128,7 +114,7 @@ describe("GET /api/admin/orders", () => {
     const store = await seedStore("AdminOrders Empty");
     const res = await app.request(
       "/api/admin/orders",
-      withAuth(store.access_token),
+      withAuth(store.session_token),
       env,
     );
     expect(res.status).toBe(200);
@@ -149,7 +135,7 @@ describe("GET /api/admin/orders", () => {
 
     const res = await app.request(
       "/api/admin/orders",
-      withAuth(store.access_token),
+      withAuth(store.session_token),
       env,
     );
     expect(res.status).toBe(200);
@@ -183,7 +169,7 @@ describe("GET /api/admin/orders", () => {
 
     const res = await app.request(
       "/api/admin/orders",
-      withAuth(store.access_token),
+      withAuth(store.session_token),
       env,
     );
     expect(res.status).toBe(200);
@@ -208,7 +194,7 @@ describe("GET /api/admin/orders", () => {
 
     const res = await app.request(
       "/api/admin/orders",
-      withAuth(store.access_token),
+      withAuth(store.session_token),
       env,
     );
     expect(res.status).toBe(200);
@@ -227,7 +213,7 @@ describe("GET /api/admin/orders", () => {
 
     const res = await app.request(
       `/api/admin/orders?since=${now}`,
-      withAuth(store.access_token),
+      withAuth(store.session_token),
       env,
     );
     expect(res.status).toBe(200);
@@ -245,7 +231,7 @@ describe("GET /api/admin/orders", () => {
 
     const res = await app.request(
       "/api/admin/orders",
-      withAuth(storeA.access_token),
+      withAuth(storeA.session_token),
       env,
     );
     expect(res.status).toBe(200);
@@ -263,7 +249,7 @@ describe("GET /api/admin/orders", () => {
 
     const res = await app.request(
       "/api/admin/orders",
-      withAuth(store.access_token),
+      withAuth(store.session_token),
       env,
     );
     const body = (await res.json()) as { data: { id: string }[] };
@@ -299,7 +285,7 @@ describe("PATCH /api/admin/orders/items/:id/serve", () => {
 
     const res = await app.request(
       `/api/admin/orders/items/${itemId}/serve`,
-      withAuth(store.access_token, { method: "PATCH" }),
+      withAuth(store.session_token, { method: "PATCH" }),
       env,
     );
     expect(res.status).toBe(200);
@@ -330,7 +316,7 @@ describe("PATCH /api/admin/orders/items/:id/serve", () => {
 
     const res = await app.request(
       `/api/admin/orders/items/${itemId}/serve`,
-      withAuth(store.access_token, { method: "PATCH" }),
+      withAuth(store.session_token, { method: "PATCH" }),
       env,
     );
     expect(res.status).toBe(200);
@@ -343,7 +329,7 @@ describe("PATCH /api/admin/orders/items/:id/serve", () => {
 
     const res = await app.request(
       `/api/admin/orders/items/${newId()}/serve`,
-      withAuth(store.access_token, { method: "PATCH" }),
+      withAuth(store.session_token, { method: "PATCH" }),
       env,
     );
     expect(res.status).toBe(404);
@@ -366,7 +352,7 @@ describe("PATCH /api/admin/orders/items/:id/serve", () => {
     // storeA tries to serve storeB's item
     const res = await app.request(
       `/api/admin/orders/items/${itemIdB}/serve`,
-      withAuth(storeA.access_token, { method: "PATCH" }),
+      withAuth(storeA.session_token, { method: "PATCH" }),
       env,
     );
     expect(res.status).toBe(404);
