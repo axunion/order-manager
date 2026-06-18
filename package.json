@@ -5,12 +5,12 @@
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": "24.16.0",
+      "version": "^24",
       "onFail": "warn"
     },
     "packageManager": {
       "name": "pnpm",
-      "version": "11.5.2",
+      "version": "^11",
       "onFail": "warn"
     }
   },
@@ -19,8 +19,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "check": "biome check . && astro check",
-    "fix": "biome check --write .",
+    "check": "biome check && astro check",
+    "fix": "biome check --write",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
@@ -44,7 +44,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
-    "@biomejs/biome": "2.4.16",
+    "@biomejs/biome": "2.5.0",
     "@cloudflare/vitest-pool-workers": "^0.16.10",
     "@cloudflare/workers-types": "^4.20260530.1",
     "@solidjs/testing-library": "^0.8.10",
