@@ -15,6 +15,7 @@
     }
   },
   "scripts": {
+    "prepare": "lefthook install",
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
@@ -31,13 +32,13 @@
     "seed:dev": "npx tsx scripts/seed-dev.ts"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "^13.6.0",
+    "@astrojs/cloudflare": "^13.7.0",
     "@astrojs/solid-js": "^6.0.1",
     "@hono/zod-validator": "^0.8.0",
     "@kobalte/core": "^0.13.11",
-    "astro": "^6.4.2",
+    "astro": "^6.4.8",
     "drizzle-orm": "^0.45.2",
-    "hono": "^4.12.23",
+    "hono": "^4.12.26",
     "qrcode": "^1.5.4",
     "solid-js": "^1.9.13",
     "zod": "^4.4.3"
@@ -45,19 +46,19 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
     "@biomejs/biome": "2.5.0",
-    "@cloudflare/vitest-pool-workers": "^0.16.10",
-    "@cloudflare/workers-types": "^4.20260530.1",
+    "@cloudflare/vitest-pool-workers": "^0.16.16",
+    "@cloudflare/workers-types": "^4.20260617.1",
     "@solidjs/testing-library": "^0.8.10",
     "@testing-library/user-event": "^14.6.1",
     "@types/qrcode": "^1.5.6",
-    "@vitest/coverage-v8": "^4.1.7",
+    "@vitest/coverage-v8": "^4.1.9",
     "drizzle-kit": "^0.31.10",
-    "happy-dom": "^20.9.0",
+    "happy-dom": "^20.10.6",
     "lefthook": "^2.1.9",
     "lightningcss": "^1.32.0",
     "typescript": "^6.0.3",
     "vite-plugin-solid": "^2.11.12",
-    "vitest": "^4.1.7",
-    "wrangler": "^4.95.0"
+    "vitest": "^4.1.9",
+    "wrangler": "^4.101.0"
   }
 }

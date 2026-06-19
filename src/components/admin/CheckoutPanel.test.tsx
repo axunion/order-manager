@@ -250,16 +250,14 @@ describe("CheckoutPanel", () => {
 
     const fetchMock = vi
       .fn()
-      .mockImplementation((url: string, init?: RequestInit) => {
+      .mockImplementation(async (url: string, init?: RequestInit) => {
         const method = (init?.method ?? "GET").toUpperCase();
         if (url.includes("/api/payments/pending") && method === "GET") {
-          return Promise.resolve({
-            ok: true,
-            json: async () => ({ data: [mockPendingOrder] }),
-          });
+          return { ok: true, json: async () => ({ data: [mockPendingOrder] }) };
         }
         if (url.includes("/api/payments") && method === "POST") {
-          return postPromise.then(() => ({
+          await postPromise;
+          return {
             ok: true,
             json: async () => ({
               data: {
@@ -270,9 +268,9 @@ describe("CheckoutPanel", () => {
                 paid_at: Date.now(),
               },
             }),
-          }));
+          };
         }
-        return Promise.resolve({ ok: false, json: async () => ({}) });
+        return { ok: false, json: async () => ({}) };
       });
     vi.stubGlobal("fetch", fetchMock);
 
