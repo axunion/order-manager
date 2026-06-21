@@ -248,14 +248,20 @@ describe("CheckoutPanel", () => {
       resolvePost = res;
     });
 
+    const baseMock = mockFetch([
+      {
+        url: "/api/payments/pending",
+        method: "GET",
+        json: { data: [mockPendingOrder] },
+      },
+    ]);
     const fetchMock = vi
       .fn()
       .mockImplementation(async (url: string, init?: RequestInit) => {
-        const method = (init?.method ?? "GET").toUpperCase();
-        if (url.includes("/api/payments/pending") && method === "GET") {
-          return { ok: true, json: async () => ({ data: [mockPendingOrder] }) };
-        }
-        if (url.includes("/api/payments") && method === "POST") {
+        if (
+          (init?.method ?? "GET").toUpperCase() === "POST" &&
+          url.includes("/api/payments")
+        ) {
           await postPromise;
           return {
             ok: true,
@@ -270,7 +276,7 @@ describe("CheckoutPanel", () => {
             }),
           };
         }
-        return { ok: false, json: async () => ({}) };
+        return baseMock(url, init);
       });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -283,6 +289,9 @@ describe("CheckoutPanel", () => {
     // Click without awaiting — the POST hangs
     const clickPromise = user.click(checkoutBtn);
 
+    // Two flushes: one for the click handler's synchronous update, one for the
+    // extra microtask introduced by the async mock function.
+    await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(0);
 
     // Button should be disabled while processing

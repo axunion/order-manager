@@ -1,3 +1,27 @@
 {
-  "enabledMcpjsonServers": ["context7"]
+  "enabledMcpjsonServers": ["context7"],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/scripts/block-secret-writes.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/scripts/claude-agent-sync-reminder.py"
+          }
+        ]
+      }
+    ]
+  }
 }

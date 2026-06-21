@@ -60,6 +60,9 @@ Commit message format:
 - Every database query that reads or writes tenant data **must** include a `store_id` filter.
 - Never fetch records by `id` alone — always verify `store_id` matches the authenticated store.
 - Violating this rule is a security bug, not a style issue.
+- Every new tenant-scoped endpoint **must** include a cross-tenant isolation test: verify that
+  accessing another store's resource by `id` returns 404 (not 403, not the resource).
+  See `src/lib/api/seats.test.ts` for the canonical pattern.
 
 ### File Sync
 - `CLAUDE.md` and `AGENT.md` at the project root must always have identical content (title line only differs).
@@ -68,6 +71,10 @@ Commit message format:
 ### Extending `.claude/` Configuration
 - When a rule, pattern, or workflow must be followed repeatedly, add it to `.claude/` (agents, hooks, or settings) rather than relying on memory.
 - This keeps guardrails enforceable and consistent across sessions.
+- Available automations in `.claude/`:
+  - **Agents**: `tenant-security-reviewer` (multi-tenant isolation audit), `doc-sync-auditor` (docs drift check)
+  - **Skills**: `/db-migration` (safe migration workflow), `/new-api-endpoint` (secure endpoint scaffold)
+  - **Hooks**: secret file write blocker (PreToolUse), CLAUDE/AGENT sync reminder (PostToolUse)
 
 ---
 
