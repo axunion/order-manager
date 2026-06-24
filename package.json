@@ -1,5 +1,6 @@
 {
   "name": "order-manager",
+  "private": true,
   "type": "module",
   "version": "0.0.1",
   "devEngines": {
@@ -16,49 +17,23 @@
   },
   "scripts": {
     "prepare": "lefthook install || true",
-    "dev": "astro dev",
-    "build": "astro build",
-    "preview": "astro preview",
-    "astro": "astro",
-    "check": "biome check && astro check",
+    "dev:admin": "pnpm --filter @order/admin dev",
+    "dev:order": "pnpm --filter @order/order dev",
+    "dev:signup": "pnpm --filter @order/signup dev",
+    "dev:api": "pnpm --filter @order/api dev",
+    "build": "pnpm -r build",
+    "check": "biome check && pnpm -r exec tsc --noEmit",
     "fix": "biome check --write",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "wrangler d1 migrations apply order-manager --local",
-    "db:reset": "rm -rf .wrangler/state/v3/d1 && pnpm db:migrate",
-    "db:rebuild": "rm -rf drizzle/*.sql drizzle/meta && pnpm db:generate && pnpm db:reset",
-    "db:studio": "drizzle-kit studio",
-    "seed:dev": "npx tsx scripts/seed-dev.ts"
-  },
-  "dependencies": {
-    "@astrojs/cloudflare": "^13.7.0",
-    "@astrojs/solid-js": "^6.0.1",
-    "@hono/zod-validator": "^0.8.0",
-    "@kobalte/core": "^0.13.11",
-    "astro": "^6.4.8",
-    "drizzle-orm": "^0.45.2",
-    "hono": "^4.12.26",
-    "qrcode": "^1.5.4",
-    "solid-js": "^1.9.13",
-    "zod": "^4.4.3"
+    "test": "pnpm -r test",
+    "db:generate": "pnpm --filter @order/db db:generate",
+    "db:migrate": "pnpm --filter @order/api db:migrate",
+    "db:reset": "pnpm --filter @order/api db:reset",
+    "db:rebuild": "pnpm db:generate && pnpm db:reset",
+    "db:studio": "pnpm --filter @order/db db:studio"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.9",
     "@biomejs/biome": "2.5.0",
-    "@cloudflare/vitest-pool-workers": "^0.16.16",
-    "@cloudflare/workers-types": "^4.20260617.1",
-    "@solidjs/testing-library": "^0.8.10",
-    "@testing-library/user-event": "^14.6.1",
-    "@types/qrcode": "^1.5.6",
-    "@vitest/coverage-v8": "^4.1.9",
-    "drizzle-kit": "^0.31.10",
-    "happy-dom": "^20.10.6",
     "lefthook": "^2.1.9",
-    "lightningcss": "^1.32.0",
-    "typescript": "^6.0.3",
-    "vite-plugin-solid": "^2.11.12",
-    "vitest": "^4.1.9",
-    "wrangler": "^4.101.0"
+    "typescript": "^6.0.3"
   }
 }

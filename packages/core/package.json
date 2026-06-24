@@ -1,0 +1,15 @@
+{
+  "name": "@order/core",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types/index.ts",
+    "./domain": "./src/domain/index.ts",
+    "./client": "./src/client/index.ts"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
+}

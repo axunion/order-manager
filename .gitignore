@@ -1,11 +1,9 @@
 # build output
 dist/
+.output/
 
 # Wrangler local dev cache
 .wrangler/
-
-# generated types
-.astro/
 
 # dependencies
 node_modules/
@@ -27,5 +25,8 @@ pnpm-debug.log*
 # macOS-specific files
 .DS_Store
 
-# jetbrains setting folder
+# JetBrains settings
 .idea/
+
+# TypeScript build info
+*.tsbuildinfo
