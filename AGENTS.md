@@ -3,7 +3,7 @@
 pnpm + Cloudflare Workers monorepo. SolidJS SPA frontends + a Hono API Worker
 on D1, with shared logic in `packages/*`.
 
-> **Sync note:** `CLAUDE.md` and `AGENTS.md` contain identical content.
+> **Sync note:** `AGENTS.md` and `CLAUDE.md` contain identical content.
 > When updating one, update the other to match.
 
 ## Approach
