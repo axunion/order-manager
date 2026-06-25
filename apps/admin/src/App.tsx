@@ -1,0 +1,23 @@
+import { Route, Router } from "@solidjs/router";
+import AdminGuard from "./layouts/AdminGuard";
+import CheckoutPage from "./pages/CheckoutPage";
+import DashboardPage from "./pages/DashboardPage";
+import LoginPage from "./pages/LoginPage";
+import MenuPage from "./pages/MenuPage";
+import OrdersPage from "./pages/OrdersPage";
+import SeatsPage from "./pages/SeatsPage";
+
+export default function App() {
+  return (
+    <Router>
+      <Route path="/login" component={LoginPage} />
+      <Route path="/" component={AdminGuard}>
+        <Route path="/" component={DashboardPage} />
+        <Route path="/menu" component={MenuPage} />
+        <Route path="/seats" component={SeatsPage} />
+        <Route path="/orders" component={OrdersPage} />
+        <Route path="/checkout" component={CheckoutPage} />
+      </Route>
+    </Router>
+  );
+}

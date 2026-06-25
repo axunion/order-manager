@@ -12,5 +12,17 @@
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "../../packages/db/drizzle"
     }
-  ]
+  ],
+  "vars": {
+    // Replace with production origins (e.g. "https://admin.example.com").
+    // For local dev, set these to the Vite dev server URLs in .dev.vars.
+    "ADMIN_ORIGIN": "http://localhost:5173",
+    "ORDER_ORIGIN": "http://localhost:5174",
+    "SIGNUP_ORIGIN": "http://localhost:5175",
+    // Set to ".example.com" in production for cross-subdomain cookie sharing.
+    // Leave empty in local dev so the cookie is scoped to localhost only.
+    "COOKIE_DOMAIN": ""
+    // RESEND_API_KEY and MAIL_FROM are secrets — set via `wrangler secret put`
+    // or in .dev.vars for local development.
+  }
 }

@@ -109,6 +109,12 @@ There is no server-side rendering for the frontend Workers.
 - Customer ordering: **QR code** per seat → `qr_token` URL parameter (no cookie)
 - Session validation, middleware, and auth utilities belong in `apps/api` (server) and `@order/core/domain` (pure logic).
 
+Since admin and API run on separate origins, the session cookie uses `SameSite=None; Secure; Domain=.example.com`.
+The admin SPA enforces auth client-side via `AdminGuard.tsx` (calls `GET /api/auth/me` on mount).
+
+See **[`docs/auth.md`](./auth.md)** for the full cross-origin authentication design, Magic Link flow,
+QR token flow, required env vars, and local development notes.
+
 ---
 
 ## Real-time updates (deferred decision)

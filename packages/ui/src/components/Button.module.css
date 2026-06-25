@@ -1,0 +1,113 @@
+/**
+ * Button — shared button component.
+ * All values reference design tokens; no raw hex or px.
+ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-base);
+  line-height: var(--leading-tight);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Variants ─────────────────────────────────────────────────────────── */
+
+.primary {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.primary:active:not(:disabled) {
+  background: var(--color-primary-active);
+}
+
+.secondary {
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+
+.danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-fg);
+  border: 1px solid var(--color-danger-border);
+}
+
+.danger:hover:not(:disabled) {
+  background: var(--color-danger-fg);
+  color: var(--color-primary-foreground);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--color-muted-foreground);
+  border: 1px solid var(--color-border);
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--color-background);
+  color: var(--color-foreground);
+}
+
+.success {
+  background: var(--color-success);
+  color: var(--color-primary-foreground);
+}
+
+.success:hover:not(:disabled) {
+  background: var(--color-success-hover);
+}
+
+.success:active:not(:disabled) {
+  background: var(--color-success-active);
+}
+
+/* ── Sizes ────────────────────────────────────────────────────────────── */
+
+.sm {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  border-radius: var(--radius-sm);
+}
+
+.md {
+  padding: var(--space-2) var(--space-4);
+}
+
+.lg {
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--text-lg);
+}
+
+/* ── Full width ───────────────────────────────────────────────────────── */
+
+.fullWidth {
+  width: 100%;
+}

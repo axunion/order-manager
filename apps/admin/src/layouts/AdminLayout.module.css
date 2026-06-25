@@ -1,0 +1,57 @@
+.header {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  padding: var(--space-4) var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.headerTitle {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+}
+
+.badge {
+  font-size: var(--text-xs);
+  background: rgb(255 255 255 / 0.2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+}
+
+.navLink {
+  color: rgb(255 255 255 / 0.8);
+  text-decoration: none;
+  font-size: var(--text-sm);
+}
+
+.navLink:hover {
+  color: var(--color-primary-foreground);
+}
+
+.logoutBtn {
+  margin-left: auto;
+  background: none;
+  border: 1px solid rgb(255 255 255 / 0.4);
+  border-radius: var(--radius-sm);
+  color: rgb(255 255 255 / 0.8);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-3);
+}
+
+.logoutBtn:hover {
+  border-color: var(--color-primary-foreground);
+  color: var(--color-primary-foreground);
+}
+
+.hasNavLink .logoutBtn {
+  margin-left: var(--space-4);
+}
+
+.main {
+  padding: var(--space-8) var(--space-6);
+  max-width: 960px;
+  margin: 0 auto;
+}

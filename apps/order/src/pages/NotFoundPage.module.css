@@ -1,0 +1,15 @@
+.container {
+  text-align: center;
+  padding: var(--space-10) var(--space-4);
+  color: var(--color-muted-foreground);
+}
+
+.heading {
+  margin: 0 0 var(--space-2);
+  color: var(--color-foreground);
+}
+
+.message {
+  margin: 0;
+  font-size: var(--text-sm);
+}

@@ -11,5 +11,13 @@
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "../../packages/db/drizzle"
     }
-  ]
+  ],
+  "vars": {
+    "ADMIN_ORIGIN": "http://admin.localhost",
+    "ORDER_ORIGIN": "http://order.localhost",
+    "SIGNUP_ORIGIN": "http://signup.localhost",
+    "COOKIE_DOMAIN": "",
+    "RESEND_API_KEY": "",
+    "MAIL_FROM": ""
+  }
 }

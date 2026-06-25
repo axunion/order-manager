@@ -1,0 +1,24 @@
+/**
+ * Global base styles.
+ */
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100dvh;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+}

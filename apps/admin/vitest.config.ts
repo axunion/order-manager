@@ -6,5 +6,11 @@ export default defineConfig({
   test: {
     environment: "happy-dom",
     include: ["src/**/*.test.{ts,tsx}"],
+    setupFiles: ["./src/setup.ts"],
+    server: {
+      deps: {
+        inline: [/@order\/ui/, /@kobalte\//, /solid-/, /@corvu\//],
+      },
+    },
   },
 });

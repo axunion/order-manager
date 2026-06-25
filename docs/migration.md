@@ -139,23 +139,42 @@ The original project used Astro's file-based routing. The new SPAs need a client
 Add `@solidjs/router` to each frontend app and define routes in `src/App.tsx`:
 
 ```tsx
-// apps/admin/src/App.tsx (example shape — implement when porting)
+// apps/admin/src/App.tsx
 import { Route, Router } from "@solidjs/router";
-import AdminIndex from "./pages/AdminIndex";
-import Login from "./pages/Login";
+import AdminGuard from "./layouts/AdminGuard";
+import LoginPage from "./pages/LoginPage";
+import DashboardPage from "./pages/DashboardPage";
 
 export default function App() {
   return (
     <Router>
-      <Route path="/login" component={Login} />
-      <Route path="/" component={AdminIndex} />
+      <Route path="/login" component={LoginPage} />
+      <Route path="/" component={AdminGuard}>
+        <Route path="/" component={DashboardPage} />
+        {/* ... more protected routes ... */}
+      </Route>
     </Router>
   );
 }
 ```
 
-`@solidjs/router` is not yet listed as a dependency — add it to the app's `package.json`
-when implementing the routing layer.
+The customer ordering app uses a URL parameter for seat identification:
+
+```tsx
+// apps/order/src/App.tsx
+import { Route, Router } from "@solidjs/router";
+import OrderPage from "./pages/OrderPage";
+
+export default function App() {
+  return (
+    <Router>
+      <Route path="/:seatToken" component={OrderPage} />
+    </Router>
+  );
+}
+```
+
+`@solidjs/router` is listed as a dependency in each frontend app's `package.json`.
 
 ### Environment bindings (Workers `env`)
 
@@ -187,6 +206,61 @@ import "@order/ui/styles/tokens.css";
 import "@order/ui/styles/global.css";
 ```
 
+### Authentication
+
+The original project used Astro middleware to protect `/admin/*` pages server-side, then a
+second `requireStore` middleware in Hono. The new project removes the Astro layer entirely —
+auth is handled **only** by Hono middleware in `apps/api`.
+
+**Cookie changes**: The original session cookie was `SameSite=Lax` (same-origin). The new
+project uses separate origins per app, so the cookie must be:
+```
+Set-Cookie: session_token=...; HttpOnly; Secure; SameSite=None; Domain=.example.com; Max-Age=...
+```
+`Domain=.example.com` shares the cookie across all `*.example.com` subdomains.
+
+**Magic Link redirect**: The original `verify` endpoint redirected to a relative path (`/admin`).
+The new endpoint redirects to `c.env.ADMIN_ORIGIN` (an absolute URL env var) so it lands on the
+correct separate domain.
+
+**SPA route guard** (`apps/admin`): Since there is no SSR, page-level auth is enforced
+client-side. `AdminGuard.tsx` calls `GET /api/auth/me` on mount; a 401 response navigates to
+`/login`. The guard also provides `StoreContext` with `{ id, name }` to child routes:
+
+```tsx
+// apps/admin/src/layouts/AdminGuard.tsx (simplified)
+export default function AdminGuard(props) {
+  const navigate = useNavigate();
+  const [store, setStore] = createSignal(null);
+  onMount(async () => {
+    const result = await apiFetch("/api/auth/me");
+    if (!result.ok) { navigate("/login", { replace: true }); return; }
+    setStore(result.data);
+  });
+  return <Show when={store()}>{(s) => <StoreContext.Provider value={s()}>{props.children}</StoreContext.Provider>}</Show>;
+}
+```
+
+**Logout**: Instead of relying on a server-side redirect, call `POST /api/auth/logout` then
+`navigate("/login")` within the SPA to avoid cross-origin redirect issues.
+
+See `docs/auth.md` for the full cross-origin authentication design.
+
+### lightningcss
+
+`lightningcss` was included as a transitive dependency of Astro. In the new project it is not
+installed automatically, but each frontend app's `vite.config.ts` enables it explicitly:
+
+```ts
+// apps/admin/vite.config.ts (and similarly for order, signup)
+export default defineConfig({
+  plugins: [solid()],
+  css: { transformer: "lightningcss" },
+});
+```
+
+Install `lightningcss` as a dev dependency in any app that uses it if Vite cannot find it.
+
 ### Test files
 
 Test files (`*.test.ts`, `*.test.tsx`) move with their source files. The only change needed
@@ -194,6 +268,19 @@ is updating import paths (`../../lib/...` → `@order/core/...`, etc.).
 
 For `apps/api` integration tests, add `test/apply-migrations.ts` (see the original
 `test/apply-migrations.ts` in the reference project) before running the workers test suite.
+
+For frontend app tests (`happy-dom`), add `server.deps.inline` in `vitest.config.ts` so that
+transitive Solid/Kobalte dependencies that ship `.jsx` files are bundled by Vitest instead of
+being handed to Node.js native ESM (which rejects `.jsx`):
+
+```ts
+// apps/admin/vitest.config.ts (and similarly for order, signup)
+server: {
+  deps: {
+    inline: [/@order\/ui/, /@kobalte\//, /solid-/, /@corvu\//],
+  },
+},
+```
 
 ---
 
