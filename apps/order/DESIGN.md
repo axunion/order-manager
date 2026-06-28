@@ -5,9 +5,9 @@
 > reference when generating or implementing UI — both for AI agents and human
 > developers.
 >
-> **Scope:** `apps/order` only. Design specifications for `apps/admin` and
-> `apps/signup` are out of scope. For component ownership rules see
-> [§10 Component Ownership Policy](#10-component-ownership-policy).
+> **Scope:** `apps/order` only. For `apps/admin` see `apps/admin/DESIGN.md`.
+> Design specifications for `apps/signup` are out of scope. For component
+> ownership rules see [§10 Component Ownership Policy](#10-component-ownership-policy).
 
 ---
 

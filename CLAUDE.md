@@ -103,4 +103,5 @@ Format:
 - `packages/ui` (`@order/ui`) — design tokens (CSS variables) and minimal
   primitives (Button, Field, Select, …). **Not a shared component library.**
   Each app owns its domain components; move to `@order/ui` only when 3+ apps
-  need identical logic. See `apps/order/DESIGN.md § Component Ownership Policy`.
+  need identical logic. See `apps/order/DESIGN.md § Component Ownership Policy`
+  and `apps/admin/DESIGN.md § Component Ownership Policy`.
