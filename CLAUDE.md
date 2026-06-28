@@ -100,4 +100,7 @@ Format:
 - `apps/api` (`@order/api`) — Hono + Zod Worker, D1 binding `DB`.
 - `packages/core` (`@order/core`) — shared Zod types/domain/client.
 - `packages/db` (`@order/db`) — Drizzle ORM schema + migrations.
-- `packages/ui` (`@order/ui`) — shared SolidJS UI (Kobalte).
+- `packages/ui` (`@order/ui`) — design tokens (CSS variables) and minimal
+  primitives (Button, Field, Select, …). **Not a shared component library.**
+  Each app owns its domain components; move to `@order/ui` only when 3+ apps
+  need identical logic. See `apps/order/DESIGN.md § Component Ownership Policy`.
