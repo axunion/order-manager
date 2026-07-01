@@ -1,5 +1,8 @@
 import { apiFetch, jsonFetch } from "@order/core/client";
-import { createSignal, onMount, Show } from "solid-js";
+import { createMemo, createSignal, onMount, Show } from "solid-js";
+import CategoryNav from "./CategoryNav";
+import CheckoutBar from "./CheckoutBar";
+import Header from "./Header";
 import MenuList from "./MenuList";
 import styles from "./OrderScreen.module.css";
 import OrderSummary from "./OrderSummary";
@@ -42,6 +45,42 @@ type BootstrapData = {
 
 export type AddItemsInput = { menu_item_id: string; quantity: number }[];
 
+export type MenuGroup = {
+  key: string;
+  categoryName: string;
+  items: MenuItem[];
+};
+
+export function categoryElementId(key: string): string {
+  return `menu-category-${key}`;
+}
+
+export function groupMenuItems(
+  categories: Category[],
+  items: MenuItem[],
+): MenuGroup[] {
+  const groups = new Map<string, MenuGroup>();
+  for (const cat of categories) {
+    groups.set(cat.id, { key: cat.id, categoryName: cat.name, items: [] });
+  }
+  const uncategorized: MenuGroup = {
+    key: "uncategorized",
+    categoryName: "その他",
+    items: [],
+  };
+  groups.set("uncategorized", uncategorized);
+  for (const item of items) {
+    const key = item.category_id ?? "uncategorized";
+    const group = groups.get(key);
+    if (group) {
+      group.items.push(item);
+    } else {
+      uncategorized.items.push(item);
+    }
+  }
+  return [...groups.values()].filter((g) => g.items.length > 0);
+}
+
 export default function OrderScreen(props: { seatToken: string }) {
   const [seatName, setSeatName] = createSignal("");
   const [categories, setCategories] = createSignal<Category[]>([]);
@@ -49,6 +88,10 @@ export default function OrderScreen(props: { seatToken: string }) {
   const [order, setOrder] = createSignal<Order | null>(null);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal("");
+  const ready = createMemo(() => !loading() && !error());
+  const menuGroups = createMemo(() =>
+    groupMenuItems(categories(), menuItems()),
+  );
 
   async function loadBootstrap() {
     setLoading(true);
@@ -110,10 +153,10 @@ export default function OrderScreen(props: { seatToken: string }) {
 
   return (
     <>
-      <header class={styles.header}>
-        <h1 class={styles.headerTitle}>{seatName() || "セルフオーダー"}</h1>
-        <p class={styles.headerSub}>セルフオーダー</p>
-      </header>
+      <Header seatName={seatName() || "セルフオーダー"} />
+      <Show when={ready()}>
+        <CategoryNav groups={menuGroups()} />
+      </Show>
       <main class={styles.main}>
         <Show when={loading()}>
           <p class={styles.loading} aria-live="polite">
@@ -127,18 +170,14 @@ export default function OrderScreen(props: { seatToken: string }) {
           </p>
         </Show>
 
-        <Show when={!loading() && !error()}>
-          <MenuList
-            categories={categories()}
-            items={menuItems()}
-            onAddItems={handleAddItems}
-          />
-          <OrderSummary
-            order={order()}
-            onRequestPayment={handleRequestPayment}
-          />
+        <Show when={ready()}>
+          <MenuList groups={menuGroups()} onAddItems={handleAddItems} />
+          <OrderSummary order={order()} />
         </Show>
       </main>
+      <Show when={ready()}>
+        <CheckoutBar order={order()} onRequestPayment={handleRequestPayment} />
+      </Show>
     </>
   );
 }

@@ -1,0 +1,24 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky-header);
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  padding: var(--space-4) var(--space-6);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  line-height: var(--leading-tight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subtitle {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  opacity: 0.8;
+}

@@ -1,0 +1,64 @@
+/* apps/order/src/styles/order-tokens.css
+   Import ONLY from apps/order/src/main.tsx — never from shared packages. */
+:root {
+  /* ── Primary — Terracotta ─────────────────────────────────────────── */
+  --color-primary: #c0552f;
+  --color-primary-hover: #a2441f;
+  --color-primary-active: #88381a;
+  --color-primary-foreground: #ffffff;
+  --color-primary-subtle: #f7ece4; /* Sand */
+
+  /* ── Accent — Honey Ochre (net-new role, not in shared base) ───────── */
+  --color-accent: #d89a4e;
+  --color-accent-hover: #c6862f;
+  --color-accent-subtle: #fbf1e0;
+
+  /* ── Neutrals — Warm Sand / Taupe ────────────────────────────────── */
+  --color-background: #faf6f1;
+  --color-foreground: #2b221c;
+  --color-muted-foreground: #6e6258;
+  --color-subtle-foreground: #9a8e82;
+  --color-border: #e7ded4;
+  --color-input: #d8ccbe;
+
+  /* ── Success — Olive / Sage ──────────────────────────────────────── */
+  --color-success: #6e7f35;
+  --color-success-hover: #5c6b2e;
+  --color-success-active: #5c6b2e;
+  --color-success-bg: #f2f3e6;
+  --color-success-border: #c2c98f;
+  --color-success-fg: #5c6b2e;
+
+  /* ── Danger — Deep Rust ───────────────────────────────────────────── */
+  --color-danger-bg: #fbede7;
+  --color-danger-border: #e8b79f;
+  --color-danger-fg: #9e3318;
+
+  /* ── Warning — Mustard / Amber ────────────────────────────────────── */
+  --color-warning-bg: #fbf1dc;
+  --color-warning-border: #e6c277;
+  --color-warning-fg: #8a5a12;
+
+  /* ── Shadows — warm espresso base ────────────────────────────────── */
+  --shadow-sm: 0 2px 8px rgb(43 34 28 / 0.06);
+  --shadow-md: 0 4px 16px rgb(43 34 28 / 0.1);
+  --shadow-lg: 0 8px 24px rgb(43 34 28 / 0.14);
+  --shadow-checkout-top: 0 -2px 8px rgb(43 34 28 / 0.06);
+
+  /* ── Typography ───────────────────────────────────────────────────── */
+  --font-sans:
+    system-ui, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP",
+    Meiryo, sans-serif;
+  --text-chip: 0.8125rem; /* 13px — Category Nav Chip label */
+  --space-chip-y: 0.375rem; /* 6px — Category Nav Chip vertical padding */
+
+  /* ── App-specific layout tokens ───────────────────────────────────── */
+  --touch-target-min: 44px; /* WCAG 2.1 §2.5.5 */
+  --order-header-height: 80px; /* CategoryNav sticky offset; verify visually */
+  --order-nav-height: 60px; /* CategoryNav's own height; used for menu scroll-margin, verify visually */
+  --order-cta-height: 52px; /* Sticky Checkout Bar button height */
+
+  /* ── Sticky stacking order — Header above CategoryNav/CheckoutBar ─── */
+  --z-sticky-header: 20;
+  --z-sticky-bar: 10;
+}

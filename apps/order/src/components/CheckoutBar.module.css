@@ -1,0 +1,25 @@
+.bar {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-sticky-bar);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-3) var(--space-4);
+  padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+  box-shadow: var(--shadow-checkout-top);
+}
+
+.payButton {
+  min-height: var(--order-cta-height);
+}
+
+.paymentRequestedMsg {
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success-fg);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  text-align: center;
+  font-weight: var(--font-medium);
+  margin: 0;
+}

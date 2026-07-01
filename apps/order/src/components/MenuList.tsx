@@ -1,11 +1,12 @@
 import { Button } from "@order/ui";
 import { createSignal, For, Show } from "solid-js";
 import styles from "./MenuList.module.css";
-import type { AddItemsInput, Category, MenuItem } from "./OrderScreen";
+import type { AddItemsInput, MenuGroup } from "./OrderScreen";
+import { categoryElementId } from "./OrderScreen";
+import QuantityStepper from "./QuantityStepper";
 
 export default function MenuList(props: {
-  categories: Category[];
-  items: MenuItem[];
+  groups: MenuGroup[];
   onAddItems: (
     items: AddItemsInput,
   ) => Promise<{ ok: boolean; message?: string }>;
@@ -21,40 +22,6 @@ export default function MenuList(props: {
 
   function setQuantity(itemId: string, value: number) {
     setQuantities((prev) => ({ ...prev, [itemId]: Math.max(1, value) }));
-  }
-
-  function groupedItems(): {
-    categoryId: string | null;
-    categoryName: string;
-    items: MenuItem[];
-  }[] {
-    const groups = new Map<
-      string | null,
-      { categoryId: string | null; categoryName: string; items: MenuItem[] }
-    >();
-    for (const cat of props.categories) {
-      groups.set(cat.id, {
-        categoryId: cat.id,
-        categoryName: cat.name,
-        items: [],
-      });
-    }
-    const uncategorized = {
-      categoryId: null,
-      categoryName: "その他",
-      items: [] as MenuItem[],
-    };
-    groups.set(null, uncategorized);
-    for (const item of props.items) {
-      const key = item.category_id ?? null;
-      const group = groups.get(key);
-      if (group) {
-        group.items.push(item);
-      } else {
-        uncategorized.items.push(item);
-      }
-    }
-    return [...groups.values()].filter((g) => g.items.length > 0);
   }
 
   async function handleOrderItem(itemId: string) {
@@ -99,12 +66,12 @@ export default function MenuList(props: {
       </Show>
 
       <Show
-        when={props.items.length > 0}
+        when={props.groups.length > 0}
         fallback={<p class={styles.empty}>メニューがまだ登録されていません</p>}
       >
-        <For each={groupedItems()}>
+        <For each={props.groups}>
           {(group) => (
-            <div class={styles.group}>
+            <div class={styles.group} id={categoryElementId(group.key)}>
               <h3 class={styles.categoryLabel}>{group.categoryName}</h3>
               <ul class={styles.list}>
                 <For each={group.items}>
@@ -117,33 +84,20 @@ export default function MenuList(props: {
                         </span>
                       </div>
                       <div class={styles.itemOrder}>
-                        <div class={styles.quantityControl}>
-                          <button
-                            type="button"
-                            class={styles.qtyBtn}
-                            aria-label={`${item.name}の数量を減らす`}
-                            onClick={() =>
-                              setQuantity(item.id, getQuantity(item.id) - 1)
-                            }
-                            disabled={submitting() || getQuantity(item.id) <= 1}
-                          >
-                            −
-                          </button>
-                          <span class={styles.qtyValue}>
-                            {getQuantity(item.id)}
-                          </span>
-                          <button
-                            type="button"
-                            class={styles.qtyBtn}
-                            aria-label={`${item.name}の数量を増やす`}
-                            onClick={() =>
-                              setQuantity(item.id, getQuantity(item.id) + 1)
-                            }
-                            disabled={submitting()}
-                          >
-                            ＋
-                          </button>
-                        </div>
+                        <QuantityStepper
+                          itemName={item.name}
+                          quantity={getQuantity(item.id)}
+                          decreaseDisabled={
+                            submitting() || getQuantity(item.id) <= 1
+                          }
+                          increaseDisabled={submitting()}
+                          onDecrease={() =>
+                            setQuantity(item.id, getQuantity(item.id) - 1)
+                          }
+                          onIncrease={() =>
+                            setQuantity(item.id, getQuantity(item.id) + 1)
+                          }
+                        />
                         <Button
                           variant="primary"
                           size="sm"
