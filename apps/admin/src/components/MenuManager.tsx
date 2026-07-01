@@ -2,6 +2,7 @@ import { apiFetch, jsonFetch } from "@order/core/client";
 import { Button, ConfirmDialog, ErrorAlert, Select } from "@order/ui";
 import { createSignal, For, onMount, Show } from "solid-js";
 import styles from "./MenuManager.module.css";
+import StatusBadge from "./StatusBadge";
 
 type Category = {
   id: string;
@@ -293,11 +294,11 @@ export default function MenuManager() {
                       ¥{item.price.toLocaleString()}
                     </span>
                     <span class={styles.itemCategory}>{catName()}</span>
-                    <span
-                      class={`${styles.itemStatus}${!item.is_available ? ` ${styles.itemStatusUnavailable ?? ""}` : ""}`}
+                    <StatusBadge
+                      tone={item.is_available ? "success" : "danger"}
                     >
-                      {item.is_available ? "提供中" : "提供停止"}
-                    </span>
+                      {item.is_available ? "販売中" : "品切れ"}
+                    </StatusBadge>
                     <Button
                       variant="secondary"
                       size="sm"

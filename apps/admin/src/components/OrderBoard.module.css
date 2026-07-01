@@ -1,3 +1,15 @@
+@keyframes alert-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 0.6;
+  }
+}
+
 .orderBoard {
   display: flex;
   flex-direction: column;
@@ -10,6 +22,7 @@
   padding: var(--space-10) var(--space-8);
   text-align: center;
   color: var(--color-subtle-foreground);
+  font-size: var(--text-sm);
 }
 
 .orderBoardEmpty p {
@@ -17,21 +30,28 @@
 }
 
 .orderList {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: var(--space-5);
+  align-items: start;
 }
 
 .orderCard {
-  background: var(--color-surface);
   border-radius: var(--radius-lg);
   padding: var(--space-5) var(--space-6);
-  border-left: 4px solid var(--color-primary);
+  box-shadow: var(--shadow-card);
 }
 
-.orderCardPayRequested {
-  border-left-color: var(--color-warning-border);
+/* Alert state — new / unserved order */
+.orderCardAlert {
+  background: var(--color-alert-bg);
+  border-left: 4px solid var(--color-alert-solid);
+}
+
+/* Warning state — payment requested */
+.orderCardWarning {
   background: var(--color-warning-bg);
+  border-left: 4px solid var(--color-warning-border);
 }
 
 .orderCardHeader {
@@ -42,28 +62,36 @@
   flex-wrap: wrap;
 }
 
-.orderSeatName {
-  font-weight: var(--font-semibold);
-  font-size: var(--text-base);
-  color: var(--color-foreground);
+.pulseDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-alert-solid);
+  flex-shrink: 0;
+  animation: alert-pulse 1.4s ease-in-out infinite;
 }
 
-.orderBadgePay {
-  font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
-  background: var(--color-warning-bg);
-  color: var(--color-warning-fg);
-  border: 1px solid var(--color-warning-border);
-  border-radius: var(--radius-full);
-  padding: var(--space-1) var(--space-2);
-  white-space: nowrap;
+@media (prefers-reduced-motion: reduce) {
+  .pulseDot {
+    animation: none;
+  }
+}
+
+.orderSeatName {
+  font-weight: var(--font-bold);
+  font-size: var(--text-lg);
+  color: var(--color-foreground);
+  word-break: break-all;
+  overflow-wrap: break-word;
 }
 
 .orderTotal {
   margin-left: auto;
-  font-weight: var(--font-semibold);
-  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+  font-size: var(--text-lg);
   color: var(--color-foreground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .orderItems {
@@ -80,7 +108,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
-  background: var(--color-background);
+  background: var(--color-surface);
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   flex-wrap: wrap;
@@ -95,11 +123,14 @@
   font-weight: var(--font-medium);
   color: var(--color-foreground);
   min-width: 0;
+  word-break: break-all;
+  overflow-wrap: break-word;
 }
 
 .orderItemQty {
   color: var(--color-muted-foreground);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .orderItemPrice {
@@ -108,4 +139,5 @@
   white-space: nowrap;
   min-width: 5rem;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }

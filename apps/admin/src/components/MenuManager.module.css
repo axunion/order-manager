@@ -12,7 +12,7 @@
 
 .menuSection h2 {
   margin: 0 0 var(--space-5);
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   color: var(--color-foreground);
 }
@@ -47,6 +47,8 @@
   font-size: var(--text-sm);
   width: 100%;
   font-family: var(--font-sans);
+  background: var(--color-surface);
+  color: var(--color-foreground);
 }
 
 .field input:focus {
@@ -73,6 +75,7 @@
   text-align: center;
   padding: var(--space-4) 0;
   margin: 0;
+  font-size: var(--text-sm);
 }
 
 .menuList {
@@ -89,7 +92,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
-  background: var(--color-background);
+  background: var(--color-surface-alt);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
 }
@@ -111,6 +114,7 @@
 .itemPrice {
   color: var(--color-foreground);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .itemCategory,
@@ -118,18 +122,4 @@
   color: var(--color-subtle-foreground);
   font-size: var(--text-xs);
   white-space: nowrap;
-}
-
-.itemStatus {
-  font-size: var(--text-xs);
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-full);
-  background: var(--color-success-bg);
-  color: var(--color-success-fg);
-  white-space: nowrap;
-}
-
-.itemStatusUnavailable {
-  background: var(--color-danger-bg);
-  color: var(--color-danger-fg);
 }

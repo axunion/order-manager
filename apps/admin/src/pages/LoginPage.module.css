@@ -16,6 +16,6 @@
 .subtitle {
   color: var(--color-muted-foreground);
   font-size: var(--text-sm);
-  line-height: var(--leading-relaxed);
+  line-height: var(--leading-normal);
   margin: 0 0 var(--space-6);
 }

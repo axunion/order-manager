@@ -22,20 +22,22 @@ export default function AdminLayout(props: Props) {
   };
 
   return (
-    <div>
+    <div class={styles.layout}>
       <header class={styles.header}>
-        <h1 class={styles.headerTitle}>{store.name}</h1>
-        <span class={styles.badge}>{props.title}</span>
-        <Show when={props.backHref}>
-          {(href) => (
-            <A class={styles.navLink} href={href()}>
-              {props.backLabel}
-            </A>
-          )}
-        </Show>
-        <button type="button" class={styles.logoutBtn} onClick={handleLogout}>
-          ログアウト
-        </button>
+        <div class={styles.headerInner}>
+          <h1 class={styles.headerTitle}>{store.name}</h1>
+          <span class={styles.badge}>{props.title}</span>
+          <Show when={props.backHref}>
+            {(href) => (
+              <A class={styles.navLink} href={href()}>
+                {props.backLabel}
+              </A>
+            )}
+          </Show>
+          <button type="button" class={styles.logoutBtn} onClick={handleLogout}>
+            ログアウト
+          </button>
+        </div>
       </header>
       <main class={styles.main}>{props.children}</main>
     </div>

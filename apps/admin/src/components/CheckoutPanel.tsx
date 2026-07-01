@@ -2,6 +2,7 @@ import { apiFetch, jsonFetch } from "@order/core/client";
 import { Button, ErrorAlert } from "@order/ui";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import styles from "./CheckoutPanel.module.css";
+import StatusBadge from "./StatusBadge";
 
 type CheckoutItem = {
   id: string;
@@ -97,7 +98,7 @@ export default function CheckoutPanel() {
             <article class={styles.checkoutCard}>
               <div class={styles.checkoutCardHeader}>
                 <span class={styles.checkoutSeatName}>{order.seat_name}</span>
-                <span class={styles.checkoutBadgePay}>会計要求中</span>
+                <StatusBadge tone="warning">会計要求中</StatusBadge>
                 <span class={styles.checkoutTotal}>
                   {formatCurrency(order.total)}
                 </span>
@@ -125,7 +126,7 @@ export default function CheckoutPanel() {
 
               <div class={styles.checkoutCardFooter}>
                 <Button
-                  variant="success"
+                  variant="primary"
                   disabled={processing().has(order.id)}
                   onClick={() => handleCheckout(order.id)}
                 >

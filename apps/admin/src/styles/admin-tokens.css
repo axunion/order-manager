@@ -1,0 +1,54 @@
+/* apps/admin/src/styles/admin-tokens.css
+   Import ONLY from apps/admin/src/main.tsx — never from shared packages. */
+:root {
+  /* ── Primary — Professional Deep Blue ─────────────────────────────── */
+  --color-primary: #1d4ed8;
+  --color-primary-hover: #1e40af;
+  --color-primary-active: #1e3a8a;
+  --color-primary-foreground: #ffffff;
+  --color-primary-subtle: #eff4ff;
+
+  /* ── Neutrals — Cool Slate ─────────────────────────────────────────── */
+  --color-background: #eef1f6;
+  --color-surface-alt: #f8fafc;
+  --color-foreground: #0f172a;
+  --color-muted-foreground: #475569;
+  --color-subtle-foreground: #94a3b8;
+  --color-border: #cbd5e1;
+  --color-input: #b8c2d0;
+  --color-ring: #1d4ed8;
+
+  /* ── Alert — New Order (signature high-visibility) ─────────────────── */
+  --color-alert-solid: #ea580c;
+  --color-alert-fg: #c2410c;
+  --color-alert-bg: #ffedd5;
+  --color-alert-border: #fb923c;
+
+  /* ── Warning — Amber (payment requested) ──────────────────────────── */
+  --color-warning-bg: #fffbeb;
+  --color-warning-border: #fcd34d;
+  --color-warning-fg: #b45309;
+  --color-warning-solid: #d97706;
+
+  /* ── Danger — Red (destructive actions only) ───────────────────────── */
+  --color-danger-bg: #fef2f2;
+  --color-danger-border: #fca5a5;
+  --color-danger-fg: #dc2626;
+
+  /* ── Success — Green (served / available / complete) ──────────────── */
+  --color-success: #16a34a;
+  --color-success-hover: #15803d;
+  --color-success-active: #166534;
+  --color-success-bg: #ecfdf3;
+  --color-success-border: #86efac;
+  --color-success-fg: #15803d;
+
+  /* ── Shadows ────────────────────────────────────────────────────────── */
+  --shadow-card: 0 1px 3px rgb(15 23 42 / 0.07), 0 1px 2px rgb(15 23 42 / 0.04);
+
+  /* ── Typography ─────────────────────────────────────────────────────── */
+  --font-bold: 700;
+  --font-sans:
+    system-ui, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP",
+    Meiryo, sans-serif;
+}

@@ -2,6 +2,7 @@ import { apiFetch } from "@order/core/client";
 import { Button, ErrorAlert } from "@order/ui";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import styles from "./OrderBoard.module.css";
+import StatusBadge from "./StatusBadge";
 
 type OrderItem = {
   id: string;
@@ -82,12 +83,18 @@ export default function OrderBoard() {
         <For each={orders()}>
           {(order) => (
             <article
-              class={`${styles.orderCard}${order.status === "payment_requested" ? ` ${styles.orderCardPayRequested ?? ""}` : ""}`}
+              class={`${styles.orderCard ?? ""} ${order.status === "payment_requested" ? (styles.orderCardWarning ?? "") : (styles.orderCardAlert ?? "")}`}
             >
               <div class={styles.orderCardHeader}>
+                <Show when={order.status === "open"}>
+                  <span class={styles.pulseDot} aria-hidden="true" />
+                </Show>
                 <span class={styles.orderSeatName}>{order.seat_name}</span>
+                <Show when={order.status === "open"}>
+                  <StatusBadge tone="alert">新規注文</StatusBadge>
+                </Show>
                 <Show when={order.status === "payment_requested"}>
-                  <span class={styles.orderBadgePay}>会計要求中</span>
+                  <StatusBadge tone="warning">会計要求中</StatusBadge>
                 </Show>
                 <span class={styles.orderTotal}>
                   {formatCurrency(order.total)}
@@ -98,7 +105,7 @@ export default function OrderBoard() {
                 <For each={order.items}>
                   {(item) => (
                     <li
-                      class={`${styles.orderItem}${item.status === "served" ? ` ${styles.orderItemServed ?? ""}` : ""}`}
+                      class={`${styles.orderItem ?? ""} ${item.status === "served" ? (styles.orderItemServed ?? "") : ""}`}
                     >
                       <span class={styles.orderItemName}>
                         {item.name_snapshot}
