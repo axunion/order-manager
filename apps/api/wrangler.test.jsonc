@@ -18,6 +18,7 @@
     "SIGNUP_ORIGIN": "http://signup.localhost",
     "COOKIE_DOMAIN": "",
     "RESEND_API_KEY": "",
-    "MAIL_FROM": ""
+    "MAIL_FROM": "",
+    "ENVIRONMENT": "production"
   }
 }

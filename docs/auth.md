@@ -89,6 +89,35 @@ The login flow is identical from the `POST /api/auth/login` step onward.
 **Key point**: The `verify` redirect must be an absolute URL (`c.env.ADMIN_ORIGIN`) because the
 verify endpoint is served from `api.example.com`, not `admin.example.com`.
 
+### Local dev: skipping email delivery
+
+Resend integration is not wired up yet, and clicking a real email is unnecessary friction
+during local development. Two fallbacks exist, gated by the `ENVIRONMENT` env var
+(`"production"` in deployed environments; set to `"development"` in `apps/api/.dev.vars`
+for local dev):
+
+1. **Console fallback (always on, any environment)** — `sendMagicLinkEmail`
+   (`packages/core/src/domain/email.ts`) logs the Magic Link URL to the Worker console
+   instead of calling the Resend API whenever `RESEND_API_KEY` is unset.
+2. **`verify_url` in the signup and login responses (`ENVIRONMENT === "development"` only)** —
+   `POST /api/stores` (`apps/api/src/routes/stores.ts`) and `POST /api/auth/login`
+   (`apps/api/src/routes/auth.ts`) include the same Magic Link URL as `verify_url` in their
+   JSON response whenever a token was actually issued. The signup SPA (`RegisterForm.tsx`)
+   forwards it to `/check-email?verify_url=...`, and `CheckEmailPage.tsx` renders a `[DEV]`
+   link that goes straight to `GET /api/auth/verify`. The admin `LoginForm.tsx` renders the
+   same kind of `[DEV]` link inline after submitting — no console log copy/paste required
+   either way. The check is an explicit opt-in (`=== "development"`, not `!== "production"`)
+   so an unset or misconfigured `ENVIRONMENT` in some future deploy target never accidentally
+   leaks the Magic Link.
+
+`POST /api/auth/login`'s "always return 200 with an identical body regardless of whether the
+email is registered" anti-enumeration contract (asserted in `apps/api/src/routes/auth.test.ts`)
+is preserved **in production**, since `verify_url` is only ever added when
+`ENVIRONMENT === "development"` — the response body is always identical in production
+regardless of the email's existence. In dev, the field naturally reveals whether an account
+exists (present only when a token was issued), which is an acceptable trade-off since dev-mode
+is never exposed publicly.
+
 ---
 
 ## SPA route guard (admin)
@@ -155,6 +184,7 @@ for `/api/order/*` routes — they use `requireSeat` not `requireStore`.
 | `COOKIE_DOMAIN` | `.example.com` | Cookie `Domain` attribute |
 | `RESEND_API_KEY` | `re_...` | Magic Link email delivery (secret) |
 | `MAIL_FROM` | `noreply@example.com` | Magic Link `From` address |
+| `ENVIRONMENT` | `production` / `development` | Gates the `verify_url` dev convenience — see [Local dev: skipping email delivery](#local-dev-skipping-email-delivery) |
 
 ### Frontend SPAs (`.env` / wrangler.jsonc `[vars]`)
 

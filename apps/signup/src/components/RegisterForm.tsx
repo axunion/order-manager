@@ -1,3 +1,4 @@
+import type { StoreCreatedResponse } from "@order/core";
 import { jsonFetch } from "@order/core/client";
 import { Button, Field } from "@order/ui";
 import { createSignal } from "solid-js";
@@ -14,15 +15,22 @@ export default function RegisterForm() {
     setError("");
     setSubmitting(true);
     try {
-      const result = await jsonFetch("/api/stores", "POST", {
-        name: name(),
-        email: email(),
-      });
+      const result = await jsonFetch<StoreCreatedResponse>(
+        "/api/stores",
+        "POST",
+        {
+          name: name(),
+          email: email(),
+        },
+      );
       if (!result.ok) {
         setError(result.message ?? "登録に失敗しました");
         return;
       }
-      window.location.href = "/check-email";
+      const verifyUrl = result.data?.verify_url;
+      window.location.href = verifyUrl
+        ? `/check-email?verify_url=${encodeURIComponent(verifyUrl)}`
+        : "/check-email";
     } finally {
       setSubmitting(false);
     }

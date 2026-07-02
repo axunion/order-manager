@@ -20,6 +20,12 @@ interface Env {
   RESEND_API_KEY: string;
   /** Sender address used in outgoing emails. */
   MAIL_FROM: string;
+  /**
+   * "production" in deployed environments; set to "development" in local
+   * `.dev.vars` to expose the Magic Link URL directly in API responses
+   * instead of requiring email delivery.
+   */
+  ENVIRONMENT: string;
 }
 
 // Augment Cloudflare.Env for `import { env } from "cloudflare:workers"` in tests.
@@ -32,5 +38,6 @@ declare namespace Cloudflare {
     COOKIE_DOMAIN: string;
     RESEND_API_KEY: string;
     MAIL_FROM: string;
+    ENVIRONMENT: string;
   }
 }

@@ -2,6 +2,7 @@ import {
   buildSlug,
   CreateStoreInput,
   errorResponse,
+  MAGIC_LINK_VERIFY_PATH,
   newId,
   sendMagicLinkEmail,
 } from "@order/core";
@@ -16,7 +17,8 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
    * POST /api/stores
    * Registers a new store with status="pending" and sends a signup Magic Link.
    * No cookie is set here; the session is created on GET /api/auth/verify.
-   * Response: 201 { data: { id, name, slug } }
+   * Response: 201 { data: { id, name, slug, verify_url? } }
+   * (verify_url is only included when ENVIRONMENT === "development")
    */
   .post("/", bodyValidator(CreateStoreInput), async (c) => {
     const { name, email } = c.req.valid("json");
@@ -67,7 +69,7 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
     }
 
     const baseUrl = new URL(c.req.url).origin;
-    const magicLinkUrl = `${baseUrl}/api/auth/verify?token=${token}`;
+    const magicLinkUrl = `${baseUrl}${MAGIC_LINK_VERIFY_PATH}?token=${token}`;
 
     try {
       await sendMagicLinkEmail(
@@ -86,5 +88,18 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
       );
     }
 
-    return c.json({ data: { id, name, slug } }, 201);
+    // Checked as an explicit opt-in (not "!== production") so an unset or
+    // misconfigured ENVIRONMENT never accidentally leaks the Magic Link.
+    const isDev = c.env.ENVIRONMENT === "development";
+    return c.json(
+      {
+        data: {
+          id,
+          name,
+          slug,
+          ...(isDev && { verify_url: magicLinkUrl }),
+        },
+      },
+      201,
+    );
   });

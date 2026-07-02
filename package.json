@@ -17,6 +17,7 @@
   },
   "scripts": {
     "prepare": "lefthook install || true",
+    "dev": "pnpm -r --if-present --parallel run dev",
     "dev:admin": "pnpm --filter @order/admin dev",
     "dev:order": "pnpm --filter @order/order dev",
     "dev:signup": "pnpm --filter @order/signup dev",

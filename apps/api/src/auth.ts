@@ -5,6 +5,29 @@ import { schema } from "@order/db";
 import { and, eq, gt, isNull, ne } from "drizzle-orm";
 
 /**
+ * Whether the Set-Cookie Secure attribute should be set for this request.
+ *
+ * True over real HTTPS, or in any non-production environment — local dev is
+ * treated as a secure context by browsers, and SameSite=None (required for
+ * cross-origin cookie delivery) needs Secure to be honored at all, otherwise
+ * the cookie is silently dropped. Gated on ENVIRONMENT rather than hostname
+ * so it covers 127.0.0.1, devcontainer/LAN addresses, etc., not just
+ * "localhost" literally.
+ *
+ * Deliberately fails toward `true` (unlike the `verify_url` dev-bypass gate,
+ * which fails toward `false`): an unexpected ENVIRONMENT value here only
+ * risks a harmless extra Secure attribute, never a leak.
+ */
+export function isSecureRequest(
+  requestUrl: string,
+  environment: string,
+): boolean {
+  return (
+    new URL(requestUrl).protocol === "https:" || environment !== "production"
+  );
+}
+
+/**
  * Issues a Magic Link token for the given store and purpose.
  * Invalidates any previous unused token for the same store+purpose so only
  * one link is valid at a time.

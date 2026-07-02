@@ -26,6 +26,8 @@ export interface StoreCreatedResponse {
   id: string;
   name: string;
   slug: string;
+  /** Magic Link URL. Only present when ENVIRONMENT !== "production". */
+  verify_url?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -36,6 +38,12 @@ export const LoginInput = z.object({
   email: z.email(),
 });
 export type LoginInput = z.infer<typeof LoginInput>;
+
+export interface LoginResponse {
+  sent: true;
+  /** Magic Link URL. Only present when ENVIRONMENT !== "production" and a token was issued. */
+  verify_url?: string;
+}
 
 // ---------------------------------------------------------------------------
 // Menu — categories

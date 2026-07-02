@@ -3,6 +3,7 @@ import {
   buildSessionCookie,
   errorResponse,
   LoginInput,
+  MAGIC_LINK_VERIFY_PATH,
   newId,
   now,
   SESSION_TOKEN_COOKIE,
@@ -13,7 +14,7 @@ import { createDb, schema } from "@order/db";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { getCookie } from "hono/cookie";
-import { deleteSession, issueMagicLink } from "../auth";
+import { deleteSession, isSecureRequest, issueMagicLink } from "../auth";
 import { requireStore } from "../middleware";
 import { bodyValidator } from "../validator";
 
@@ -95,7 +96,7 @@ export const authRouter = new Hono<{ Bindings: Env }>()
       expires_at: ts + SESSION_TTL_MS,
     });
 
-    const secure = new URL(c.req.url).protocol === "https:";
+    const secure = isSecureRequest(c.req.url, c.env.ENVIRONMENT);
     const cookieDomain = c.env.COOKIE_DOMAIN || undefined;
     c.header(
       "Set-Cookie",
@@ -128,6 +129,7 @@ export const authRouter = new Hono<{ Bindings: Env }>()
       .limit(1);
 
     const store = rows[0];
+    let magicLinkUrl: string | undefined;
 
     if (store && store.status !== "suspended") {
       try {
@@ -135,7 +137,7 @@ export const authRouter = new Hono<{ Bindings: Env }>()
         const token = await issueMagicLink(db, store.id, purpose);
         // Magic Link verify URL is always on the API origin.
         const baseUrl = new URL(c.req.url).origin;
-        const magicLinkUrl = `${baseUrl}/api/auth/verify?token=${token}`;
+        magicLinkUrl = `${baseUrl}${MAGIC_LINK_VERIFY_PATH}?token=${token}`;
 
         // Defer email delivery so its latency is not observable to the caller.
         // Without this, response time reveals whether the email address is registered.
@@ -160,8 +162,18 @@ export const authRouter = new Hono<{ Bindings: Env }>()
       }
     }
 
-    // Always return 200 with the same body regardless of email existence.
-    return c.json({ data: { sent: true } });
+    // Always return 200 regardless of email existence. In dev
+    // (ENVIRONMENT === "development") only, include verify_url when a token
+    // was actually issued — production always returns the identical body.
+    // Checked as an explicit opt-in (not "!== production") so an unset or
+    // misconfigured ENVIRONMENT never accidentally leaks the Magic Link.
+    const isDev = c.env.ENVIRONMENT === "development";
+    return c.json({
+      data: {
+        sent: true,
+        ...(isDev && magicLinkUrl && { verify_url: magicLinkUrl }),
+      },
+    });
   })
 
   /**
@@ -179,7 +191,7 @@ export const authRouter = new Hono<{ Bindings: Env }>()
       await deleteSession(db, token);
     }
 
-    const secure = new URL(c.req.url).protocol === "https:";
+    const secure = isSecureRequest(c.req.url, c.env.ENVIRONMENT);
     const cookieDomain = c.env.COOKIE_DOMAIN || undefined;
     c.header(
       "Set-Cookie",

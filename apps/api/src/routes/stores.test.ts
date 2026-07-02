@@ -147,6 +147,28 @@ describe("POST /api/stores", () => {
     expect(res.status).toBe(400);
   });
 
+  it("does NOT include verify_url when ENVIRONMENT=production", async () => {
+    const email = `prod-env-${crypto.randomUUID()}@example.com`;
+    const res = await app.request(
+      "/api/stores",
+      { method: "POST", headers: JSON_HEADERS, body: storeBody({ email }) },
+      { ...env, ENVIRONMENT: "production" },
+    );
+    const body = (await res.json()) as { data: { verify_url?: string } };
+    expect(body.data.verify_url).toBeUndefined();
+  });
+
+  it("includes verify_url when ENVIRONMENT=development", async () => {
+    const email = `dev-env-${crypto.randomUUID()}@example.com`;
+    const res = await app.request(
+      "/api/stores",
+      { method: "POST", headers: JSON_HEADERS, body: storeBody({ email }) },
+      { ...env, ENVIRONMENT: "development" },
+    );
+    const body = (await res.json()) as { data: { verify_url?: string } };
+    expect(body.data.verify_url).toMatch(/\/api\/auth\/verify\?token=.+/);
+  });
+
   it("returns 400 when email is already registered", async () => {
     const email = `dup-${crypto.randomUUID()}@example.com`;
     await app.request(

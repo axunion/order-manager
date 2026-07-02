@@ -10,3 +10,19 @@
   line-height: var(--leading-normal);
   margin: 0;
 }
+
+.devNote {
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-warning-fg);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin: var(--space-4) 0 0;
+}
+
+.devLink {
+  color: inherit;
+  font-weight: var(--font-semibold);
+}

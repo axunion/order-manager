@@ -236,6 +236,44 @@ describe("POST /api/auth/login", () => {
     expect(tokens).toHaveLength(1);
   });
 
+  it("does NOT include verify_url for an active store when ENVIRONMENT=production", async () => {
+    const email = `login-prod-${crypto.randomUUID()}@example.com`;
+    const { signupToken } = await registerStore("Login Prod Cafe", email);
+    await verifyToken(signupToken);
+
+    const res = await app.request(
+      "/api/auth/login",
+      jsonInit("POST", { email }),
+      { ...env, ENVIRONMENT: "production" },
+    );
+    const body = (await res.json()) as { data: { verify_url?: string } };
+    expect(body.data.verify_url).toBeUndefined();
+  });
+
+  it("includes verify_url for an active store when ENVIRONMENT=development", async () => {
+    const email = `login-dev-${crypto.randomUUID()}@example.com`;
+    const { signupToken } = await registerStore("Login Dev Cafe", email);
+    await verifyToken(signupToken);
+
+    const res = await app.request(
+      "/api/auth/login",
+      jsonInit("POST", { email }),
+      { ...env, ENVIRONMENT: "development" },
+    );
+    const body = (await res.json()) as { data: { verify_url?: string } };
+    expect(body.data.verify_url).toMatch(/\/api\/auth\/verify\?token=.+/);
+  });
+
+  it("does NOT include verify_url in dev mode when the email is not registered", async () => {
+    const res = await app.request(
+      "/api/auth/login",
+      jsonInit("POST", { email: "ghost-dev@nonexistent.example.com" }),
+      { ...env, ENVIRONMENT: "development" },
+    );
+    const body = (await res.json()) as { data: { verify_url?: string } };
+    expect(body.data.verify_url).toBeUndefined();
+  });
+
   it("issues a signup token (recovery) for a pending store", async () => {
     const email = `login-pending-${crypto.randomUUID()}@example.com`;
     const { storeId } = await registerStore("Login Pending Cafe", email);
