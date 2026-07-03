@@ -14,9 +14,9 @@ source code and `docs/` and report what needs updating. You MUST NOT edit any fi
 
 | Source area | Owning doc |
 |---|---|
-| `apps/api/src/middleware.ts`, `apps/api/src/auth.ts`, `apps/api/src/routes/auth.ts`, `apps/api/src/routes/stores.ts` (auth flows, session/token lifecycle, cookies, CORS) | `docs/auth.md` |
-| `apps/*/wrangler.jsonc`, `apps/api/.dev.vars.example`, secrets, D1 config, migrations workflow | `docs/deploy.md` |
-| Workspace layout, `pnpm-workspace.yaml` (catalog), root scripts | `docs/monorepo.md`, `README.md` |
+| `apps/api/src/middleware.ts`, `apps/api/src/auth.ts`, `apps/api/src/routes/auth.ts`, `apps/api/src/routes/stores.ts` (auth flows, session/token lifecycle, cookies, CORS) | `dev-docs/reference/auth.md` |
+| `apps/*/wrangler.jsonc`, `apps/api/.dev.vars.example`, secrets, D1 config, migrations workflow | `dev-docs/reference/deploy.md` |
+| Workspace layout, `pnpm-workspace.yaml` (catalog), root scripts | `dev-docs/reference/monorepo.md`, `README.md` |
 | Root `package.json` scripts, tooling conventions | `CLAUDE.md` + `AGENTS.md` (keep in sync) |
 | App UI components, tokens, ownership policy | `apps/order/DESIGN.md`, `apps/admin/DESIGN.md` |
 
@@ -49,13 +49,13 @@ Response envelope contract:
 
 ### Docs that need updating
 
-#### docs/auth.md
+#### dev-docs/reference/auth.md
 - [ ] <auth flow step, env var, or cookie/CORS detail to update>
 
-#### docs/deploy.md
+#### dev-docs/reference/deploy.md
 - [ ] <deploy step, secret, or D1/wrangler config to update>
 
-#### docs/monorepo.md / README.md
+#### dev-docs/reference/monorepo.md / README.md
 - [ ] <workspace, catalog, or command-table entry to update>
 
 #### CLAUDE.md + AGENTS.md

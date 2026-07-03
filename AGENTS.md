@@ -33,7 +33,7 @@ on D1, with shared logic in `packages/*`.
   as `"catalog:"`. Add new shared deps to the catalog, not per-workspace.
 - **CI/deploy:** GitHub Actions (`.github/workflows/ci.yml`) runs
   `check`/`test`/`build` on pushes and PRs. Deployment is manual — see
-  `docs/deploy.md`.
+  `dev-docs/reference/deploy.md`.
 - **TypeScript:** every workspace extends `tsconfig.base.json` (strict,
   `noUncheckedIndexedAccess`, `verbatimModuleSyntax`). Use `@order/*` path
   aliases for cross-package imports.
@@ -111,3 +111,7 @@ Format:
   Each app owns its domain components; move to `@order/ui` only when 3+ apps
   need identical logic. See `apps/order/DESIGN.md § Component Ownership Policy`
   and `apps/admin/DESIGN.md § Component Ownership Policy`.
+- `dev-docs/` — internal engineering docs (auth, deploy, monorepo ops), kept
+  separate from any future public GitHub Pages site. `reference/` holds
+  confirmed specs; `proposals/` holds in-progress/under-discussion designs.
+  See `dev-docs/README.md`.

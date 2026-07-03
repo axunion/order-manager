@@ -30,8 +30,8 @@ paths:
 
 | Route type | Auth mechanism |
 |---|---|
-| Admin (menu, seats, orders, payments) | `session_token` HttpOnly cookie — enforced by `requireSession` middleware |
-| Customer order API | `qr_token` URL query parameter |
+| Admin (menu, seats, orders, payments) | `session_token` HttpOnly cookie — enforced by `requireStore` middleware |
+| Customer order API | `qr_token` URL **path** parameter (`:seatToken`) — enforced by `requireSeat` middleware, applied inline per-route (not global `.use()`) |
 | Public (stores, auth) | No auth |
 
 Do not mix auth patterns; check `apps/api/src/app.ts` mount order to confirm which middleware applies.

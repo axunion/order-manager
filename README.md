@@ -17,9 +17,9 @@ packages/
   ui/      Shared Solid components + design tokens — frontend only
 ```
 
-See [docs/auth.md](./docs/auth.md) for the authentication design,
-[docs/deploy.md](./docs/deploy.md) for deployment, and
-[docs/monorepo.md](./docs/monorepo.md) for monorepo operations.
+See [dev-docs/reference/auth.md](./dev-docs/reference/auth.md) for the authentication design,
+[dev-docs/reference/deploy.md](./dev-docs/reference/deploy.md) for deployment, and
+[dev-docs/reference/monorepo.md](./dev-docs/reference/monorepo.md) for monorepo operations.
 
 ## Prerequisites
 

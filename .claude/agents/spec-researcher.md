@@ -45,7 +45,7 @@ This project (order-manager) uses:
 - **Runtime**: Cloudflare Workers + D1 (SQLite)
 - **Backend**: Hono (admin + customer auth, mounted routes)
 - **Frontend**: SolidJS + Kobalte (Select, AlertDialog, ConfirmDialog) + CSS Modules + LightningCSS + tokens.css
-- **Testing**: Vitest with two separate projects (node / workers), dangerouslyDisableSandbox: true required for workers tests
+- **Testing**: Vitest, per-workspace config — `apps/api` runs on `@cloudflare/vitest-pool-workers` (Miniflare), each frontend app/package uses `happy-dom` or plain `node`; `dangerouslyDisableSandbox: true` required for workers tests
 - **Package manager**: pnpm
 
 Always consider this stack when interpreting documentation and providing recommendations.
