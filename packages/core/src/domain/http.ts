@@ -1,5 +1,5 @@
 /**
- * Response envelope helpers matching the API contract in docs/architecture.md.
+ * Response envelope helpers for the shared API contract.
  *
  * Success:  { "data": { ... } }
  * Error:    { "error": { "code": "...", "message": "..." } }

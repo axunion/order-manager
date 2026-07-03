@@ -17,7 +17,9 @@ packages/
   ui/      Shared Solid components + design tokens — frontend only
 ```
 
-See [docs/](./docs/README.md) for architecture, monorepo operations, and migration guide.
+See [docs/auth.md](./docs/auth.md) for the authentication design,
+[docs/deploy.md](./docs/deploy.md) for deployment, and
+[docs/monorepo.md](./docs/monorepo.md) for monorepo operations.
 
 ## Prerequisites
 
@@ -47,4 +49,3 @@ pnpm dev:signup   # start signup Vite dev server
 | `pnpm db:reset` | Wipe and re-apply local D1 |
 | `pnpm db:rebuild` | Regenerate + reset from scratch |
 | `pnpm db:studio` | Open Drizzle Studio |
-| `pnpm seed:dev` | Seed local D1 with development data |

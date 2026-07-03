@@ -203,6 +203,45 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    '@cloudflare/workers-types':
+      specifier: ^4.20260621.1
+      version: 4.20260621.1
+    '@solidjs/router':
+      specifier: ^0.15.3
+      version: 0.15.4
+    '@solidjs/testing-library':
+      specifier: ^0.8.10
+      version: 0.8.10
+    '@testing-library/user-event':
+      specifier: ^14.6.1
+      version: 14.6.1
+    drizzle-orm:
+      specifier: ^0.45.2
+      version: 0.45.2
+    happy-dom:
+      specifier: ^20.10.6
+      version: 20.10.6
+    solid-js:
+      specifier: ^1.9.13
+      version: 1.9.13
+    vite:
+      specifier: ^8.0.0
+      version: 8.0.16
+    vite-plugin-solid:
+      specifier: ^2.11.12
+      version: 2.11.12
+    vitest:
+      specifier: ^4.1.9
+      version: 4.1.9
+    wrangler:
+      specifier: ^4.103.0
+      version: 4.103.0
+    zod:
+      specifier: ^4.4.3
+      version: 4.4.3
+
 importers:
 
   .:
@@ -226,36 +265,39 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
       '@solidjs/router':
-        specifier: ^0.15.3
+        specifier: 'catalog:'
         version: 0.15.4(solid-js@1.9.13)
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4
       solid-js:
-        specifier: ^1.9.13
+        specifier: 'catalog:'
         version: 1.9.13
     devDependencies:
       '@solidjs/testing-library':
-        specifier: ^0.8.10
+        specifier: 'catalog:'
         version: 0.8.10(@solidjs/router@0.15.4(solid-js@1.9.13))(solid-js@1.9.13)
       '@testing-library/user-event':
-        specifier: ^14.6.1
+        specifier: 'catalog:'
         version: 14.6.1(@testing-library/dom@10.4.1)
       '@types/qrcode':
         specifier: ^1.5.6
         version: 1.5.6
       happy-dom:
-        specifier: ^20.10.6
+        specifier: 'catalog:'
         version: 20.10.6
       vite:
-        specifier: ^8.0.0
+        specifier: 'catalog:'
         version: 8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(tsx@4.22.4)
       vite-plugin-solid:
-        specifier: ^2.11.12
+        specifier: 'catalog:'
         version: 2.11.12(solid-js@1.9.13)(vite@8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(tsx@4.22.4))
       vitest:
-        specifier: ^4.1.9
+        specifier: 'catalog:'
         version: 4.1.9(@types/node@26.0.0)(@vitest/coverage-v8@4.1.9)(happy-dom@20.10.6)(vite@8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(tsx@4.22.4))
+      wrangler:
+        specifier: 'catalog:'
+        version: 4.103.0(@cloudflare/workers-types@4.20260621.1)
 
   apps/api:
     dependencies:
@@ -269,26 +311,26 @@ importers:
         specifier: workspace:*
         version: link:../../packages/db
       drizzle-orm:
-        specifier: ^0.45.2
+        specifier: 'catalog:'
         version: 0.45.2(@cloudflare/workers-types@4.20260621.1)
       hono:
         specifier: ^4.12.26
         version: 4.12.26
       zod:
-        specifier: ^4.4.3
+        specifier: 'catalog:'
         version: 4.4.3
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: ^0.16.18
         version: 0.16.18(@cloudflare/workers-types@4.20260621.1)(@vitest/runner@4.1.9)(@vitest/snapshot@4.1.9)(vitest@4.1.9)
       '@cloudflare/workers-types':
-        specifier: ^4.20260621.1
+        specifier: 'catalog:'
         version: 4.20260621.1
       vitest:
-        specifier: ^4.1.9
+        specifier: 'catalog:'
         version: 4.1.9(@types/node@26.0.0)(@vitest/coverage-v8@4.1.9)(happy-dom@20.10.6)(vite@8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(tsx@4.22.4))
       wrangler:
-        specifier: ^4.103.0
+        specifier: 'catalog:'
         version: 4.103.0(@cloudflare/workers-types@4.20260621.1)
 
   apps/order:
@@ -300,30 +342,33 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
       '@solidjs/router':
-        specifier: ^0.15.3
+        specifier: 'catalog:'
         version: 0.15.4(solid-js@1.9.13)
       solid-js:
-        specifier: ^1.9.13
+        specifier: 'catalog:'
         version: 1.9.13
     devDependencies:
       '@solidjs/testing-library':
-        specifier: ^0.8.10
+        specifier: 'catalog:'
         version: 0.8.10(@solidjs/router@0.15.4(solid-js@1.9.13))(solid-js@1.9.13)
       '@testing-library/user-event':
-        specifier: ^14.6.1
+        specifier: 'catalog:'
         version: 14.6.1(@testing-library/dom@10.4.1)
       happy-dom:
-        specifier: ^20.10.6
+        specifier: 'catalog:'
         version: 20.10.6
       vite:
-        specifier: ^8.0.0
+        specifier: 'catalog:'
         version: 8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(tsx@4.22.4)
       vite-plugin-solid:
-        specifier: ^2.11.12
+        specifier: 'catalog:'
         version: 2.11.12(solid-js@1.9.13)(vite@8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(tsx@4.22.4))
       vitest:
-        specifier: ^4.1.9
+        specifier: 'catalog:'
         version: 4.1.9(@types/node@26.0.0)(@vitest/coverage-v8@4.1.9)(happy-dom@20.10.6)(vite@8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(tsx@4.22.4))
+      wrangler:
+        specifier: 'catalog:'
+        version: 4.103.0(@cloudflare/workers-types@4.20260621.1)
 
   apps/signup:
     dependencies:
@@ -334,49 +379,52 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
       '@solidjs/router':
-        specifier: ^0.15.3
+        specifier: 'catalog:'
         version: 0.15.4(solid-js@1.9.13)
       solid-js:
-        specifier: ^1.9.13
+        specifier: 'catalog:'
         version: 1.9.13
     devDependencies:
       '@solidjs/testing-library':
-        specifier: ^0.8.10
+        specifier: 'catalog:'
         version: 0.8.10(@solidjs/router@0.15.4(solid-js@1.9.13))(solid-js@1.9.13)
       '@testing-library/user-event':
-        specifier: ^14.6.1
+        specifier: 'catalog:'
         version: 14.6.1(@testing-library/dom@10.4.1)
       happy-dom:
-        specifier: ^20.10.6
+        specifier: 'catalog:'
         version: 20.10.6
       vite:
-        specifier: ^8.0.0
+        specifier: 'catalog:'
         version: 8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(tsx@4.22.4)
       vite-plugin-solid:
-        specifier: ^2.11.12
+        specifier: 'catalog:'
         version: 2.11.12(solid-js@1.9.13)(vite@8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(tsx@4.22.4))
       vitest:
-        specifier: ^4.1.9
+        specifier: 'catalog:'
         version: 4.1.9(@types/node@26.0.0)(@vitest/coverage-v8@4.1.9)(happy-dom@20.10.6)(vite@8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(tsx@4.22.4))
+      wrangler:
+        specifier: 'catalog:'
+        version: 4.103.0(@cloudflare/workers-types@4.20260621.1)
 
   packages/core:
     dependencies:
       zod:
-        specifier: ^4.4.3
+        specifier: 'catalog:'
         version: 4.4.3
     devDependencies:
       vitest:
-        specifier: ^4.1.9
+        specifier: 'catalog:'
         version: 4.1.9(@types/node@26.0.0)(@vitest/coverage-v8@4.1.9)(happy-dom@20.10.6)(vite@8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(tsx@4.22.4))
 
   packages/db:
     dependencies:
       drizzle-orm:
-        specifier: ^0.45.2
+        specifier: 'catalog:'
         version: 0.45.2(@cloudflare/workers-types@4.20260621.1)
     devDependencies:
       '@cloudflare/workers-types':
-        specifier: ^4.20260621.1
+        specifier: 'catalog:'
         version: 4.20260621.1
       drizzle-kit:
         specifier: ^0.31.10
@@ -391,23 +439,23 @@ importers:
         specifier: workspace:*
         version: link:../core
       solid-js:
-        specifier: ^1.9.13
+        specifier: 'catalog:'
         version: 1.9.13
     devDependencies:
       '@solidjs/testing-library':
-        specifier: ^0.8.10
+        specifier: 'catalog:'
         version: 0.8.10(@solidjs/router@0.15.4(solid-js@1.9.13))(solid-js@1.9.13)
       '@testing-library/user-event':
-        specifier: ^14.6.1
+        specifier: 'catalog:'
         version: 14.6.1(@testing-library/dom@10.4.1)
       happy-dom:
-        specifier: ^20.10.6
+        specifier: 'catalog:'
         version: 20.10.6
       vite-plugin-solid:
-        specifier: ^2.11.12
+        specifier: 'catalog:'
         version: 2.11.12(solid-js@1.9.13)(vite@8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(tsx@4.22.4))
       vitest:
-        specifier: ^4.1.9
+        specifier: 'catalog:'
         version: 4.1.9(@types/node@26.0.0)(@vitest/coverage-v8@4.1.9)(happy-dom@20.10.6)(vite@8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(tsx@4.22.4))
 
 packages:

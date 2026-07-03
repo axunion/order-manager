@@ -26,8 +26,14 @@ on D1, with shared logic in `packages/*`.
 ## Tooling
 
 - **Linting/formatting:** Biome only — no ESLint, no Prettier.
-- **Pre-commit hooks:** lefthook runs `biome check --write` + `pnpm test` on
-  staged files. Do not bypass (`--no-verify`).
+- **Pre-commit hooks:** lefthook runs `biome check --write` on staged files and
+  the full `pnpm test`. Do not bypass (`--no-verify`).
+- **Dependencies:** shared library versions are pinned once in the
+  `pnpm-workspace.yaml` catalog; workspace `package.json` files reference them
+  as `"catalog:"`. Add new shared deps to the catalog, not per-workspace.
+- **CI/deploy:** GitHub Actions (`.github/workflows/ci.yml`) runs
+  `check`/`test`/`build` on pushes and PRs. Deployment is manual — see
+  `docs/deploy.md`.
 - **TypeScript:** every workspace extends `tsconfig.base.json` (strict,
   `noUncheckedIndexedAccess`, `verbatimModuleSyntax`). Use `@order/*` path
   aliases for cross-package imports.
@@ -63,7 +69,7 @@ Run `pnpm check` before committing.
 ## Language
 
 Write in **English only**: in-code comments, console output, error and log
-messages, and AI-readable config files (CLAUDE.md, AGENT.md, etc.).
+messages, and AI-readable config files (CLAUDE.md, AGENTS.md, etc.).
 
 ## Code Structure
 

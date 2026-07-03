@@ -44,6 +44,12 @@ See the root `package.json` for shortcuts — `pnpm dev:admin`, `pnpm db:generat
 
 ## Adding a dependency
 
+Shared library versions (solid-js, vitest, vite, zod, drizzle-orm, …) are pinned
+once in the `catalog:` section of `pnpm-workspace.yaml`; workspace `package.json`
+files reference them as `"catalog:"`. When adding a dependency that another
+workspace already uses — or is likely to — add its version to the catalog and
+reference it with `"catalog:"` instead of duplicating the version string.
+
 Always add dependencies to the specific package that uses them, not to the root:
 
 ```sh

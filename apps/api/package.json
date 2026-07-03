@@ -15,14 +15,14 @@
     "@hono/zod-validator": "^0.8.0",
     "@order/core": "workspace:*",
     "@order/db": "workspace:*",
-    "drizzle-orm": "^0.45.2",
+    "drizzle-orm": "catalog:",
     "hono": "^4.12.26",
-    "zod": "^4.4.3"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.16.18",
-    "@cloudflare/workers-types": "^4.20260621.1",
-    "vitest": "^4.1.9",
-    "wrangler": "^4.103.0"
+    "@cloudflare/workers-types": "catalog:",
+    "vitest": "catalog:",
+    "wrangler": "catalog:"
   }
 }

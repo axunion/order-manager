@@ -12,18 +12,18 @@ Your only job is to review code and report findings. You MUST NOT edit any file.
 
 ## Project context
 
-Stack: Astro 6 SSR on Cloudflare Workers / Hono / Drizzle ORM + Cloudflare D1.
+Stack: Hono API on Cloudflare Workers / Drizzle ORM + Cloudflare D1 (SolidJS SPA frontends).
 Canonical secure implementations to reference:
-- `src/lib/api/seats.ts` — ownership verify then operate pattern
-- `src/lib/api/payments.ts` — `store_id` in SELECT, UPDATE, and batch writes
-- `src/lib/api/middleware.ts` — `requireStore` / `requireSeat` definitions
-- `src/lib/api/order.ts` — `SeatEnv` + `requireSeat` as inline per-route middleware
-- `src/db/schema.ts` — denormalized `store_id` on `order_items` and `payments`
+- `apps/api/src/routes/seats.ts` — ownership verify then operate pattern
+- `apps/api/src/routes/payments.ts` — `store_id` in SELECT, UPDATE, and batch writes
+- `apps/api/src/middleware.ts` — `requireStore` / `requireSeat` definitions
+- `apps/api/src/routes/order.ts` — `SeatEnv` + `requireSeat` as inline per-route middleware
+- `packages/db/src/schema.ts` — denormalized `store_id` on `order_items` and `payments`
 
 ## Checks to perform
 
 Read the provided files (or run `git diff HEAD~1` if told to review the latest commit).
-For each modified or new file under `src/lib/api/` or `src/db/`:
+For each modified or new file under `apps/api/src/` or `packages/db/src/`:
 
 ### 1. store_id filter on every tenant query
 - Every `db.select()`, `db.update()`, `db.delete()`, `db.insert()` that touches a
@@ -43,7 +43,7 @@ For each modified or new file under `src/lib/api/` or `src/db/`:
 - Flag any new `new Hono<AuthEnv>()` or `new Hono<SeatEnv>()` chain missing middleware.
 
 ### 4. New tables without store_id
-- Any new table in `src/db/schema.ts` that stores per-store data MUST have a `store_id`
+- Any new table in `packages/db/src/schema.ts` that stores per-store data MUST have a `store_id`
   column with `.notNull().references(() => stores.id)` and an index.
 - If the table can be queried without joining through a parent that already has `store_id`
   (like `order_items` and `payments` do), the `store_id` must be denormalized onto it.
