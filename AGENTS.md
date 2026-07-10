@@ -111,7 +111,8 @@ Format:
   Each app owns its domain components; move to `@order/ui` only when 3+ apps
   need identical logic. See `apps/order/DESIGN.md § Component Ownership Policy`
   and `apps/admin/DESIGN.md § Component Ownership Policy`.
-- `dev-docs/` — internal engineering docs (auth, deploy, monorepo ops), kept
-  separate from any future public GitHub Pages site. `reference/` holds
-  confirmed specs; `proposals/` holds in-progress/under-discussion designs.
-  See `dev-docs/README.md`.
+- `dev-docs/` — internal docs, kept separate from any future public GitHub
+  Pages site. `roadmap.md` is the phased product plan; `specs/` holds product
+  specs (shipped behavior + known limitations); `reference/` holds technical
+  specs (auth, deploy, monorepo ops); `proposals/` holds
+  in-progress/under-discussion designs. See `dev-docs/README.md`.
