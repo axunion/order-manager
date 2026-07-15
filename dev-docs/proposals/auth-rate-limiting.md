@@ -12,6 +12,16 @@ Cap Magic Link issuance per store using data we already have:
 email-change), count tokens created for that `store_id` in the last hour;
 if ≥ 5, **silently skip issuance**.
 
+**Prerequisite — stop deleting superseded tokens.** `issueMagicLink`
+(`apps/api/src/auth.ts`) currently **DELETEs** the previous unused token
+on each issuance, so at most one unissued row survives per (store,
+purpose) and the count above would never reach the cap. Change the
+DELETE to an UPDATE setting `used_at = now()` (supersede). Consumed
+tokens are already kept for audit; superseded ones get the same
+treatment, and `verify` already rejects any token with `used_at` set, so
+security is unchanged — but created-at rows now accumulate and the count
+works.
+
 - The response must stay the anti-enumeration 200 `{ sent: true }` — a
   429 would leak that the email is registered. Log
   `[auth] rate-limited magic link for store <id>` for observability.
@@ -40,9 +50,10 @@ gates public exposure of the API.
 
 ## Testing
 
-- Worker tests: 6th login request within an hour issues no token (count
-  D1 rows) yet still returns `{ sent: true }`; cap resets outside the
-  window (insert aged tokens directly); email-change requests share the
-  same cap.
+- Worker tests: superseded token (re-request) fails at `verify` exactly
+  like a consumed one; 6th login request within an hour issues no token
+  (count D1 rows) yet still returns `{ sent: true }`; cap resets outside
+  the window (insert aged tokens directly); email-change requests share
+  the same cap (defer this case if store-settings hasn't shipped yet).
 - WAF rules are config, not code — verified by the deploy checklist, not
   vitest.

@@ -94,8 +94,9 @@ Then run `pnpm install` to create the symlink.
 
 ## Dependency boundary enforcement
 
-Currently enforced by convention and code review. Planned: add a lint rule (e.g. `eslint-plugin-boundaries`
-or a custom biome plugin) to fail CI when a forbidden cross-package import is detected.
+Currently enforced by convention and code review. Planned: fail CI when a forbidden
+cross-package import is detected (a Biome plugin or a small custom check — the repo is
+Biome-only, so no ESLint-based rule).
 
 Forbidden imports to watch for:
 

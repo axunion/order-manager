@@ -91,7 +91,8 @@ verify endpoint is served from `api.example.com`, not `admin.example.com`.
 
 ### Local dev: skipping email delivery
 
-Resend integration is not wired up yet, and clicking a real email is unnecessary friction
+Resend delivery is implemented (`packages/core/src/domain/email.ts` calls the Resend REST
+API when `RESEND_API_KEY` is set), but clicking a real email is unnecessary friction
 during local development. Two fallbacks exist, gated by the `ENVIRONMENT` env var
 (`"production"` in deployed environments; set to `"development"` in `apps/api/.dev.vars`
 for local dev):

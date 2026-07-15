@@ -31,10 +31,11 @@ concern.)
 ## Staff-call reuse (Phase 3)
 
 The staff-call proposal reuses this exact mechanism (watermark diff +
-beep + highlight); keep the beep and highlight helpers component-local
-but factor them so `StaffCallBanner` can import them later (extract to a
-shared module only when that second consumer lands, per the 3+ rule this
-is still fine at 2 within the same app).
+beep + highlight). Keep the beep and highlight helpers component-local
+in v1, but shaped so they can move as-is: when staff-call lands as the
+second consumer, extract them into a shared module **within
+`apps/admin`** (a deliberate, app-internal exception to the 3+ rule —
+matching [staff-call.md](./staff-call.md)).
 
 ## Testing
 

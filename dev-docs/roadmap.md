@@ -11,8 +11,15 @@ Conventions:
   design doc in `proposals/`. **Design docs are pre-written for every
   item**: Phase 2–3 proposals are implementation-ready; Phase 4–5 are
   sketches whose open decisions must be resolved (and the doc promoted
-  to "ready") before starting. Once shipped, fold a proposal into the
-  relevant spec and delete it (see `dev-docs/README.md`).
+  to "ready") before starting.
+- Items are implemented one at a time following
+  [reference/implementation-loop.md](reference/implementation-loop.md)
+  (tests → implementation → review → commit, per slice) — invoked via
+  the `/implement-item` skill.
+- When an item ships: mark it **✅ Shipped** here, fold its proposal
+  into the relevant spec, delete the proposal, and repoint the item's
+  link to that spec (see `dev-docs/README.md`). This makes "the next
+  unshipped item" mechanically findable across sessions.
 - Phase numbering continues from Phase 1 ("core business cycle",
   shipped). The `payments.method` schema comment already reserves
   Phase 4 for payment methods; numbering here keeps that promise.
@@ -48,6 +55,9 @@ simulated) full service day with zero manual DB intervention.
    ([checkout](specs/features/checkout.md))
    Payments are currently write-only. A date-ranged payments API and an
    admin sales page answering "today: ¥X across N checks".
+   *Soft dependency on item 1:* the cancelled-line display in its
+   response spec applies only once cancellation ships; defer that part
+   if implemented first.
 3. **New-order alert on the order board**
    → [proposal](proposals/new-order-alerts.md)
    ([order-fulfillment](specs/features/order-fulfillment.md))
@@ -67,7 +77,10 @@ simulated) full service day with zero manual DB intervention.
    → [proposal](proposals/auth-rate-limiting.md)
    ([authentication](specs/features/authentication.md))
    Throttle signup/login per IP + per email to protect the Resend quota
-   and victims' inboxes.
+   and victims' inboxes. Includes a prerequisite change to
+   `issueMagicLink` (supersede instead of delete — see the proposal).
+   *Soft dependency on item 4:* the email-change cap test applies only
+   once store settings ship.
 
 ## Phase 3 — Customer experience
 

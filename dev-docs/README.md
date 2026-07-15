@@ -14,7 +14,9 @@ branch, decided later).
   truth alongside the code. `specs/features/` holds one spec per feature
   area.
 - `reference/` — technical specs: how the system is built and operated
-  (auth architecture, deploy runbook, monorepo ops). Treat as source of
+  (auth architecture, deploy runbook, monorepo ops, and
+  `implementation-loop.md` — the per-item workflow for turning a
+  proposal into shipped code). Treat as source of
   truth; keep in sync with the code (see `.claude/agents/doc-sync-auditor.md`).
 - `proposals/` — in-progress or under-discussion design docs. Not yet
   implemented, or implemented but not finalized. Once shipped and

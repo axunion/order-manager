@@ -24,8 +24,10 @@ store rename and owner email change (re-verified via Magic Link).
   authenticated, so anti-enumeration does not apply here).
 - Issues a Magic Link token with `purpose = 'email_change'` and the
   target address stored on the token; **sends to the new address**
-  (possession proof). Invalidate previous unused email-change tokens on
-  re-request, mirroring `issueMagicLink`'s existing behavior.
+  (possession proof). Supersede previous unused email-change tokens on
+  re-request via `issueMagicLink`'s mechanism (mark `used_at`, not
+  DELETE — see the prerequisite in
+  [auth-rate-limiting.md](./auth-rate-limiting.md)).
 - Always 200 `{ data: { sent: true } }` (+ `verify_url` in dev, same
   opt-in gate as login).
 
