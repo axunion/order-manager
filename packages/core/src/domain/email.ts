@@ -12,7 +12,7 @@ const DEFAULT_FROM = "noreply@order-manager.example.com";
 interface SendMagicLinkOptions {
   to: string;
   magicLinkUrl: string;
-  purpose: "signup" | "login";
+  purpose: "signup" | "login" | "email_change";
 }
 
 interface EmailConfig {
@@ -63,8 +63,8 @@ export async function sendMagicLinkEmail(
   }
 }
 
-function buildEmailContent(
-  purpose: "signup" | "login",
+export function buildEmailContent(
+  purpose: "signup" | "login" | "email_change",
   magicLinkUrl: string,
 ): { subject: string; html: string } {
   if (purpose === "signup") {
@@ -76,6 +76,20 @@ function buildEmailContent(
         このリンクは15分間有効です。</p>
         <p><a href="${magicLinkUrl}">${magicLinkUrl}</a></p>
         <p>このメールに心当たりがない場合は無視してください。</p>
+      `,
+    };
+  }
+  if (purpose === "email_change") {
+    return {
+      subject: "メールアドレス変更の確認",
+      html: `
+        <p>オーダーマネージャーの管理画面で、このメールアドレスへの変更が
+        リクエストされました。</p>
+        <p>以下のリンクをクリックして変更を確定してください。<br>
+        このリンクは15分間有効で、一度しか使用できません。</p>
+        <p><a href="${magicLinkUrl}">${magicLinkUrl}</a></p>
+        <p>このメールに心当たりがない場合は無視してください。メールアドレスは
+        変更されません。</p>
       `,
     };
   }

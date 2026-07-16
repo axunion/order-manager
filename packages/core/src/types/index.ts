@@ -30,6 +30,28 @@ export interface StoreCreatedResponse {
   verify_url?: string;
 }
 
+export const UpdateStoreNameInput = z.object({
+  name: displayName,
+});
+export type UpdateStoreNameInput = z.infer<typeof UpdateStoreNameInput>;
+
+export interface StoreResponse {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export const EmailChangeInput = z.object({
+  new_email: z.email(),
+});
+export type EmailChangeInput = z.infer<typeof EmailChangeInput>;
+
+export interface EmailChangeResponse {
+  sent: true;
+  /** Magic Link URL. Only present when ENVIRONMENT !== "production". */
+  verify_url?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
