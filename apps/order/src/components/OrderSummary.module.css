@@ -59,6 +59,22 @@
   white-space: nowrap;
 }
 
+.itemCancelled {
+  opacity: 0.5;
+}
+
+.itemCancelled .itemName,
+.itemCancelled .itemQty,
+.itemCancelled .itemPrice {
+  text-decoration: line-through;
+}
+
+.itemCancelledLabel {
+  color: var(--color-danger-fg);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
 .total {
   display: flex;
   justify-content: space-between;

@@ -26,7 +26,7 @@ export type OrderItem = {
   name_snapshot: string;
   unit_price_snapshot: number;
   quantity: number;
-  status: "ordered" | "served";
+  status: "ordered" | "served" | "cancelled";
   created_at: number;
 };
 

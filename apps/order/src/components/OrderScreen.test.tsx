@@ -275,6 +275,50 @@ describe("OrderScreen", () => {
     await findByText(/会計をお待ちください/);
   });
 
+  it("shows a cancelled item with a 取消済み label and excludes it from the total", async () => {
+    const bootstrap = {
+      data: {
+        ...bootstrapWithOrder.data,
+        order: {
+          id: "order1",
+          status: "open",
+          items: [
+            {
+              id: "oi1",
+              name_snapshot: "ラーメン",
+              unit_price_snapshot: 800,
+              quantity: 1,
+              status: "ordered",
+              created_at: 1000,
+            },
+            {
+              id: "oi2",
+              name_snapshot: "ビール",
+              unit_price_snapshot: 600,
+              quantity: 1,
+              status: "cancelled",
+              created_at: 1001,
+            },
+          ],
+          total: 800,
+        },
+      },
+    };
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([{ url: "/api/order/", method: "GET", json: bootstrap }]),
+    );
+
+    const { findByText, queryByText } = render(() => (
+      <OrderScreen seatToken="test-token" />
+    ));
+    await findByText("ビール");
+    await findByText("取消済み");
+    // Total (800) excludes the cancelled ビール line; 1,400 would be the
+    // (wrong) sum if it were still counted.
+    expect(queryByText("1,400")).toBeNull();
+  });
+
   it("'会計をお願いする' button calls PATCH request-payment", async () => {
     const fetchMock = mockFetch([
       { url: "/api/order/", method: "GET", json: bootstrapWithOrder },
