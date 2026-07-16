@@ -56,9 +56,8 @@ simulated) full service day with zero manual DB intervention.
    → [checkout](specs/features/checkout.md), [domain-model](specs/domain-model.md)
    Payments were write-only. A date-ranged payments API and an admin
    sales page answering "today: ¥X across N checks".
-3. **New-order alert on the order board**
-   → [proposal](proposals/new-order-alerts.md)
-   ([order-fulfillment](specs/features/order-fulfillment.md))
+3. **✅ Shipped — New-order alert on the order board**
+   → [order-fulfillment](specs/features/order-fulfillment.md)
    Sound + visual badge when polling picks up new orders or appended
    items.
 4. **Store settings**

@@ -36,7 +36,9 @@ Index on `(store_id, status)`. CHECK on status; CHECK
   and poll it with the existing order refresh).
 - Admin: OrderBoard gains a banner strip of open calls (seat name +
   elapsed time + resolve button). Reuses the new-order alert sound/
-  highlight helpers ([new-order-alerts.md](./new-order-alerts.md)) —
+  highlight helpers (`playAlertBeep` and the highlight-timer logic in
+  `apps/admin/src/components/OrderBoard.tsx`, documented in
+  [order-fulfillment.md](../specs/features/order-fulfillment.md)) —
   calls beep too; this is the second consumer that justifies extracting
   the alert helpers into a shared module within `apps/admin`.
 

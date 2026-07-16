@@ -313,6 +313,16 @@ their visual state must communicate urgency instantly.
 - Left border: `4px solid var(--color-warning-border)` (`#FCD34D`)
 - All other geometry identical to alert state
 
+**New-order alert (on top of Alert/Warning)**
+
+- `box-shadow: 0 0 0 3px var(--color-ring)` ring, applied by JS for ~10s
+  when a poll detects an item newer than the watermark; a second alert
+  on the same card restarts the window
+- Board-level controls (above the card grid): a `🔔/🔕 通知音` toggle
+  button (`aria-pressed`), persisted to `localStorage`
+  (`order-alert-sound`); `document.title` gains a `(N)` unserved-item
+  count
+
 **Card Header**
 
 - Seat name: 18px / 700 / `#0F172A` — immediately identifiable even under glare

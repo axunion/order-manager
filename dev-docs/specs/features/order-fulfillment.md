@@ -42,10 +42,26 @@ orders. Requires the `session_token` cookie (`requireStore`).
 All four endpoints are single-row-scoped with `store_id` filters;
 cross-tenant ids → 404 (not 403).
 
+### New-order alerts (client-side only, no API change)
+
+The board diffs each poll against a watermark (the max
+`order_items.created_at` seen so far, items not orders — appended items
+to an existing order alert too). Any item newer than the watermark
+triggers the alert and advances it; the initial load sets the watermark
+silently. The `?since=` param above stays unused for this — full-list
+diffing is simpler at this scale.
+
+- **Visual (always on):** the affected order card gets a highlight ring
+  for ~10s (a second alert on the same order restarts the window rather
+  than clearing it early); `document.title` gains a `(N)` count of
+  `ordered`-status items so a backgrounded tab still shows activity.
+- **Sound (opt-in):** a Web Audio oscillator beep, toggled in the board
+  header and persisted to `localStorage` (`order-alert-sound`) — sound
+  is blocked by browsers before a user gesture, so the first toggle-on
+  click doubles as the unlock.
+
 ## Known limitations (→ roadmap)
 
-- **No new-order alert** — the list refreshes silently; staff must watch
-  the screen. (Phase 2)
 - **Polling, not push** — 5s latency and wasted requests; fine at
   current scale. Durable Objects/SSE is a deliberate later optimization.
   (Phase 5)
