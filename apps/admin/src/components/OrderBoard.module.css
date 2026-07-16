@@ -114,7 +114,8 @@
   flex-wrap: wrap;
 }
 
-.orderItemServed {
+.orderItemServed,
+.orderItemCancelled {
   opacity: 0.5;
 }
 
@@ -140,4 +141,10 @@
   min-width: 5rem;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.orderItemCancelled .orderItemName,
+.orderItemCancelled .orderItemQty,
+.orderItemCancelled .orderItemPrice {
+  text-decoration: line-through;
 }

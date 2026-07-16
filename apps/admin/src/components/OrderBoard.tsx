@@ -1,5 +1,5 @@
 import { apiFetch } from "@order/core/client";
-import { Button, ErrorAlert } from "@order/ui";
+import { Button, ConfirmDialog, ErrorAlert } from "@order/ui";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import styles from "./OrderBoard.module.css";
 import StatusBadge from "./StatusBadge";
@@ -9,7 +9,7 @@ type OrderItem = {
   name_snapshot: string;
   unit_price_snapshot: number;
   quantity: number;
-  status: "ordered" | "served";
+  status: "ordered" | "served" | "cancelled";
   created_at: number;
 };
 
@@ -25,7 +25,7 @@ type AdminOrder = {
 export default function OrderBoard() {
   const [orders, setOrders] = createSignal<AdminOrder[]>([]);
   const [error, setError] = createSignal("");
-  const [serving, setServing] = createSignal<Set<string>>(new Set());
+  const [pendingItems, setPendingItems] = createSignal<Set<string>>(new Set());
 
   async function loadOrders() {
     const result = await apiFetch<AdminOrder[]>("/api/admin/orders");
@@ -44,24 +44,58 @@ export default function OrderBoard() {
     onCleanup(() => clearInterval(timerId));
   });
 
-  const handleServe = async (itemId: string) => {
-    setServing((prev) => new Set([...prev, itemId]));
+  const runItemAction = async (
+    itemId: string,
+    path: string,
+    failureMessage: string,
+  ) => {
+    setPendingItems((prev) => new Set([...prev, itemId]));
     try {
-      const result = await apiFetch(`/api/admin/orders/items/${itemId}/serve`, {
-        method: "PATCH",
-      });
+      const result = await apiFetch(path, { method: "PATCH" });
       if (!result.ok) {
-        setError(result.message ?? "提供済みマークに失敗しました。");
+        setError(result.message ?? failureMessage);
         return;
       }
       await loadOrders();
     } finally {
-      setServing((prev) => {
+      setPendingItems((prev) => {
         const next = new Set(prev);
         next.delete(itemId);
         return next;
       });
     }
+  };
+
+  const handleServe = (itemId: string) =>
+    runItemAction(
+      itemId,
+      `/api/admin/orders/items/${itemId}/serve`,
+      "提供済みマークに失敗しました。",
+    );
+
+  const handleUnserve = (itemId: string) =>
+    runItemAction(
+      itemId,
+      `/api/admin/orders/items/${itemId}/unserve`,
+      "提供取消に失敗しました。",
+    );
+
+  const handleVoidItem = (itemId: string) =>
+    runItemAction(
+      itemId,
+      `/api/admin/orders/items/${itemId}/cancel`,
+      "明細の取消に失敗しました。",
+    );
+
+  const handleCancelOrder = async (orderId: string) => {
+    const result = await apiFetch(`/api/admin/orders/${orderId}/cancel`, {
+      method: "PATCH",
+    });
+    if (!result.ok) {
+      setError(result.message ?? "注文のキャンセルに失敗しました。");
+      return;
+    }
+    await loadOrders();
   };
 
   const formatCurrency = (amount: number) =>
@@ -99,13 +133,23 @@ export default function OrderBoard() {
                 <span class={styles.orderTotal}>
                   {formatCurrency(order.total)}
                 </span>
+                <ConfirmDialog
+                  triggerLabel="注文をキャンセル"
+                  triggerVariant="danger"
+                  triggerSize="sm"
+                  aria-label={`注文をキャンセル ${order.seat_name}`}
+                  title="注文のキャンセル"
+                  description={`「${order.seat_name}」の注文をキャンセルしますか？明細もすべて取り消されます。この操作は元に戻せません。`}
+                  confirmLabel="キャンセルする"
+                  onConfirm={() => handleCancelOrder(order.id)}
+                />
               </div>
 
               <ul class={styles.orderItems}>
                 <For each={order.items}>
                   {(item) => (
                     <li
-                      class={`${styles.orderItem ?? ""} ${item.status === "served" ? (styles.orderItemServed ?? "") : ""}`}
+                      class={`${styles.orderItem ?? ""} ${item.status === "served" ? (styles.orderItemServed ?? "") : ""} ${item.status === "cancelled" ? (styles.orderItemCancelled ?? "") : ""}`}
                     >
                       <span class={styles.orderItemName}>
                         {item.name_snapshot}
@@ -116,16 +160,49 @@ export default function OrderBoard() {
                           item.unit_price_snapshot * item.quantity,
                         )}
                       </span>
-                      <Button
-                        variant="success"
-                        size="sm"
-                        disabled={
-                          item.status === "served" || serving().has(item.id)
+                      <Show
+                        when={item.status !== "cancelled"}
+                        fallback={
+                          <StatusBadge tone="danger">取消済み</StatusBadge>
                         }
-                        onClick={() => handleServe(item.id)}
                       >
-                        {serving().has(item.id) ? "処理中..." : "提供済み"}
-                      </Button>
+                        <Show
+                          when={item.status === "served"}
+                          fallback={
+                            <Button
+                              variant="success"
+                              size="sm"
+                              disabled={pendingItems().has(item.id)}
+                              onClick={() => handleServe(item.id)}
+                            >
+                              {pendingItems().has(item.id)
+                                ? "処理中..."
+                                : "提供済み"}
+                            </Button>
+                          }
+                        >
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={pendingItems().has(item.id)}
+                            onClick={() => handleUnserve(item.id)}
+                          >
+                            {pendingItems().has(item.id)
+                              ? "処理中..."
+                              : "提供取消"}
+                          </Button>
+                        </Show>
+                        <ConfirmDialog
+                          triggerLabel="取消"
+                          triggerVariant="danger"
+                          triggerSize="sm"
+                          aria-label={`明細を取消 ${item.name_snapshot} (${item.id})`}
+                          title="明細の取消"
+                          description={`「${item.name_snapshot}」を取消しますか？この操作は元に戻せません。`}
+                          confirmLabel="取消する"
+                          onConfirm={() => handleVoidItem(item.id)}
+                        />
+                      </Show>
                     </li>
                   )}
                 </For>

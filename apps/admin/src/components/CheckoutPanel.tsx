@@ -74,6 +74,27 @@ export default function CheckoutPanel() {
     }
   };
 
+  const handleReopen = async (orderId: string) => {
+    setActionError("");
+    setProcessing((prev) => new Set([...prev, orderId]));
+    try {
+      const result = await apiFetch(`/api/admin/orders/${orderId}/reopen`, {
+        method: "PATCH",
+      });
+      if (!result.ok) {
+        setActionError(result.message ?? "席への差し戻しに失敗しました。");
+        return;
+      }
+      await loadPending();
+    } finally {
+      setProcessing((prev) => {
+        const next = new Set(prev);
+        next.delete(orderId);
+        return next;
+      });
+    }
+  };
+
   const formatCurrency = (amount: number) =>
     `¥${amount.toLocaleString("ja-JP")}`;
 
@@ -125,6 +146,13 @@ export default function CheckoutPanel() {
               </ul>
 
               <div class={styles.checkoutCardFooter}>
+                <Button
+                  variant="secondary"
+                  disabled={processing().has(order.id)}
+                  onClick={() => handleReopen(order.id)}
+                >
+                  {processing().has(order.id) ? "処理中..." : "席に戻す"}
+                </Button>
                 <Button
                   variant="primary"
                   disabled={processing().has(order.id)}

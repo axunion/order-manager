@@ -275,6 +275,66 @@ describe("CheckoutPanel", () => {
     await clickPromise;
   });
 
+  it("sends PATCH to reopen endpoint when 席に戻す button is clicked", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch([
+      {
+        url: "/api/payments/pending",
+        method: "GET",
+        json: { data: [mockPendingOrder] },
+      },
+      {
+        url: "/api/admin/orders/order-checkout-1/reopen",
+        method: "PATCH",
+        json: { data: { id: "order-checkout-1", status: "open" } },
+      },
+      {
+        url: "/api/payments/pending",
+        method: "GET",
+        json: { data: [] },
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { findByRole } = render(() => <CheckoutPanel />);
+    const reopenBtn = await findByRole("button", { name: /席に戻す/ });
+    await user.click(reopenBtn);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/admin/orders/order-checkout-1/reopen",
+      expect.objectContaining({ method: "PATCH" }),
+    );
+  });
+
+  it("shows an error when the reopen PATCH fails", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/payments/pending",
+          method: "GET",
+          json: { data: [mockPendingOrder] },
+        },
+        {
+          url: "/api/admin/orders/order-checkout-1/reopen",
+          method: "PATCH",
+          ok: false,
+          json: {
+            error: { code: "CONFLICT", message: "この注文は操作できません。" },
+          },
+        },
+      ]),
+    );
+
+    const { findByRole } = render(() => <CheckoutPanel />);
+    const reopenBtn = await findByRole("button", { name: /席に戻す/ });
+    await user.click(reopenBtn);
+
+    const alert = await findByRole("alert");
+    expect(alert.textContent).toContain("操作できません");
+  });
+
   it("polls every 5 seconds via setInterval", async () => {
     vi.useFakeTimers();
     const fetchMock = mockFetch([
