@@ -42,7 +42,10 @@ store rename and owner email change (re-verified via Magic Link).
 
 `magic_link_tokens`:
 - `purpose` enum gains `'email_change'` (CHECK constraint update →
-  table-rebuild migration, same caveat as order-cancellation).
+  table-rebuild migration; SQLite can't alter CHECK constraints in
+  place, so `pnpm db:generate` produces a table-rebuild — verify FK
+  integrity in the migration test, as with the `orders`/`order_items`
+  status CHECK updates in `dev-docs/specs/domain-model.md`).
 - New nullable column `new_email` (set only for `email_change` tokens).
 
 ## Admin UI — SettingsPage

@@ -16,19 +16,25 @@ oldest first. Polled every 5 seconds by the UI.
   snapshots — the client never sends an amount.
 - Guards: order must exist in this store (404), be `payment_requested`
   (409 otherwise, with a distinct "already paid" message), and have at
-  least one item (409).
+  least one non-`cancelled` item (409, same message as zero items —
+  voided-out bills cannot be checked out).
 - Writes payment INSERT + order UPDATE (`paid`, `closed_at`) atomically
   via `db.batch()`. Concurrent double-payment is blocked by the
   `payments.order_id` UNIQUE constraint → 409.
 - Method is hard-coded `'cash'` — the enum's only value (schema comment
   reserves `'card' | 'qr'` for Phase 4).
 
+### Sending a bill back to the table (`PATCH /api/admin/orders/:id/reopen`)
+
+- Transitions `payment_requested → open`, e.g. when a customer wants to
+  add more items before paying. Idempotent if already `open`; 409 if
+  `paid` or `cancelled`.
+
 ## Known limitations (→ roadmap)
 
 - **Payments are write-only** — no endpoint or screen reads completed
   payments. No sales history, no daily totals, no way to answer "how much
-  did we make today". The data is all there. (Phase 2, top priority with
-  cancellation)
+  did we make today". The data is all there. (Phase 2, top priority)
 - **Cash only** — no card/QR-code payment integration. (Phase 4)
 - **No amount adjustment** — no discounts, comps, or service charge.
   (Phase 4)

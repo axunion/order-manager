@@ -43,21 +43,20 @@ Conventions:
 touching the database. Exit criterion: one real (or realistically
 simulated) full service day with zero manual DB intervention.
 
-1. **Order cancellation & correction**
-   → [proposal](proposals/order-cancellation.md)
-   ([customer-ordering](specs/features/customer-ordering.md),
-   [order-fulfillment](specs/features/order-fulfillment.md))
+1. **✅ Shipped — Order cancellation & correction**
+   → [order-fulfillment](specs/features/order-fulfillment.md),
+   [checkout](specs/features/checkout.md),
+   [customer-ordering](specs/features/customer-ordering.md),
+   [domain-model](specs/domain-model.md)
    The largest operational gap: today no mistake is recoverable. Staff
    can void items, un-serve, reopen a requested bill, and cancel a whole
-   order; customer self-cancel is deferred (decision in the proposal).
+   order; customer self-cancel is deferred (decision in
+   customer-ordering.md's Known limitations).
 2. **Sales history & daily summary**
    → [proposal](proposals/sales-history.md)
    ([checkout](specs/features/checkout.md))
    Payments are currently write-only. A date-ranged payments API and an
    admin sales page answering "today: ¥X across N checks".
-   *Soft dependency on item 1:* the cancelled-line display in its
-   response spec applies only once cancellation ships; defer that part
-   if implemented first.
 3. **New-order alert on the order board**
    → [proposal](proposals/new-order-alerts.md)
    ([order-fulfillment](specs/features/order-fulfillment.md))

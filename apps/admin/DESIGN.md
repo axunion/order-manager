@@ -280,12 +280,13 @@ The centrepiece of the admin UI. Cards represent active restaurant seats;
 their visual state must communicate urgency instantly.
 
 ```
-┌────────────────────────────────────────────────────────┐  ← Alert state
-│ ● Table 3         [会計要求中]          ¥4,200         │
-│ ─────────────────────────────────────────────────────  │
-│  ラーメン         × 2   ¥1,600        [提供済み ✓]    │
-│  餃子             × 1     ¥500        [提供済み ✓]    │
-└────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐  ← Alert state
+│ ● Table 3    [会計要求中]   ¥4,200   [注文をキャンセル]        │
+│ ───────────────────────────────────────────────────────────── │
+│  ラーメン         × 2   ¥1,600    [提供済み ✓] [取消]         │
+│  餃子             × 1     ¥500    [提供取消]   [取消]         │
+│  ビール(取消済み) × 1     ¥600         [取消済み]              │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 **Alert state — new / unserved order** *(primary visual state)*
@@ -316,6 +317,8 @@ their visual state must communicate urgency instantly.
 - Seat name: 18px / 700 / `#0F172A` — immediately identifiable even under glare
 - Status badge: see §4 Status Badges
 - Order total: `margin-left: auto` / 18px / 700 / `#0F172A` / `tabular-nums`
+- "注文をキャンセル" — `ConfirmDialog` (`danger` variant / `sm` size), placed
+  last in the header. Cascades to cancel every non-cancelled item.
 
 **Order Item Row** (inside card)
 
@@ -324,8 +327,14 @@ their visual state must communicate urgency instantly.
 - Item name: 14px / 500 / `#0F172A` — `flex: 1`
 - Quantity (`× N`): 14px / `#475569` / `tabular-nums`
 - Line price: 14px / 600 / `#0F172A` / `tabular-nums` / `text-align: right`
-- "提供済み" button: `success` variant / `sm` size
-- **Served state:** `opacity: 0.5` on the entire item row
+- `ordered` state: "提供済み" button (`success` variant / `sm` size) +
+  "取消" `ConfirmDialog` (`danger` variant / `sm` size)
+- **Served state:** `opacity: 0.5` on the entire item row; "提供済み"
+  replaced by "提供取消" (`secondary` variant / `sm` size) + "取消"
+  `ConfirmDialog`
+- **Cancelled state:** `opacity: 0.5` plus `text-decoration: line-through`
+  on name/qty/price; action buttons replaced by a single 取消済み
+  Status Badge (`danger` tone)
 
 **Order list layout**
 
@@ -348,7 +357,9 @@ pending" exclusively.
 - Left border: `4px solid #D97706`
 - Card header badge: Warning "会計要求中"
 - Total amount: 20px / 700 / `#0F172A` / `tabular-nums`
-- Footer: `border-top: 1px solid #FCD34D` / flex-end / "会計完了" primary button
+- Footer: `border-top: 1px solid #FCD34D` / flex-end / `gap: space-3` /
+  "席に戻す" (`secondary` variant, plain `Button` — reversible, no
+  `ConfirmDialog`) then "会計完了" (`primary` variant)
 - Item rows: same geometry as Order Card rows; no served/unserved distinction
 
 ---
@@ -364,6 +375,7 @@ Pill-shaped inline labels. Always paired with clear text — never colour alone.
 | Served | 提供済み | `#ECFDF3` | `#15803D` | `#86EFAC` |
 | Available | 販売中 | `#ECFDF3` | `#15803D` | `#86EFAC` |
 | Unavailable | 品切れ | `#FEF2F2` | `#DC2626` | `#FCA5A5` |
+| Cancelled | 取消済み | `#FEF2F2` | `#DC2626` | `#FCA5A5` |
 
 All badges: 12px / 600 / `border-radius: radius-full` / padding `4px 8px`.
 

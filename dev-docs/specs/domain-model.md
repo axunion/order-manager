@@ -46,22 +46,37 @@ pending ──(magic link verified)──▶ active ──(future: admin action)
 
 ```
 open ──(customer requests payment)──▶ payment_requested ──(staff checkout)──▶ paid
+  ▲                    │
+  └───(staff reopens)──┘
+
+open, payment_requested ──(staff cancels)──▶ cancelled
 ```
 
 - `open` — items can be added by the customer.
 - `payment_requested` — bill locked; adding items returns 409. Set by the
-  customer, currently irreversible (no way back to `open` — a known gap,
-  see roadmap Phase 2).
+  customer; staff can send it back to `open` (`PATCH
+  /api/admin/orders/:id/reopen`, idempotent if already `open`).
 - `paid` — terminal. `closed_at` must be set (DB CHECK constraint).
+- `cancelled` — terminal (walkout, mistaken table). Reachable from `open`
+  or `payment_requested` via `PATCH /api/admin/orders/:id/cancel`, never
+  from `paid`. Sets `closed_at`; frees the seat like `paid` does (the
+  one-active-order-per-seat partial index excludes it). Cancelling an
+  order cascades to all its non-`cancelled` items in one `db.batch`.
 
 ### order_items.status
 
 ```
 ordered ──(staff marks served)──▶ served
+   │                                  │
+   └──(staff voids)──▶ cancelled ◀────┘
 ```
 
-Both transitions are idempotent at the API level. There is no `cancelled`
-state yet — order/item cancellation is roadmap Phase 2.
+- `ordered → served` and `served → ordered` (un-serve, `PATCH
+  .../unserve`) are idempotent at the API level.
+- `ordered | served → cancelled` (void, `PATCH .../cancel`) is terminal
+  and idempotent; rejected (409) once the parent order is `paid` or
+  `cancelled`. `sumOrderItems` excludes `cancelled` items from every
+  total, so voiding a line never requires recomputation elsewhere.
 
 ## Invariants (DB-enforced)
 
@@ -70,7 +85,7 @@ state yet — order/item cancellation is roadmap Phase 2.
    concurrent Workers racing to create the first order.
 2. **One payment per order** — `payments.order_id` UNIQUE. Concurrent
    double-checkout is caught by the constraint and surfaced as 409.
-3. **Paid orders have `closed_at`** — CHECK constraint.
+3. **Paid or cancelled orders have `closed_at`** — CHECK constraint.
 4. **Positive amounts** — `menu_items.price > 0`,
    `order_items.quantity > 0` (also capped at 99 by Zod),
    `payments.total_amount >= 0`.

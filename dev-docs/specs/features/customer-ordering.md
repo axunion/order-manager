@@ -10,7 +10,10 @@ credential (`requireSeat` middleware).
 
 Returns seat name, the menu (categories + **available items only**), and
 the active order with items and running total, or `order: null`. Invalid
-tokens → 404 and the SPA shows a not-found page.
+tokens → 404 and the SPA shows a not-found page. Voided items stay in the
+returned `items` array with `status: 'cancelled'` (for a strikethrough
+display) rather than disappearing; the order `total` already excludes
+them.
 
 ### Adding items (`POST /api/order/:seatToken/items`)
 
@@ -41,12 +44,11 @@ fresh.
 
 ## Known limitations (→ roadmap)
 
-- **No cancellation** — a mistaken tap cannot be undone by anyone, not
-  even staff. First thing a real restaurant hits. (Phase 2, top
-  priority)
-- **No undo for request-payment** — tapping the bill button locks the
-  order; only completing payment unlocks the table. (Phase 2, part of
-  cancellation work)
+- **No customer self-cancel** — once an order reaches the kitchen,
+  voiding an item or the whole order is staff-mediated only
+  (`dev-docs/specs/features/order-fulfillment.md`); a "call staff"
+  button is the intended UX for customer-initiated corrections.
+  (Deliberate v1 decision — revisit with pilot feedback)
 - **No staff call** — customers can only order; "water please" still
   needs shouting. (Phase 3)
 - **No item notes** — "no onions" has no field. (Phase 3, with
