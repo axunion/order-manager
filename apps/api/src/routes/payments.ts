@@ -6,7 +6,7 @@ import {
   sumOrderItems,
 } from "@order/core";
 import { createDb, schema } from "@order/db";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { Hono } from "hono";
 import { type AuthEnv, requireStore } from "../middleware";
 import { mapOrderItem, type OrderItemPayload } from "../order-item";
@@ -26,12 +26,148 @@ type PendingCheckPayload = {
   created_at: number;
 };
 
+/** Completed payment returned by GET /api/payments. */
+type PaymentHistoryPayload = {
+  id: string;
+  order_id: string;
+  seat_name: string;
+  total_amount: number;
+  method: string;
+  paid_at: number;
+  items: OrderItemPayload[];
+};
+
+/** Sales-history date range is capped at 62 days (~2 months). */
+const MAX_RANGE_MS = 62 * 24 * 60 * 60 * 1000;
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
 export const paymentsRouter = new Hono<AuthEnv>()
   .use(requireStore)
+
+  /**
+   * GET /api/payments?from=<unix_ms>&to=<unix_ms>
+   * Returns completed payments for the authenticated store with
+   * `paid_at` in `[from, to)`, newest first, each joined with its
+   * order's seat name and line items (cancelled lines are included and
+   * flagged by status — they explain the bill, but their amounts are
+   * already excluded from `total_amount`).
+   *
+   * Validation (400 VALIDATION_ERROR): both params required, integers,
+   * from < to, and range <= 62 days.
+   *
+   * Response: 200 { data: PaymentHistoryPayload[] }
+   */
+  .get("/", async (c) => {
+    const { id: storeId } = c.var.store;
+    const db = createDb(c.env.DB);
+
+    const fromRaw = c.req.query("from");
+    const toRaw = c.req.query("to");
+    if (fromRaw === undefined || toRaw === undefined) {
+      return errorResponse("VALIDATION_ERROR", "from と to は必須です。", 400);
+    }
+
+    const from = Number(fromRaw);
+    const to = Number(toRaw);
+    if (!Number.isInteger(from) || !Number.isInteger(to)) {
+      return errorResponse(
+        "VALIDATION_ERROR",
+        "from と to は整数のUnixミリ秒で指定してください。",
+        400,
+      );
+    }
+    if (from >= to) {
+      return errorResponse(
+        "VALIDATION_ERROR",
+        "from は to より前の値である必要があります。",
+        400,
+      );
+    }
+    if (to - from > MAX_RANGE_MS) {
+      return errorResponse(
+        "VALIDATION_ERROR",
+        "期間は62日以内で指定してください。",
+        400,
+      );
+    }
+
+    const paymentsRows = await db
+      .select()
+      .from(schema.payments)
+      .where(
+        and(
+          eq(schema.payments.store_id, storeId),
+          gte(schema.payments.paid_at, from),
+          lt(schema.payments.paid_at, to),
+        ),
+      )
+      .orderBy(desc(schema.payments.paid_at));
+
+    if (paymentsRows.length === 0) {
+      return c.json({ data: [] });
+    }
+
+    const orderIds = paymentsRows.map((p) => p.order_id);
+
+    const [ordersRows, itemsRows] = await Promise.all([
+      db
+        .select({ id: schema.orders.id, seat_id: schema.orders.seat_id })
+        .from(schema.orders)
+        .where(
+          and(
+            eq(schema.orders.store_id, storeId),
+            inArray(schema.orders.id, orderIds),
+          ),
+        ),
+      db
+        .select()
+        .from(schema.orderItems)
+        .where(
+          and(
+            eq(schema.orderItems.store_id, storeId),
+            inArray(schema.orderItems.order_id, orderIds),
+          ),
+        )
+        .orderBy(asc(schema.orderItems.created_at)),
+    ]);
+
+    const seatIds = ordersRows.map((o) => o.seat_id);
+    const seatsRows = await db
+      .select({ id: schema.seats.id, name: schema.seats.name })
+      .from(schema.seats)
+      .where(
+        and(
+          eq(schema.seats.store_id, storeId),
+          inArray(schema.seats.id, seatIds),
+        ),
+      );
+    const seatNameById = new Map(seatsRows.map((s) => [s.id, s.name]));
+    const seatNameByOrderId = new Map(
+      ordersRows.map((o) => [o.id, seatNameById.get(o.seat_id) ?? ""]),
+    );
+
+    const itemsByOrderId = new Map<string, typeof itemsRows>();
+    for (const item of itemsRows) {
+      const list = itemsByOrderId.get(item.order_id) ?? [];
+      list.push(item);
+      itemsByOrderId.set(item.order_id, list);
+    }
+
+    const data: PaymentHistoryPayload[] = paymentsRows.map((payment) => ({
+      id: payment.id,
+      order_id: payment.order_id,
+      seat_name: seatNameByOrderId.get(payment.order_id) ?? "",
+      total_amount: payment.total_amount,
+      method: payment.method,
+      paid_at: payment.paid_at,
+      items: (itemsByOrderId.get(payment.order_id) ?? []).map(mapOrderItem),
+    }));
+
+    return c.json({ data });
+  })
 
   /**
    * GET /api/payments/pending
