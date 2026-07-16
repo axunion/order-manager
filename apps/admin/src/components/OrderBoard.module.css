@@ -16,6 +16,27 @@
   gap: var(--space-6);
 }
 
+.alertControls {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.soundToggle {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-foreground);
+  cursor: pointer;
+}
+
+.soundToggle[aria-pressed="true"] {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
 .orderBoardEmpty {
   background: var(--color-surface);
   border-radius: var(--radius-lg);
@@ -52,6 +73,12 @@
 .orderCardWarning {
   background: var(--color-warning-bg);
   border-left: 4px solid var(--color-warning-border);
+}
+
+/* New-order alert — a poll detected items newer than the watermark.
+   Applied for ~10s by OrderBoard's JS timer, on top of Alert/Warning. */
+.orderCardNewAlert {
+  box-shadow: 0 0 0 3px var(--color-ring);
 }
 
 .orderCardHeader {

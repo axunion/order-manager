@@ -6,6 +6,7 @@ import OrderBoard from "./OrderBoard";
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
+  localStorage.clear();
 });
 
 type MockRoute = {
@@ -400,5 +401,253 @@ describe("OrderBoard", () => {
 
     await vi.advanceTimersByTimeAsync(5000);
     expect(fetchMock.mock.calls.length).toBeGreaterThan(callsAfterMount);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// New-order alerts
+// ---------------------------------------------------------------------------
+
+class MockAudioContext {
+  currentTime = 0;
+  createOscillator() {
+    return {
+      type: "",
+      frequency: { value: 0 },
+      connect: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+    };
+  }
+  createGain() {
+    return { gain: { value: 0 }, connect: vi.fn() };
+  }
+}
+
+function sequentialFetch(responses: unknown[][]) {
+  let call = 0;
+  return vi.fn().mockImplementation(() => {
+    const data = responses[Math.min(call, responses.length - 1)];
+    call += 1;
+    return Promise.resolve({ ok: true, json: async () => ({ data }) });
+  });
+}
+
+const initialOrder = {
+  id: "order-1",
+  seat_name: "テーブル1",
+  status: "open",
+  items: [
+    {
+      id: "item-1",
+      name_snapshot: "唐揚げ",
+      unit_price_snapshot: 500,
+      quantity: 1,
+      status: "ordered",
+      created_at: 1000,
+    },
+  ],
+  total: 500,
+  created_at: 1000,
+};
+
+const withNewOrder = [
+  initialOrder,
+  {
+    id: "order-2",
+    seat_name: "テーブル2",
+    status: "open",
+    items: [
+      {
+        id: "item-2",
+        name_snapshot: "ビール",
+        unit_price_snapshot: 600,
+        quantity: 1,
+        status: "ordered",
+        created_at: 2000,
+      },
+    ],
+    total: 600,
+    created_at: 2000,
+  },
+];
+
+describe("OrderBoard new-order alerts", () => {
+  it("sets the watermark on first load without highlighting any card", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", sequentialFetch([[initialOrder]]));
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const card = screen.getByText("テーブル1").closest("article");
+    expect(card?.className).not.toMatch(/orderCardNewAlert/);
+  });
+
+  it("highlights a newly arrived order on a later poll", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", sequentialFetch([[initialOrder], withNewOrder]));
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0); // initial load: watermark = 1000
+    await vi.advanceTimersByTimeAsync(5000); // poll: order-2's item (2000) is newer
+
+    const newCard = screen.getByText("テーブル2").closest("article");
+    const oldCard = screen.getByText("テーブル1").closest("article");
+    expect(newCard?.className).toMatch(/orderCardNewAlert/);
+    expect(oldCard?.className).not.toMatch(/orderCardNewAlert/);
+  });
+
+  it("restarts the highlight window on a second alert for the same order", async () => {
+    vi.useFakeTimers();
+    const orderTwoAgain = {
+      ...withNewOrder[1],
+      items: [
+        {
+          ...withNewOrder[1]?.items[0],
+          id: "item-3",
+          created_at: 3000,
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      sequentialFetch([
+        [initialOrder], // t=0: watermark = 1000
+        withNewOrder, // t=5000: order-2 item (2000) — highlight starts, expires at t=15000
+        [initialOrder, orderTwoAgain], // t=10000: order-2 item (3000) — highlight restarts, expires at t=20000
+      ]),
+    );
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(5000); // t=5000
+    await vi.advanceTimersByTimeAsync(5000); // t=10000, second alert
+
+    await vi.advanceTimersByTimeAsync(6000); // t=16000: past the original 15000 expiry
+    const cardAt16s = screen.getByText("テーブル2").closest("article");
+    expect(cardAt16s?.className).toMatch(/orderCardNewAlert/);
+
+    await vi.advanceTimersByTimeAsync(5000); // t=21000: past the restarted 20000 expiry
+    const cardAt21s = screen.getByText("テーブル2").closest("article");
+    expect(cardAt21s?.className).not.toMatch(/orderCardNewAlert/);
+  });
+
+  it("does not highlight when a later poll returns no items newer than the watermark", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", sequentialFetch([[initialOrder], [initialOrder]]));
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(5000);
+
+    const card = screen.getByText("テーブル1").closest("article");
+    expect(card?.className).not.toMatch(/orderCardNewAlert/);
+  });
+
+  it("invokes the Web Audio API when sound is enabled and a new order arrives", async () => {
+    vi.useFakeTimers();
+    localStorage.setItem("order-alert-sound", "true");
+    const audioCtor = vi.fn().mockImplementation(() => new MockAudioContext());
+    vi.stubGlobal("AudioContext", audioCtor);
+    vi.stubGlobal("fetch", sequentialFetch([[initialOrder], withNewOrder]));
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+    audioCtor.mockClear(); // ignore any unlock-gesture call from init
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(audioCtor).toHaveBeenCalled();
+  });
+
+  it("does not invoke the Web Audio API when sound is disabled", async () => {
+    vi.useFakeTimers();
+    const audioCtor = vi.fn().mockImplementation(() => new MockAudioContext());
+    vi.stubGlobal("AudioContext", audioCtor);
+    vi.stubGlobal("fetch", sequentialFetch([[initialOrder], withNewOrder]));
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(audioCtor).not.toHaveBeenCalled();
+  });
+
+  it("persists the sound toggle to localStorage and unlocks audio on enable", async () => {
+    vi.useFakeTimers();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const audioCtor = vi.fn().mockImplementation(() => new MockAudioContext());
+    vi.stubGlobal("AudioContext", audioCtor);
+    vi.stubGlobal("fetch", sequentialFetch([[]]));
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const toggleBtn = screen.getByRole("button", { name: /通知音/ });
+    expect(toggleBtn.getAttribute("aria-pressed")).toBe("false");
+
+    await user.click(toggleBtn);
+
+    expect(localStorage.getItem("order-alert-sound")).toBe("true");
+    expect(toggleBtn.getAttribute("aria-pressed")).toBe("true");
+    expect(audioCtor).toHaveBeenCalledTimes(1);
+
+    await user.click(toggleBtn);
+    expect(localStorage.getItem("order-alert-sound")).toBe("false");
+  });
+
+  it("loads the sound preference from localStorage on mount", async () => {
+    vi.useFakeTimers();
+    localStorage.setItem("order-alert-sound", "true");
+    vi.stubGlobal("fetch", sequentialFetch([[]]));
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const toggleBtn = screen.getByRole("button", { name: /通知音/ });
+    expect(toggleBtn.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("sets document.title to the unserved item count", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", sequentialFetch([[initialOrder]]));
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(document.title).toBe("(1) Order Manager — Admin");
+  });
+
+  it("counts only 'ordered' items, excluding served and cancelled", async () => {
+    vi.useFakeTimers();
+    const mixedOrder = {
+      id: "order-mixed",
+      seat_name: "テーブル3",
+      status: "open",
+      items: [
+        { ...initialOrder.items[0], id: "a", status: "ordered" },
+        { ...initialOrder.items[0], id: "b", status: "ordered" },
+        { ...initialOrder.items[0], id: "c", status: "served" },
+        { ...initialOrder.items[0], id: "d", status: "cancelled" },
+      ],
+      total: 1000,
+      created_at: 1000,
+    };
+    vi.stubGlobal("fetch", sequentialFetch([[mixedOrder]]));
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(document.title).toBe("(2) Order Manager — Admin");
+  });
+
+  it("resets document.title when there are no unserved items", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", sequentialFetch([[]]));
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(document.title).toBe("Order Manager — Admin");
   });
 });

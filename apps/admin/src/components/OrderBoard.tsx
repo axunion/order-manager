@@ -1,6 +1,14 @@
 import { apiFetch } from "@order/core/client";
 import { Button, ConfirmDialog, ErrorAlert } from "@order/ui";
-import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+} from "solid-js";
 import styles from "./OrderBoard.module.css";
 import StatusBadge from "./StatusBadge";
 
@@ -22,14 +30,99 @@ type AdminOrder = {
   created_at: number;
 };
 
+const SOUND_STORAGE_KEY = "order-alert-sound";
+const HIGHLIGHT_DURATION_MS = 10_000;
+const BASE_TITLE = "Order Manager — Admin";
+
+/** Plays a short beep via a Web Audio oscillator. No-ops if unsupported. */
+function playAlertBeep() {
+  try {
+    const AudioCtx =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.value = 880;
+    gain.gain.value = 0.2;
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + 0.15);
+  } catch {
+    // Web Audio unsupported or blocked — the visual alert still fires.
+  }
+}
+
 export default function OrderBoard() {
   const [orders, setOrders] = createSignal<AdminOrder[]>([]);
   const [error, setError] = createSignal("");
   const [pendingItems, setPendingItems] = createSignal<Set<string>>(new Set());
+  const [soundEnabled, setSoundEnabled] = createSignal(
+    localStorage.getItem(SOUND_STORAGE_KEY) === "true",
+  );
+  const [highlightedOrderIds, setHighlightedOrderIds] = createSignal<
+    Set<string>
+  >(new Set());
+
+  // Not signals: only used inside loadOrders to diff polls, never read in JSX.
+  let watermark = -Infinity;
+  let hasLoadedOnce = false;
+  const highlightTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  function highlightOrders(orderIds: Set<string>) {
+    setHighlightedOrderIds((prev) => new Set([...prev, ...orderIds]));
+    for (const id of orderIds) {
+      // A second alert on the same order before its highlight expires
+      // restarts the 10s window instead of letting the old timer clear
+      // the newer highlight early.
+      const existing = highlightTimers.get(id);
+      if (existing) clearTimeout(existing);
+      highlightTimers.set(
+        id,
+        setTimeout(() => {
+          setHighlightedOrderIds((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+          highlightTimers.delete(id);
+        }, HIGHLIGHT_DURATION_MS),
+      );
+    }
+    if (soundEnabled()) {
+      playAlertBeep();
+    }
+  }
 
   async function loadOrders() {
     const result = await apiFetch<AdminOrder[]>("/api/admin/orders");
     if (result.ok && result.data) {
+      const items = result.data.flatMap((o) => o.items);
+      if (!hasLoadedOnce) {
+        // Initial load: set the watermark silently, no alert.
+        watermark = items.reduce(
+          (max, i) => Math.max(max, i.created_at),
+          watermark,
+        );
+        hasLoadedOnce = true;
+      } else {
+        const newOrderIds = new Set(
+          result.data
+            .filter((o) => o.items.some((i) => i.created_at > watermark))
+            .map((o) => o.id),
+        );
+        watermark = items.reduce(
+          (max, i) => Math.max(max, i.created_at),
+          watermark,
+        );
+        if (newOrderIds.size > 0) {
+          highlightOrders(newOrderIds);
+        }
+      }
       setOrders(result.data);
       setError("");
     } else {
@@ -42,7 +135,36 @@ export default function OrderBoard() {
     loadOrders();
     const timerId = setInterval(loadOrders, 5000);
     onCleanup(() => clearInterval(timerId));
+    onCleanup(() => {
+      for (const timer of highlightTimers.values()) clearTimeout(timer);
+      highlightTimers.clear();
+    });
+    onCleanup(() => {
+      document.title = BASE_TITLE;
+    });
   });
+
+  const unservedCount = createMemo(() =>
+    orders().reduce(
+      (sum, o) => sum + o.items.filter((i) => i.status === "ordered").length,
+      0,
+    ),
+  );
+
+  createEffect(() => {
+    const count = unservedCount();
+    document.title = count > 0 ? `(${count}) ${BASE_TITLE}` : BASE_TITLE;
+  });
+
+  const toggleSound = () => {
+    const next = !soundEnabled();
+    setSoundEnabled(next);
+    localStorage.setItem(SOUND_STORAGE_KEY, String(next));
+    if (next) {
+      // The toggle-on click doubles as the audio-unlocking user gesture.
+      playAlertBeep();
+    }
+  };
 
   const runItemAction = async (
     itemId: string,
@@ -103,6 +225,17 @@ export default function OrderBoard() {
 
   return (
     <div class={styles.orderBoard}>
+      <div class={styles.alertControls}>
+        <button
+          type="button"
+          class={styles.soundToggle}
+          aria-pressed={soundEnabled()}
+          onClick={toggleSound}
+        >
+          {soundEnabled() ? "🔔 通知音: オン" : "🔕 通知音: オフ"}
+        </button>
+      </div>
+
       <Show when={error()}>
         <ErrorAlert>{error()}</ErrorAlert>
       </Show>
@@ -117,7 +250,7 @@ export default function OrderBoard() {
         <For each={orders()}>
           {(order) => (
             <article
-              class={`${styles.orderCard ?? ""} ${order.status === "payment_requested" ? (styles.orderCardWarning ?? "") : (styles.orderCardAlert ?? "")}`}
+              class={`${styles.orderCard ?? ""} ${order.status === "payment_requested" ? (styles.orderCardWarning ?? "") : (styles.orderCardAlert ?? "")} ${highlightedOrderIds().has(order.id) ? (styles.orderCardNewAlert ?? "") : ""}`}
             >
               <div class={styles.orderCardHeader}>
                 <Show when={order.status === "open"}>
