@@ -22,6 +22,13 @@
       "when": 1784211303970,
       "tag": "0002_adorable_frank_castle",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1784214901827,
+      "tag": "0003_zippy_blue_blade",
+      "breakpoints": true
     }
   ]
 }

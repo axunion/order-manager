@@ -128,8 +128,15 @@ export const magicLinkTokens = sqliteTable(
       .references(() => stores.id),
     /** UUID v4 embedded in the Magic Link URL */
     token: text("token").notNull().unique(),
-    /** 'signup' for first-time onboarding; 'login' for returning owners */
-    purpose: text("purpose", { enum: ["signup", "login"] }).notNull(),
+    /**
+     * 'signup' for first-time onboarding; 'login' for returning owners;
+     * 'email_change' for re-verifying a new owner email (see new_email).
+     */
+    purpose: text("purpose", {
+      enum: ["signup", "login", "email_change"],
+    }).notNull(),
+    /** Target address for 'email_change' tokens only; null otherwise */
+    new_email: text("new_email"), // nullable
     /** Unix ms; token is invalid after this timestamp */
     expires_at: integer("expires_at").notNull(),
     /** Set when the token is consumed; kept for audit trail (not deleted) */
@@ -142,7 +149,7 @@ export const magicLinkTokens = sqliteTable(
     index("idx_magic_link_tokens_store").on(table.store_id),
     check(
       "magic_link_tokens_purpose_chk",
-      sql`${table.purpose} IN ('signup', 'login')`,
+      sql`${table.purpose} IN ('signup', 'login', 'email_change')`,
     ),
   ],
 );
