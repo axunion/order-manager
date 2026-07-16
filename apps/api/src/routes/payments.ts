@@ -185,8 +185,8 @@ export const paymentsRouter = new Hono<AuthEnv>()
         ),
       );
 
-    // Guard: an order with no items should not be billed.
-    if (items.length === 0) {
+    // Guard: an order with no non-cancelled items should not be billed.
+    if (items.every((item) => item.status === "cancelled")) {
       return errorResponse(
         "CONFLICT",
         "注文明細がありません。会計できません。",

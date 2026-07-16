@@ -507,3 +507,183 @@ describe("Business cycle: multi-tenant isolation (2店舗データ分離)", () =
     expect(bMenuIds).not.toContain(storeA.menuItemId);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Scenario 3: Order cancellation mid-cycle
+// ---------------------------------------------------------------------------
+
+describe("Business cycle: order cancellation (注文キャンセル・修正)", () => {
+  it("voids an item mid-cycle and excludes it from the checkout total", async () => {
+    const token = await registerAndVerify(
+      "キャンセルテスト食堂",
+      `cancel-void-${crypto.randomUUID()}@test.internal`,
+    );
+
+    const item1Res = await app.request(
+      "/api/menu/items",
+      withAuth(token, jsonInit("POST", { name: "唐揚げ", price: 500 })),
+      env,
+    );
+    const item1Body = (await item1Res.json()) as { data: { id: string } };
+    const item2Res = await app.request(
+      "/api/menu/items",
+      withAuth(token, jsonInit("POST", { name: "ビール", price: 600 })),
+      env,
+    );
+    const item2Body = (await item2Res.json()) as { data: { id: string } };
+
+    const seatRes = await app.request(
+      "/api/seats",
+      withAuth(token, jsonInit("POST", { name: "テーブル9" })),
+      env,
+    );
+    const seatBody = (await seatRes.json()) as { data: { qr_token: string } };
+    const qrToken = seatBody.data.qr_token;
+
+    // Order both items — expected total before voiding: 500 + 600 = 1100
+    const orderRes = await app.request(
+      `/api/order/${qrToken}/items`,
+      jsonInit("POST", {
+        items: [
+          { menu_item_id: item1Body.data.id, quantity: 1 },
+          { menu_item_id: item2Body.data.id, quantity: 1 },
+        ],
+      }),
+      env,
+    );
+    const orderBody = (await orderRes.json()) as {
+      data: {
+        order: { id: string; items: { id: string; name_snapshot: string }[] };
+      };
+    };
+    const orderId = orderBody.data.order.id;
+    const beerItem = orderBody.data.order.items.find(
+      (i) => i.name_snapshot === "ビール",
+    );
+    if (!beerItem) throw new Error("Beer item not found in order response");
+
+    // Staff voids the beer item
+    const voidRes = await app.request(
+      `/api/admin/orders/items/${beerItem.id}/cancel`,
+      withAuth(token, { method: "PATCH" }),
+      env,
+    );
+    expect(voidRes.status).toBe(200);
+
+    // Admin board total now excludes the voided item
+    const adminOrdersRes = await app.request(
+      "/api/admin/orders",
+      withAuth(token),
+      env,
+    );
+    const adminOrdersBody = (await adminOrdersRes.json()) as {
+      data: {
+        id: string;
+        total: number;
+        items: { id: string; status: string }[];
+      }[];
+    };
+    const adminOrder = adminOrdersBody.data.find((o) => o.id === orderId);
+    expect(adminOrder?.total).toBe(500);
+    expect(adminOrder?.items.find((i) => i.id === beerItem.id)?.status).toBe(
+      "cancelled",
+    );
+
+    // Customer screen still shows the voided line (for a strikethrough
+    // display) but the order total excludes it
+    const bootstrapRes = await app.request(`/api/order/${qrToken}`, {}, env);
+    const bootstrapBody = (await bootstrapRes.json()) as {
+      data: {
+        order: {
+          total: number;
+          items: { id: string; status: string }[];
+        } | null;
+      };
+    };
+    expect(bootstrapBody.data.order?.total).toBe(500);
+    expect(
+      bootstrapBody.data.order?.items.find((i) => i.id === beerItem.id)?.status,
+    ).toBe("cancelled");
+
+    // Checkout total also excludes the voided item
+    await app.request(
+      `/api/order/${qrToken}/request-payment`,
+      { method: "PATCH" },
+      env,
+    );
+    const payRes = await app.request(
+      "/api/payments",
+      withAuth(token, jsonInit("POST", { order_id: orderId })),
+      env,
+    );
+    expect(payRes.status).toBe(201);
+    const payBody = (await payRes.json()) as {
+      data: { total_amount: number };
+    };
+    expect(payBody.data.total_amount).toBe(500);
+  });
+
+  it("cancels a whole order and lets the seat accept a fresh order", async () => {
+    const token = await registerAndVerify(
+      "キャンセルテスト食堂2",
+      `cancel-order-${crypto.randomUUID()}@test.internal`,
+    );
+
+    const itemRes = await app.request(
+      "/api/menu/items",
+      withAuth(token, jsonInit("POST", { name: "唐揚げ", price: 500 })),
+      env,
+    );
+    const itemBody = (await itemRes.json()) as { data: { id: string } };
+
+    const seatRes = await app.request(
+      "/api/seats",
+      withAuth(token, jsonInit("POST", { name: "テーブル10" })),
+      env,
+    );
+    const seatBody = (await seatRes.json()) as { data: { qr_token: string } };
+    const qrToken = seatBody.data.qr_token;
+
+    const orderRes = await app.request(
+      `/api/order/${qrToken}/items`,
+      jsonInit("POST", {
+        items: [{ menu_item_id: itemBody.data.id, quantity: 1 }],
+      }),
+      env,
+    );
+    const orderBody = (await orderRes.json()) as {
+      data: { order: { id: string } };
+    };
+    const orderId = orderBody.data.order.id;
+
+    // Walkout — staff cancels the whole order
+    const cancelRes = await app.request(
+      `/api/admin/orders/${orderId}/cancel`,
+      withAuth(token, { method: "PATCH" }),
+      env,
+    );
+    expect(cancelRes.status).toBe(200);
+
+    // The seat no longer has an active order for the customer screen
+    const bootstrapRes = await app.request(`/api/order/${qrToken}`, {}, env);
+    const bootstrapBody = (await bootstrapRes.json()) as {
+      data: { order: null };
+    };
+    expect(bootstrapBody.data.order).toBeNull();
+
+    // ...and a fresh order can be placed on the same seat
+    const reorderRes = await app.request(
+      `/api/order/${qrToken}/items`,
+      jsonInit("POST", {
+        items: [{ menu_item_id: itemBody.data.id, quantity: 1 }],
+      }),
+      env,
+    );
+    expect(reorderRes.status).toBe(201);
+    const reorderBody = (await reorderRes.json()) as {
+      data: { order: { id: string; status: string } };
+    };
+    expect(reorderBody.data.order.id).not.toBe(orderId);
+    expect(reorderBody.data.order.status).toBe("open");
+  });
+});
