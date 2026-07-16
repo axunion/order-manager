@@ -265,7 +265,8 @@ screen context.
 
 ### Dashboard Navigation (`DashboardPage`)
 
-The dashboard hub presents the four main sections as navigation links.
+The dashboard hub presents the main sections (menu, seats, orders,
+checkout, sales) as navigation links.
 
 - Container: Surface card / `border-radius: radius-lg` / `padding: space-8` /
   `border: 2px dashed border` — signals "interim" state (scaffold placeholder)
@@ -361,6 +362,26 @@ pending" exclusively.
   "席に戻す" (`secondary` variant, plain `Button` — reversible, no
   `ConfirmDialog`) then "会計完了" (`primary` variant)
 - Item rows: same geometry as Order Card rows; no served/unserved distinction
+
+---
+
+### Sales History (`SalesHistory`)
+
+Retrospective view, not a live monitor — no polling; the date navigation
+itself is the refresh action.
+
+- Date nav: prev/next-day `Button` (`secondary` variant, `sm` size) either
+  side of a native `<input type="date">`, defaulting to today (JST)
+- Header stats: three `Surface` cards in a `repeat(auto-fit, minmax(160px, 1fr))`
+  grid — 売上合計 (total revenue), 会計件数 (check count), 平均単価
+  (average per check)
+- Check list: each row is a full-width toggle button (seat name, paid
+  time, total); clicking expands an item list below it (same
+  strikethrough treatment for cancelled lines as Order Card / customer
+  `OrderSummary`)
+- Empty state: same pattern as Order Card's empty state (dashed-border
+  placeholder is Dashboard-only; this one mirrors OrderBoard's plain
+  Surface-card empty message)
 
 ---
 

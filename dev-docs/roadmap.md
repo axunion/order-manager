@@ -52,11 +52,10 @@ simulated) full service day with zero manual DB intervention.
    can void items, un-serve, reopen a requested bill, and cancel a whole
    order; customer self-cancel is deferred (decision in
    customer-ordering.md's Known limitations).
-2. **Sales history & daily summary**
-   → [proposal](proposals/sales-history.md)
-   ([checkout](specs/features/checkout.md))
-   Payments are currently write-only. A date-ranged payments API and an
-   admin sales page answering "today: ¥X across N checks".
+2. **✅ Shipped — Sales history & daily summary**
+   → [checkout](specs/features/checkout.md), [domain-model](specs/domain-model.md)
+   Payments were write-only. A date-ranged payments API and an admin
+   sales page answering "today: ¥X across N checks".
 3. **New-order alert on the order board**
    → [proposal](proposals/new-order-alerts.md)
    ([order-fulfillment](specs/features/order-fulfillment.md))

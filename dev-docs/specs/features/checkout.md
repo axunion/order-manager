@@ -30,11 +30,23 @@ oldest first. Polled every 5 seconds by the UI.
   add more items before paying. Idempotent if already `open`; 409 if
   `paid` or `cancelled`.
 
+### Sales history (`GET /api/payments?from=<unix_ms>&to=<unix_ms>`)
+
+- Returns completed payments with `paid_at` in `[from, to)`, newest
+  first, each joined with its order's seat name and line items.
+  Cancelled lines are included and flagged by status — they explain the
+  bill, but their amounts are already excluded from `total_amount`.
+- Validation (400): both params required, integers, `from < to`, range
+  ≤ 62 days.
+- No pagination and no server-side aggregation — the admin SalesPage
+  computes totals client-side from the list; a two-month window at
+  small-restaurant volume stays well under response limits.
+- The admin SalesPage (`/sales`) scopes each query to a JST calendar
+  day via `jstDayRange` (`@order/core`, `domain/time.ts`), with
+  prev/next-day navigation and a date picker (defaults to today JST).
+
 ## Known limitations (→ roadmap)
 
-- **Payments are write-only** — no endpoint or screen reads completed
-  payments. No sales history, no daily totals, no way to answer "how much
-  did we make today". The data is all there. (Phase 2, top priority)
 - **Cash only** — no card/QR-code payment integration. (Phase 4)
 - **No amount adjustment** — no discounts, comps, or service charge.
   (Phase 4)

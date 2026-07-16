@@ -105,6 +105,9 @@ concurrently.
   tax column). Reduced-rate (8%) vs standard (10%) breakdown for receipts
   is a Phase 4 concern and will require a schema change.
 - All timestamps are **Unix milliseconds** (`integer` columns), generated
-  in the Worker via `Date.now()` — D1 has no native datetime.
+  in the Worker via `Date.now()` — D1 has no native datetime. The API
+  stays timezone-agnostic; business-day boundaries (JST, UTC+9) are a
+  client concern via `jstDayRange`/`toJstDateString` (`@order/core`,
+  `domain/time.ts`), used by the sales-history date range.
 - Billing totals are always computed from
   `unit_price_snapshot × quantity`, never from live menu prices.
