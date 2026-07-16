@@ -41,28 +41,55 @@ behavior.
 
 ### Session & logout
 
-- `GET /api/auth/me` resolves the session for SPA bootstrapping (401 when
-  invalid/expired). Admin routes are guarded by `requireStore`.
+- `GET /api/auth/me` resolves the session for SPA bootstrapping — returns
+  `{ id, name, email }` (401 when invalid/expired). Admin routes are
+  guarded by `requireStore`.
 - `POST /api/auth/logout` deletes only the current session (other devices
   stay logged in), clears the cookie, redirects to the login page.
 - Multiple concurrent sessions per store are allowed by design (shared
   staff devices).
 
+### Store settings — rename & email change (`apps/admin` SettingsPage)
+
+- `PATCH /api/stores/me` (`requireStore`, applied inline since
+  `storesRouter` is otherwise public) updates the display name only; the
+  slug is never regenerated (a stable identifier, not currently used by
+  any feature).
+- `POST /api/stores/me/email-change` (`requireStore`) issues a Magic
+  Link with `purpose = 'email_change'` to the **new** address, proving
+  control before the change applies. Rejects 400 if the address equals
+  the current one or is already registered to another store — the
+  caller is authenticated here, so anti-enumeration doesn't apply
+  (unlike `/api/auth/login`).
+- `GET /api/auth/verify` applies `stores.email` on `email_change` token
+  verification, right after marking the token consumed and before
+  session creation (same ordering as the `signup` → `stores.status =
+  'active'` transition). A UNIQUE-constraint race — the address
+  claimed by another store after the token was issued — fails
+  generically as `INVALID_TOKEN`, same as any other invalid token.
+- `magic_link_tokens.purpose` includes `'email_change'`; a nullable
+  `new_email` column holds the pending target address for that purpose
+  only (see [domain-model.md](../domain-model.md)).
+
 ### Dev conveniences
 
 When `ENVIRONMENT === "development"` (explicit opt-in, never inferred),
-signup/login responses include `verify_url` so local dev works without
-email delivery.
+signup/login/email-change responses include `verify_url` so local dev
+works without email delivery.
 
 ## Known limitations (→ roadmap)
 
 - **No staff accounts or roles** — everyone shares the owner session.
   (Phase 5)
-- **No way to change the owner email or store name** — no
-  update-store endpoint at all. (Phase 2)
+- **No notification to the old email address on email change** — a
+  hijacked session could silently redirect future login links to an
+  attacker's inbox with no signal to the legitimate owner. Deliberate
+  v1 scope decision (proof of control of the *new* address is
+  required; the old address is not). Hardening follow-up, tracked
+  here — no roadmap phase assigned yet.
 - **No session revocation UI** ("log out everywhere") and no sliding
   expiry (`last_used_at` is reserved but unused). (Phase 5)
-- **No rate limiting** on login/signup — an attacker can burn email quota
-  or spam a victim inbox. (Phase 2, deploy-blocking)
+- **No rate limiting** on login/signup/email-change — an attacker can
+  burn email quota or spam a victim inbox. (Phase 2, deploy-blocking)
 - **`suspended` has no admin tooling** — the state exists but nothing can
   set it. (Phase 5)

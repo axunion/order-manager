@@ -266,7 +266,7 @@ screen context.
 ### Dashboard Navigation (`DashboardPage`)
 
 The dashboard hub presents the main sections (menu, seats, orders,
-checkout, sales) as navigation links.
+checkout, sales, settings) as navigation links.
 
 - Container: Surface card / `border-radius: radius-lg` / `padding: space-8` /
   `border: 2px dashed border` — signals "interim" state (scaffold placeholder)
@@ -433,6 +433,25 @@ The menu list is a flat, border-driven layout optimised for scanning.
 - Separated from list by `border-bottom: 1px solid border` + `margin-bottom: space-5`
 - Field label: 12px / 500 / `#475569`
 - Input: see §4 Inputs
+
+---
+
+### Store Settings (`StoreSettings`)
+
+Two independent forms, each a Surface card (`section` / `radius-lg` /
+`padding: space-6` / `shadow-sm`), modeled on the existing `LoginForm`
+pattern (Field + Button, `<Show>` toggles to a post-submit notice).
+
+- **Name form**: `Field` pre-filled with the current name; inline "保存"
+  `Button`; a `savedNote` confirmation (`--color-success-fg`) appears
+  next to the button after a successful save, not a page navigation.
+- **Email form**: current email shown as static text above the form
+  (`--color-muted-foreground`), stays visible after submit since the
+  address hasn't actually changed until the link is clicked. On submit,
+  the form itself is replaced (`<Show fallback>`) by a "check your new
+  inbox" notice, plus the same `[DEV]` verify-link box as `LoginForm`
+  (`--color-warning-bg` / `-border` / `-fg`) when `verify_url` is
+  present.
 
 ---
 

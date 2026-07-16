@@ -14,7 +14,9 @@ stores 1 ──── * menu_categories 1 ──── * menu_items
    └──── * magic_link_tokens
 ```
 
-- **stores** — one row per tenant. Owner email doubles as the login id.
+- **stores** — one row per tenant. Owner email doubles as the login id;
+  changeable via store settings (see below), always re-verified via
+  Magic Link before it takes effect.
 - **menu_categories / menu_items** — the sellable catalog. Items may be
   uncategorized (`category_id` nullable). Prices are tax-inclusive JPY
   integers.
@@ -28,6 +30,9 @@ stores 1 ──── * menu_categories 1 ──── * menu_items
 - **payments** — exactly one per paid order (`order_id` UNIQUE).
 - **sessions / magic_link_tokens** — auth artifacts; see
   [features/authentication.md](./features/authentication.md).
+  `magic_link_tokens.purpose` is `'signup' | 'login' | 'email_change'`;
+  the nullable `new_email` column holds the pending target address for
+  `email_change` tokens only.
 
 ## State machines
 

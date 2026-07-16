@@ -60,9 +60,8 @@ simulated) full service day with zero manual DB intervention.
    → [order-fulfillment](specs/features/order-fulfillment.md)
    Sound + visual badge when polling picks up new orders or appended
    items.
-4. **Store settings**
-   → [proposal](proposals/store-settings.md)
-   ([authentication](specs/features/authentication.md))
+4. **✅ Shipped — Store settings**
+   → [authentication](specs/features/authentication.md), [domain-model](specs/domain-model.md)
    Edit store name; change owner email with re-verification via Magic
    Link to the new address.
 5. **Seat lifecycle fixes**
@@ -76,8 +75,6 @@ simulated) full service day with zero manual DB intervention.
    Throttle signup/login per IP + per email to protect the Resend quota
    and victims' inboxes. Includes a prerequisite change to
    `issueMagicLink` (supersede instead of delete — see the proposal).
-   *Soft dependency on item 4:* the email-change cap test applies only
-   once store settings ship.
 
 ## Phase 3 — Customer experience
 

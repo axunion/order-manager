@@ -80,11 +80,23 @@ Used for both new store registration (signup) and returning admin login.
                   └─▶ 302 redirect to ADMIN_ORIGIN (e.g. https://admin.example.com)
 
 [Admin SPA]   mounts, AdminGuard calls GET /api/auth/me
-                  └─▶ API returns { id, name } — session valid
+                  └─▶ API returns { id, name, email } — session valid
                   └─▶ AdminGuard provides StoreContext to child routes
 ```
 
 The login flow is identical from the `POST /api/auth/login` step onward.
+
+**Third purpose — email change**: `POST /api/stores/me/email-change`
+(`requireStore`) issues a `magic_link_tokens` row with `purpose =
+'email_change'` and `new_email` set, and emails it to the **new**
+address instead of the current one (proof of control before the change
+applies). `GET /api/auth/verify` handles this purpose by setting
+`stores.email = new_email` — right after marking the token consumed,
+before session creation — then continues through the same
+session-creation and redirect steps as signup/login. A UNIQUE-constraint
+race (the address claimed by another store between issuance and verify)
+falls back to the same generic `INVALID_TOKEN` 400 as any other invalid
+token, never a 500 or a distinguishing message.
 
 **Key point**: The `verify` redirect must be an absolute URL (`c.env.ADMIN_ORIGIN`) because the
 verify endpoint is served from `api.example.com`, not `admin.example.com`.
@@ -100,16 +112,17 @@ for local dev):
 1. **Console fallback (always on, any environment)** — `sendMagicLinkEmail`
    (`packages/core/src/domain/email.ts`) logs the Magic Link URL to the Worker console
    instead of calling the Resend API whenever `RESEND_API_KEY` is unset.
-2. **`verify_url` in the signup and login responses (`ENVIRONMENT === "development"` only)** —
-   `POST /api/stores` (`apps/api/src/routes/stores.ts`) and `POST /api/auth/login`
+2. **`verify_url` in the signup, login, and email-change responses (`ENVIRONMENT === "development"`
+   only)** — `POST /api/stores`, `POST /api/stores/me/email-change` (both
+   `apps/api/src/routes/stores.ts`), and `POST /api/auth/login`
    (`apps/api/src/routes/auth.ts`) include the same Magic Link URL as `verify_url` in their
    JSON response whenever a token was actually issued. The signup SPA (`RegisterForm.tsx`)
    forwards it to `/check-email?verify_url=...`, and `CheckEmailPage.tsx` renders a `[DEV]`
-   link that goes straight to `GET /api/auth/verify`. The admin `LoginForm.tsx` renders the
-   same kind of `[DEV]` link inline after submitting — no console log copy/paste required
-   either way. The check is an explicit opt-in (`=== "development"`, not `!== "production"`)
-   so an unset or misconfigured `ENVIRONMENT` in some future deploy target never accidentally
-   leaks the Magic Link.
+   link that goes straight to `GET /api/auth/verify`. The admin `LoginForm.tsx` and
+   `StoreSettings.tsx` render the same kind of `[DEV]` link inline after submitting — no
+   console log copy/paste required either way. The check is an explicit opt-in
+   (`=== "development"`, not `!== "production"`) so an unset or misconfigured `ENVIRONMENT`
+   in some future deploy target never accidentally leaks the Magic Link.
 
 `POST /api/auth/login`'s "always return 200 with an identical body regardless of whether the
 email is registered" anti-enumeration contract (asserted in `apps/api/src/routes/auth.test.ts`)
@@ -127,7 +140,7 @@ Since the admin app has no SSR, page-level auth is enforced client-side by `Admi
 It calls `GET /api/auth/me` on every protected route mount:
 
 - **401** → navigate to `/login` (replace history entry so Back does not loop)
-- **200** → render children with `StoreContext.Provider` providing `{ id, name }`
+- **200** → render children with `StoreContext.Provider` providing `{ id, name, email }`
 
 `GET /api/auth/me` is a lightweight session check endpoint added for this purpose.
 

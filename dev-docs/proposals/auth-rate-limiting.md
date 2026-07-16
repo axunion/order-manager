@@ -53,7 +53,7 @@ gates public exposure of the API.
 - Worker tests: superseded token (re-request) fails at `verify` exactly
   like a consumed one; 6th login request within an hour issues no token
   (count D1 rows) yet still returns `{ sent: true }`; cap resets outside
-  the window (insert aged tokens directly); email-change requests share
-  the same cap (defer this case if store-settings hasn't shipped yet).
+  the window (insert aged tokens directly); email-change requests
+  (`POST /api/stores/me/email-change`, shipped) share the same cap.
 - WAF rules are config, not code — verified by the deploy checklist, not
   vitest.
