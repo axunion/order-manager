@@ -1,0 +1,61 @@
+.storeSettings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.section {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+}
+
+.heading {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--color-foreground);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+
+.currentEmail {
+  color: var(--color-muted-foreground);
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-4);
+}
+
+.savedNote {
+  color: var(--color-success-fg);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.sent {
+  color: var(--color-muted-foreground);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  margin: 0;
+}
+
+.devNote {
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-warning-fg);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin: var(--space-4) 0 0;
+}
+
+.devLink {
+  color: inherit;
+  font-weight: var(--font-semibold);
+}

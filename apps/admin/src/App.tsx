@@ -7,6 +7,7 @@ import MenuPage from "./pages/MenuPage";
 import OrdersPage from "./pages/OrdersPage";
 import SalesPage from "./pages/SalesPage";
 import SeatsPage from "./pages/SeatsPage";
+import SettingsPage from "./pages/SettingsPage";
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="/orders" component={OrdersPage} />
         <Route path="/checkout" component={CheckoutPage} />
         <Route path="/sales" component={SalesPage} />
+        <Route path="/settings" component={SettingsPage} />
       </Route>
     </Router>
   );

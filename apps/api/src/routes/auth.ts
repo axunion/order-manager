@@ -21,13 +21,20 @@ import { bodyValidator } from "../validator";
 export const authRouter = new Hono<{ Bindings: Env }>()
   /**
    * GET /api/auth/me
-   * Returns the authenticated store's id and name.
-   * Used by the admin SPA on initial load to resolve the session.
+   * Returns the authenticated store's id, name, and email.
+   * Used by the admin SPA on initial load to resolve the session (and by
+   * SettingsPage to show the current email without a second endpoint).
    * Returns 401 if not authenticated or session has expired.
    */
-  .get("/me", requireStore, (c) => {
+  .get("/me", requireStore, async (c) => {
     const { id, name } = c.var.store;
-    return c.json({ data: { id, name } });
+    const db = createDb(c.env.DB);
+    const rows = await db
+      .select({ email: schema.stores.email })
+      .from(schema.stores)
+      .where(eq(schema.stores.id, id))
+      .limit(1);
+    return c.json({ data: { id, name, email: rows[0]?.email ?? "" } });
   })
 
   /**

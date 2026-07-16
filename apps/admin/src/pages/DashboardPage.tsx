@@ -21,6 +21,9 @@ export default function DashboardPage() {
         <A href="/sales" class={styles.menuLink}>
           売上履歴
         </A>
+        <A href="/settings" class={styles.menuLink}>
+          店舗設定
+        </A>
       </div>
     </AdminLayout>
   );
