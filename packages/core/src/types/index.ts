@@ -143,13 +143,13 @@ export interface OrderItemResponse {
   name_snapshot: string;
   unit_price_snapshot: number;
   quantity: number;
-  status: "ordered" | "served";
+  status: "ordered" | "served" | "cancelled";
   created_at: number;
 }
 
 export interface OrderResponse {
   id: string;
-  status: "open" | "payment_requested" | "paid";
+  status: "open" | "payment_requested" | "paid" | "cancelled";
   items: OrderItemResponse[];
   total: number;
 }
@@ -178,7 +178,7 @@ export interface AdminOrderItemResponse {
   name_snapshot: string;
   unit_price_snapshot: number;
   quantity: number;
-  status: "ordered" | "served";
+  status: "ordered" | "served" | "cancelled";
   created_at: number;
 }
 
