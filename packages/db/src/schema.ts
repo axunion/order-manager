@@ -187,14 +187,15 @@ export const orders = sqliteTable(
     /**
      * State machine:
      *   open → payment_requested → paid
+     *   open | payment_requested → cancelled (terminal; walkouts, mistaken table)
      */
     status: text("status", {
-      enum: ["open", "payment_requested", "paid"],
+      enum: ["open", "payment_requested", "paid", "cancelled"],
     }).notNull(),
     created_at: integer("created_at")
       .notNull()
       .$defaultFn(() => Date.now()), // Unix ms
-    /** set when status transitions to 'paid' */
+    /** set when status transitions to 'paid' or 'cancelled' */
     closed_at: integer("closed_at"), // Unix ms, nullable
   },
   (table) => [
@@ -202,18 +203,18 @@ export const orders = sqliteTable(
     index("idx_orders_store").on(table.store_id, table.status),
     // Enforce the one-active-order-per-seat invariant at the DB level.
     // Covers only 'open' and 'payment_requested' rows so historical paid
-    // orders for the same seat are unrestricted.
+    // (and cancelled) orders for the same seat are unrestricted.
     uniqueIndex("idx_one_active_order_per_seat")
       .on(table.seat_id)
       .where(sql`${table.status} IN ('open', 'payment_requested')`),
     check(
       "orders_status_chk",
-      sql`${table.status} IN ('open', 'payment_requested', 'paid')`,
+      sql`${table.status} IN ('open', 'payment_requested', 'paid', 'cancelled')`,
     ),
-    // Enforce that closed_at is always set when an order reaches 'paid' status.
+    // Enforce that closed_at is always set once an order reaches a terminal status.
     check(
-      "orders_paid_has_closed_at_chk",
-      sql`${table.status} != 'paid' OR ${table.closed_at} IS NOT NULL`,
+      "orders_closed_status_has_closed_at_chk",
+      sql`${table.status} NOT IN ('paid', 'cancelled') OR ${table.closed_at} IS NOT NULL`,
     ),
   ],
 );
@@ -248,9 +249,10 @@ export const orderItems = sqliteTable(
     /**
      * State machine:
      *   ordered → served
+     *   ordered | served → cancelled (terminal; wrong dish can be voided after delivery)
      */
     status: text("status", {
-      enum: ["ordered", "served"],
+      enum: ["ordered", "served", "cancelled"],
     }).notNull(),
     created_at: integer("created_at")
       .notNull()
@@ -261,7 +263,7 @@ export const orderItems = sqliteTable(
     index("idx_order_items_store").on(table.store_id),
     check(
       "order_items_status_chk",
-      sql`${table.status} IN ('ordered', 'served')`,
+      sql`${table.status} IN ('ordered', 'served', 'cancelled')`,
     ),
     check("order_items_quantity_positive_chk", sql`${table.quantity} > 0`),
   ],
