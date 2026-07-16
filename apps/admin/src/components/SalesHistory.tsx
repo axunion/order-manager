@@ -1,0 +1,199 @@
+import { jstDayRange, todayJst } from "@order/core";
+import { apiFetch } from "@order/core/client";
+import { Button, ErrorAlert } from "@order/ui";
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import styles from "./SalesHistory.module.css";
+
+type SalesItem = {
+  id: string;
+  name_snapshot: string;
+  unit_price_snapshot: number;
+  quantity: number;
+  status: "ordered" | "served" | "cancelled";
+};
+
+type Payment = {
+  id: string;
+  order_id: string;
+  seat_name: string;
+  total_amount: number;
+  method: string;
+  paid_at: number;
+  items: SalesItem[];
+};
+
+/** Shifts a "YYYY-MM-DD" calendar date by `deltaDays`, using UTC arithmetic
+ * so month/year rollovers are handled by the platform's Date implementation. */
+export function shiftDate(dateStr: string, deltaDays: number): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const shifted = new Date(
+    Date.UTC(year ?? 1970, (month ?? 1) - 1, (day ?? 1) + deltaDays),
+  );
+  return shifted.toISOString().slice(0, 10);
+}
+
+const formatCurrency = (amount: number) => `¥${amount.toLocaleString("ja-JP")}`;
+
+const formatTime = (ms: number) =>
+  new Date(ms).toLocaleTimeString("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Tokyo",
+  });
+
+export default function SalesHistory() {
+  const [date, setDate] = createSignal(todayJst());
+  const [payments, setPayments] = createSignal<Payment[]>([]);
+  const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal("");
+  const [expanded, setExpanded] = createSignal<Set<string>>(new Set());
+
+  async function load() {
+    setLoading(true);
+    setError("");
+    const { from, to } = jstDayRange(date());
+    const result = await apiFetch<Payment[]>(
+      `/api/payments?from=${from}&to=${to}`,
+    );
+    if (result.ok && result.data) {
+      setPayments(result.data);
+    } else {
+      setPayments([]);
+      setError(result.message ?? "売上データの取得に失敗しました。");
+    }
+    setLoading(false);
+  }
+
+  createEffect(() => {
+    date();
+    load();
+  });
+
+  const totalRevenue = createMemo(() =>
+    payments().reduce((sum, p) => sum + p.total_amount, 0),
+  );
+  const checkCount = createMemo(() => payments().length);
+  const averagePerCheck = createMemo(() =>
+    checkCount() === 0 ? 0 : Math.round(totalRevenue() / checkCount()),
+  );
+
+  const toggleExpanded = (id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  return (
+    <div class={styles.salesHistory}>
+      <div class={styles.dateNav}>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setDate(shiftDate(date(), -1))}
+        >
+          ← 前日
+        </Button>
+        <input
+          type="date"
+          class={styles.dateInput}
+          aria-label="日付"
+          value={date()}
+          onInput={(e) => setDate(e.currentTarget.value)}
+        />
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setDate(shiftDate(date(), 1))}
+        >
+          翌日 →
+        </Button>
+      </div>
+
+      <Show when={error()}>
+        <ErrorAlert>{error()}</ErrorAlert>
+      </Show>
+
+      <Show when={!loading() && !error()}>
+        <div class={styles.stats}>
+          <div class={styles.statCard}>
+            <span class={styles.statLabel}>売上合計</span>
+            <span class={styles.statValue}>
+              {formatCurrency(totalRevenue())}
+            </span>
+          </div>
+          <div class={styles.statCard}>
+            <span class={styles.statLabel}>会計件数</span>
+            <span class={styles.statValue}>{checkCount()}件</span>
+          </div>
+          <div class={styles.statCard}>
+            <span class={styles.statLabel}>平均単価</span>
+            <span class={styles.statValue}>
+              {formatCurrency(averagePerCheck())}
+            </span>
+          </div>
+        </div>
+
+        <Show
+          when={payments().length > 0}
+          fallback={
+            <div class={styles.empty}>
+              <p>この日の会計はありません</p>
+            </div>
+          }
+        >
+          <ul class={styles.checkList}>
+            <For each={payments()}>
+              {(payment) => (
+                <li class={styles.checkItem}>
+                  <button
+                    type="button"
+                    class={styles.checkHeader}
+                    onClick={() => toggleExpanded(payment.id)}
+                    aria-expanded={expanded().has(payment.id)}
+                  >
+                    <span class={styles.checkTime}>
+                      {formatTime(payment.paid_at)}
+                    </span>
+                    <span class={styles.checkSeat}>{payment.seat_name}</span>
+                    <span class={styles.checkTotal}>
+                      {formatCurrency(payment.total_amount)}
+                    </span>
+                  </button>
+                  <Show when={expanded().has(payment.id)}>
+                    <ul class={styles.itemList}>
+                      <For each={payment.items}>
+                        {(item) => (
+                          <li
+                            class={`${styles.item} ${item.status === "cancelled" ? styles.itemCancelled : ""}`}
+                          >
+                            <span class={styles.itemName}>
+                              {item.name_snapshot}
+                            </span>
+                            <span class={styles.itemQty}>
+                              × {item.quantity}
+                            </span>
+                            <span class={styles.itemPrice}>
+                              {formatCurrency(
+                                item.unit_price_snapshot * item.quantity,
+                              )}
+                            </span>
+                          </li>
+                        )}
+                      </For>
+                    </ul>
+                  </Show>
+                </li>
+              )}
+            </For>
+          </ul>
+        </Show>
+      </Show>
+    </div>
+  );
+}

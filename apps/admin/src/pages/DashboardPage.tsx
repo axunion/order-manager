@@ -18,6 +18,9 @@ export default function DashboardPage() {
         <A href="/checkout" class={styles.menuLink}>
           会計・レジ
         </A>
+        <A href="/sales" class={styles.menuLink}>
+          売上履歴
+        </A>
       </div>
     </AdminLayout>
   );

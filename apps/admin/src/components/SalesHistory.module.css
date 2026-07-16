@@ -1,0 +1,151 @@
+.salesHistory {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.dateNav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.dateInput {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-foreground);
+  background: var(--color-surface);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-4);
+}
+
+.statCard {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.statLabel {
+  font-size: var(--text-sm);
+  color: var(--color-muted-foreground);
+}
+
+.statValue {
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--color-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-10) var(--space-8);
+  text-align: center;
+  color: var(--color-subtle-foreground);
+  font-size: var(--text-sm);
+}
+
+.empty p {
+  margin: 0;
+}
+
+.checkList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.checkItem {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.checkHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.checkTime {
+  color: var(--color-muted-foreground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.checkSeat {
+  flex: 1;
+  font-weight: var(--font-medium);
+  color: var(--color-foreground);
+}
+
+.checkTotal {
+  font-weight: var(--font-semibold);
+  color: var(--color-foreground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.itemList {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  padding: var(--space-1) 0;
+}
+
+.itemName {
+  flex: 1;
+  color: var(--color-foreground);
+}
+
+.itemQty {
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+}
+
+.itemPrice {
+  color: var(--color-foreground);
+  white-space: nowrap;
+}
+
+.itemCancelled {
+  opacity: 0.5;
+}
+
+.itemCancelled .itemName,
+.itemCancelled .itemQty,
+.itemCancelled .itemPrice {
+  text-decoration: line-through;
+}
