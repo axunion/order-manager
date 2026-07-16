@@ -32,6 +32,9 @@ export function isSecureRequest(
  * Invalidates any previous unused token for the same store+purpose so only
  * one link is valid at a time.
  *
+ * `newEmail` is required for purpose 'email_change' — it is the pending
+ * target address, applied to stores.email only once the token is verified.
+ *
  * Insert-first ordering: the new token is written before old ones are deleted
  * so a DELETE failure leaves two temporarily valid tokens (harmless — the old
  * one expires naturally) while an INSERT failure leaves the old token intact.
@@ -39,7 +42,8 @@ export function isSecureRequest(
 export async function issueMagicLink(
   db: Database,
   storeId: string,
-  purpose: "signup" | "login",
+  purpose: "signup" | "login" | "email_change",
+  newEmail?: string,
 ): Promise<string> {
   const token = newId();
   const expires_at = now() + MAGIC_LINK_TTL_MS;
@@ -49,6 +53,7 @@ export async function issueMagicLink(
     store_id: storeId,
     token,
     purpose,
+    new_email: newEmail ?? null,
     expires_at,
   });
 

@@ -56,6 +56,7 @@ export const authRouter = new Hono<{ Bindings: Env }>()
         id: schema.magicLinkTokens.id,
         store_id: schema.magicLinkTokens.store_id,
         purpose: schema.magicLinkTokens.purpose,
+        new_email: schema.magicLinkTokens.new_email,
       })
       .from(schema.magicLinkTokens)
       .where(
@@ -85,6 +86,24 @@ export const authRouter = new Hono<{ Bindings: Env }>()
         .update(schema.stores)
         .set({ status: "active", activated_at: ts })
         .where(eq(schema.stores.id, linkToken.store_id));
+    }
+
+    // For email_change tokens, apply the pending address now that the owner
+    // has proven control of it. A UNIQUE race (the address was claimed by
+    // another store after this token was issued) fails generically — the
+    // token is already consumed, so the owner must re-request the change.
+    if (linkToken.purpose === "email_change") {
+      if (!linkToken.new_email) {
+        return errorResponse("INVALID_TOKEN", "Invalid or expired link", 400);
+      }
+      try {
+        await db
+          .update(schema.stores)
+          .set({ email: linkToken.new_email })
+          .where(eq(schema.stores.id, linkToken.store_id));
+      } catch {
+        return errorResponse("INVALID_TOKEN", "Invalid or expired link", 400);
+      }
     }
 
     // Create a new session.
