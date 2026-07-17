@@ -68,3 +68,8 @@ export function jsonFetch<T>(
     body: JSON.stringify(body),
   });
 }
+
+/** Builds the public URL for a menu item image from its R2 key. */
+export function menuImageUrl(key: string): string {
+  return `${API_BASE}/api/menu/images/${key}`;
+}

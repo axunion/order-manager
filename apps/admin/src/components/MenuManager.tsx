@@ -1,6 +1,7 @@
-import { apiFetch, jsonFetch } from "@order/core/client";
+import { apiFetch, jsonFetch, menuImageUrl } from "@order/core/client";
 import { Button, ConfirmDialog, ErrorAlert, Select } from "@order/ui";
 import { createSignal, For, onMount, Show } from "solid-js";
+import { downscaleImage } from "../lib/downscaleImage";
 import styles from "./MenuManager.module.css";
 import StatusBadge from "./StatusBadge";
 
@@ -19,6 +20,8 @@ type Item = {
   is_available: boolean;
   category_id: string | null;
   sort_order: number;
+  description: string | null;
+  image_key: string | null;
 };
 
 export default function MenuManager() {
@@ -35,7 +38,26 @@ export default function MenuManager() {
   const [itemCategoryId, setItemCategoryId] = createSignal<string>("");
   const [itemIsAvailable, setItemIsAvailable] = createSignal(true);
   const [itemSortOrder, setItemSortOrder] = createSignal(0);
+  const [itemDescription, setItemDescription] = createSignal("");
   const [itemSubmitting, setItemSubmitting] = createSignal(false);
+
+  const [editingItemId, setEditingItemId] = createSignal<string | null>(null);
+  const [editItemName, setEditItemName] = createSignal("");
+  const [editItemPrice, setEditItemPrice] = createSignal("");
+  const [editItemCategoryId, setEditItemCategoryId] = createSignal<string>("");
+  const [editItemIsAvailable, setEditItemIsAvailable] = createSignal(true);
+  const [editItemSortOrder, setEditItemSortOrder] = createSignal(0);
+  const [editItemDescription, setEditItemDescription] = createSignal("");
+  const [itemUpdating, setItemUpdating] = createSignal(false);
+
+  // Keyed by item id so concurrent uploads to different items don't clobber
+  // each other's "uploading" state or preview.
+  const [uploadingImageIds, setUploadingImageIds] = createSignal<
+    Record<string, boolean>
+  >({});
+  const [pendingPreviews, setPendingPreviews] = createSignal<
+    Record<string, string>
+  >({});
 
   async function loadCategories() {
     const result = await apiFetch<Category[]>("/api/menu/categories");
@@ -97,6 +119,7 @@ export default function MenuManager() {
         is_available: itemIsAvailable(),
         category_id: categoryId,
         sort_order: itemSortOrder(),
+        description: itemDescription() || null,
       });
       if (!result.ok) {
         setError(result.message ?? "エラーが発生しました");
@@ -107,6 +130,7 @@ export default function MenuManager() {
       setItemCategoryId("");
       setItemIsAvailable(true);
       setItemSortOrder(0);
+      setItemDescription("");
       await loadItems();
     } finally {
       setItemSubmitting(false);
@@ -122,7 +146,10 @@ export default function MenuManager() {
       setError(result.message ?? "削除に失敗しました");
       return;
     }
-    await loadItems();
+    // Update the list in place rather than reloading: a full reload would
+    // replace every row's object identity, tearing down and rebuilding any
+    // other item's inline edit form that happens to be open.
+    setItems((prev) => prev.filter((i) => i.id !== id));
   };
 
   const handleToggleAvailability = async (item: Item) => {
@@ -138,11 +165,116 @@ export default function MenuManager() {
         sort_order: item.sort_order,
       },
     );
-    if (!result.ok) {
+    if (!result.ok || !result.data) {
       setError(result.message ?? "更新に失敗しました");
       return;
     }
-    await loadItems();
+    const updated = result.data;
+    setItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
+  };
+
+  const startItemEdit = (item: Item) => {
+    setEditingItemId(item.id);
+    setEditItemName(item.name);
+    setEditItemPrice(String(item.price));
+    setEditItemCategoryId(item.category_id ?? "");
+    setEditItemIsAvailable(item.is_available);
+    setEditItemSortOrder(item.sort_order);
+    setEditItemDescription(item.description ?? "");
+    setError("");
+  };
+
+  const cancelItemEdit = () => {
+    setEditingItemId(null);
+  };
+
+  const handleItemEditSubmit = async (e: SubmitEvent, itemId: string) => {
+    e.preventDefault();
+    setError("");
+    setItemUpdating(true);
+    try {
+      const result = await jsonFetch<Item>(
+        `/api/menu/items/${itemId}`,
+        "PATCH",
+        {
+          name: editItemName(),
+          price: Number(editItemPrice()),
+          is_available: editItemIsAvailable(),
+          category_id: editItemCategoryId() || null,
+          sort_order: editItemSortOrder(),
+          description: editItemDescription() || null,
+        },
+      );
+      if (!result.ok || !result.data) {
+        setError(result.message ?? "更新に失敗しました");
+        return;
+      }
+      const updated = result.data;
+      setItems((prev) => prev.map((i) => (i.id === itemId ? updated : i)));
+      setEditingItemId(null);
+    } finally {
+      setItemUpdating(false);
+    }
+  };
+
+  const handleImageChange = async (
+    e: Event & { currentTarget: HTMLInputElement },
+    item: Item,
+  ) => {
+    const file = e.currentTarget.files?.[0];
+    e.currentTarget.value = "";
+    if (!file) return;
+
+    setError("");
+    setUploadingImageIds((prev) => ({ ...prev, [item.id]: true }));
+    let previewUrl: string | null = null;
+    try {
+      const blob = await downscaleImage(file);
+      previewUrl = URL.createObjectURL(blob);
+      setPendingPreviews((prev) => ({
+        ...prev,
+        [item.id]: previewUrl as string,
+      }));
+
+      const result = await apiFetch<Item>(`/api/menu/items/${item.id}/image`, {
+        method: "PUT",
+        headers: { "Content-Type": blob.type },
+        body: blob,
+      });
+      if (!result.ok || !result.data) {
+        setError(result.message ?? "画像のアップロードに失敗しました");
+        return;
+      }
+      const updated = result.data;
+      setItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
+    } catch {
+      setError("画像の処理に失敗しました。別の画像をお試しください。");
+    } finally {
+      setUploadingImageIds((prev) => {
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
+      setPendingPreviews((prev) => {
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    }
+  };
+
+  const handleImageRemove = async (item: Item) => {
+    setError("");
+    const result = await apiFetch<Item>(`/api/menu/items/${item.id}/image`, {
+      method: "DELETE",
+    });
+    if (!result.ok || !result.data) {
+      setError(result.message ?? "画像の削除に失敗しました");
+      return;
+    }
+    const updated = result.data;
+    setItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
   };
 
   return (
@@ -271,6 +403,17 @@ export default function MenuManager() {
               disabled={itemSubmitting()}
             />
           </div>
+          <div class={styles.field}>
+            <label for="item-description">商品説明（任意）</label>
+            <textarea
+              id="item-description"
+              value={itemDescription()}
+              onInput={(e) => setItemDescription(e.currentTarget.value)}
+              placeholder="例：香ばしい米粉を使用したから揚げ"
+              maxLength={500}
+              disabled={itemSubmitting()}
+            />
+          </div>
           <Button type="submit" disabled={itemSubmitting()}>
             {itemSubmitting() ? "追加中..." : "商品を追加"}
           </Button>
@@ -282,37 +425,188 @@ export default function MenuManager() {
           <ul class={styles.menuList}>
             <For each={items()}>
               {(item) => {
-                const catName = () =>
+                const itemCategoryName = () =>
                   categories().find((c) => c.id === item.category_id)?.name ??
                   "なし";
+                const thumbSrc = () =>
+                  pendingPreviews()[item.id] ??
+                  (item.image_key ? menuImageUrl(item.image_key) : null);
                 return (
                   <li
-                    class={`${styles.menuListItem}${!item.is_available ? ` ${styles.menuListItemUnavailable ?? ""}` : ""}`}
+                    class={`${styles.menuListItem} ${styles.itemListItem}${!item.is_available ? ` ${styles.menuListItemUnavailable ?? ""}` : ""}`}
                   >
-                    <span class={styles.itemName}>{item.name}</span>
-                    <span class={styles.itemPrice}>
-                      ¥{item.price.toLocaleString()}
-                    </span>
-                    <span class={styles.itemCategory}>{catName()}</span>
-                    <StatusBadge
-                      tone={item.is_available ? "success" : "danger"}
-                    >
-                      {item.is_available ? "販売中" : "品切れ"}
-                    </StatusBadge>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleToggleAvailability(item)}
-                    >
-                      {item.is_available ? "停止" : "再開"}
-                    </Button>
-                    <ConfirmDialog
-                      triggerLabel="削除"
-                      aria-label={`削除 ${item.name}`}
-                      title="商品の削除"
-                      description={`「${item.name}」を削除しますか？この操作は元に戻せません。`}
-                      onConfirm={() => handleItemDelete(item.id)}
-                    />
+                    <Show when={thumbSrc()}>
+                      <div class={styles.itemThumb}>
+                        <img src={thumbSrc() ?? ""} alt="" />
+                      </div>
+                    </Show>
+                    <div class={styles.itemInfo}>
+                      <Show
+                        when={editingItemId() === item.id}
+                        fallback={
+                          <>
+                            <div class={styles.itemHeaderRow}>
+                              <span class={styles.itemName}>{item.name}</span>
+                              <span class={styles.itemPrice}>
+                                ¥{item.price.toLocaleString()}
+                              </span>
+                              <span class={styles.itemCategory}>
+                                {itemCategoryName()}
+                              </span>
+                              <StatusBadge
+                                tone={item.is_available ? "success" : "danger"}
+                              >
+                                {item.is_available ? "販売中" : "品切れ"}
+                              </StatusBadge>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                aria-label={`商品を編集 ${item.name}`}
+                                onClick={() => startItemEdit(item)}
+                              >
+                                編集
+                              </Button>
+                            </div>
+                            <Show when={item.description}>
+                              <p class={styles.itemDescription}>
+                                {item.description}
+                              </p>
+                            </Show>
+                          </>
+                        }
+                      >
+                        <form
+                          class={styles.editForm}
+                          onSubmit={(e) => handleItemEditSubmit(e, item.id)}
+                        >
+                          <input
+                            type="text"
+                            value={editItemName()}
+                            onInput={(e) =>
+                              setEditItemName(e.currentTarget.value)
+                            }
+                            required
+                            maxLength={100}
+                            disabled={itemUpdating()}
+                            aria-label={`商品名を編集 ${item.name}`}
+                          />
+                          <input
+                            type="number"
+                            min={1}
+                            value={editItemPrice()}
+                            onInput={(e) =>
+                              setEditItemPrice(e.currentTarget.value)
+                            }
+                            required
+                            disabled={itemUpdating()}
+                            aria-label={`価格を編集 ${item.name}`}
+                          />
+                          <Select
+                            options={categories().map((c) => ({
+                              value: c.id,
+                              label: c.name,
+                            }))}
+                            value={editItemCategoryId() || null}
+                            onChange={setEditItemCategoryId}
+                            placeholder="-- なし --"
+                            disabled={itemUpdating()}
+                            aria-label={`カテゴリを編集 ${item.name}`}
+                          />
+                          <label class={styles.editCheck}>
+                            <input
+                              type="checkbox"
+                              checked={editItemIsAvailable()}
+                              onChange={(e) =>
+                                setEditItemIsAvailable(e.currentTarget.checked)
+                              }
+                              disabled={itemUpdating()}
+                            />
+                            提供中
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={editItemSortOrder()}
+                            onInput={(e) =>
+                              setEditItemSortOrder(
+                                Number(e.currentTarget.value),
+                              )
+                            }
+                            disabled={itemUpdating()}
+                            aria-label={`表示順を編集 ${item.name}`}
+                          />
+                          <textarea
+                            value={editItemDescription()}
+                            onInput={(e) =>
+                              setEditItemDescription(e.currentTarget.value)
+                            }
+                            maxLength={500}
+                            placeholder="商品説明（任意）"
+                            disabled={itemUpdating()}
+                            aria-label={`商品説明を編集 ${item.name}`}
+                          />
+                          <Button
+                            type="submit"
+                            size="sm"
+                            disabled={itemUpdating()}
+                          >
+                            {itemUpdating() ? "保存中..." : "保存"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            disabled={itemUpdating()}
+                            onClick={cancelItemEdit}
+                          >
+                            キャンセル
+                          </Button>
+                        </form>
+                      </Show>
+                    </div>
+                    <div class={styles.itemActions}>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleToggleAvailability(item)}
+                      >
+                        {item.is_available ? "停止" : "再開"}
+                      </Button>
+                      <label class={styles.imageUploadLabel}>
+                        {uploadingImageIds()[item.id]
+                          ? "アップロード中..."
+                          : item.image_key
+                            ? "画像を変更"
+                            : "画像を追加"}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          class={styles.visuallyHidden}
+                          onChange={(e) => handleImageChange(e, item)}
+                          disabled={uploadingImageIds()[item.id] === true}
+                          aria-label={`画像を選択 ${item.name}`}
+                        />
+                      </label>
+                      <Show when={item.image_key}>
+                        <ConfirmDialog
+                          triggerLabel="画像を削除"
+                          triggerVariant="secondary"
+                          triggerSize="sm"
+                          aria-label={`画像を削除 ${item.name}`}
+                          title="画像の削除"
+                          description={`「${item.name}」の画像を削除しますか？`}
+                          confirmLabel="削除する"
+                          onConfirm={() => handleImageRemove(item)}
+                        />
+                      </Show>
+                      <ConfirmDialog
+                        triggerLabel="削除"
+                        aria-label={`削除 ${item.name}`}
+                        title="商品の削除"
+                        description={`「${item.name}」を削除しますか？この操作は元に戻せません。`}
+                        onConfirm={() => handleItemDelete(item.id)}
+                      />
+                    </div>
                   </li>
                 );
               }}
