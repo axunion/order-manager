@@ -16,6 +16,44 @@ import { bodyValidator } from "../validator";
 // Helpers
 // ---------------------------------------------------------------------------
 
+const IMAGE_MAX_BYTES = 1024 * 1024; // 1 MB
+
+const IMAGE_CONTENT_TYPES: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
+/** Best-effort delete of an R2 object; failures are logged, never thrown. */
+async function deleteImageObject(bucket: R2Bucket, key: string): Promise<void> {
+  try {
+    await bucket.delete(key);
+  } catch {
+    console.error(`[menu] Failed to delete R2 object ${key}`);
+  }
+}
+
+/**
+ * Runs `promise` via waitUntil when available so its latency isn't observed
+ * by the caller; falls back to awaiting it inline when executionCtx is
+ * unavailable. Accessing `c.executionCtx` itself throws (rather than being
+ * undefined) in some test environments, so the access is guarded too.
+ */
+async function background(
+  c: { executionCtx?: { waitUntil: (promise: Promise<unknown>) => void } },
+  promise: Promise<unknown>,
+): Promise<void> {
+  try {
+    if (c.executionCtx?.waitUntil) {
+      c.executionCtx.waitUntil(promise);
+      return;
+    }
+  } catch {
+    // executionCtx unavailable — fall through to awaiting inline below.
+  }
+  await promise;
+}
+
 /**
  * Verifies that categoryId belongs to storeId.
  * Returns an error Response if the category is invalid; undefined otherwise.
@@ -197,7 +235,8 @@ export const menuRouter = new Hono<AuthEnv>()
     }
 
     const id = newId();
-    const { name, price, is_available, category_id, sort_order } = input;
+    const { name, price, is_available, category_id, sort_order, description } =
+      input;
     await db.insert(schema.menuItems).values({
       id,
       store_id: storeId,
@@ -206,6 +245,7 @@ export const menuRouter = new Hono<AuthEnv>()
       is_available,
       category_id,
       sort_order,
+      description,
     });
     return c.json(
       {
@@ -217,6 +257,8 @@ export const menuRouter = new Hono<AuthEnv>()
           is_available,
           category_id,
           sort_order,
+          description,
+          image_key: null,
         },
       },
       201,
@@ -247,12 +289,13 @@ export const menuRouter = new Hono<AuthEnv>()
       if (err) return err;
     }
 
-    const { name, price, is_available, category_id, sort_order } = input;
+    const { name, price, is_available, category_id, sort_order, description } =
+      input;
     // Drizzle skips undefined fields in .set(), so omitting category_id
-    // in the request body leaves the column unchanged in the DB.
+    // (or description) in the request body leaves the column unchanged in the DB.
     const updated = await db
       .update(schema.menuItems)
-      .set({ name, price, is_available, category_id, sort_order })
+      .set({ name, price, is_available, category_id, sort_order, description })
       .where(
         and(
           eq(schema.menuItems.id, itemId),
@@ -280,7 +323,10 @@ export const menuRouter = new Hono<AuthEnv>()
 
     // Verify ownership first.
     const existing = await db
-      .select({ id: schema.menuItems.id })
+      .select({
+        id: schema.menuItems.id,
+        image_key: schema.menuItems.image_key,
+      })
       .from(schema.menuItems)
       .where(
         and(
@@ -289,7 +335,8 @@ export const menuRouter = new Hono<AuthEnv>()
         ),
       )
       .limit(1);
-    if (existing.length === 0) {
+    const item = existing[0];
+    if (!item) {
       return errorResponse("NOT_FOUND", "Menu item not found", 404);
     }
 
@@ -322,5 +369,143 @@ export const menuRouter = new Hono<AuthEnv>()
           eq(schema.menuItems.store_id, storeId),
         ),
       );
+    if (item.image_key) {
+      await background(c, deleteImageObject(c.env.IMAGES, item.image_key));
+    }
     return c.json({ data: { id: itemId } });
+  })
+
+  // ──────────────────── Item images ────────────────────
+
+  /**
+   * PUT /api/menu/items/:id/image
+   * Uploads/replaces the photo for a menu item owned by the authenticated store.
+   * Body: raw binary. Content-Type must be image/jpeg, image/png, or image/webp.
+   * Size cap 1 MB (413 otherwise). Deletes the previous image object, if any,
+   * best-effort. Returns the updated item.
+   */
+  .put("/items/:id/image", async (c) => {
+    const { id: storeId } = c.var.store;
+    const itemId = c.req.param("id");
+    const db = createDb(c.env.DB);
+
+    const existing = await db
+      .select({ image_key: schema.menuItems.image_key })
+      .from(schema.menuItems)
+      .where(
+        and(
+          eq(schema.menuItems.id, itemId),
+          eq(schema.menuItems.store_id, storeId),
+        ),
+      )
+      .limit(1);
+    const item = existing[0];
+    if (!item) {
+      return errorResponse("NOT_FOUND", "Menu item not found", 404);
+    }
+
+    const contentType = c.req.header("Content-Type") ?? "";
+    const ext = IMAGE_CONTENT_TYPES[contentType];
+    if (!ext) {
+      return errorResponse(
+        "VALIDATION_ERROR",
+        "Content-Type must be image/jpeg, image/png, or image/webp",
+        400,
+      );
+    }
+
+    // Fast-path rejection from the declared length, before buffering the body.
+    // Content-Length can be absent or wrong, so byteLength below is authoritative.
+    const declaredLength = Number(c.req.header("Content-Length"));
+    if (declaredLength > IMAGE_MAX_BYTES) {
+      return errorResponse(
+        "PAYLOAD_TOO_LARGE",
+        "Image exceeds the 1 MB size limit",
+        413,
+      );
+    }
+
+    const body = await c.req.arrayBuffer();
+    if (body.byteLength > IMAGE_MAX_BYTES) {
+      return errorResponse(
+        "PAYLOAD_TOO_LARGE",
+        "Image exceeds the 1 MB size limit",
+        413,
+      );
+    }
+
+    const key = `menu/${storeId}/${itemId}/${newId()}.${ext}`;
+    await c.env.IMAGES.put(key, body, {
+      httpMetadata: { contentType },
+    });
+
+    const updated = await db
+      .update(schema.menuItems)
+      .set({ image_key: key })
+      .where(
+        and(
+          eq(schema.menuItems.id, itemId),
+          eq(schema.menuItems.store_id, storeId),
+        ),
+      )
+      .returning();
+    const result = updated[0];
+    if (!result) {
+      // Item was deleted concurrently between the ownership check above and
+      // here — clean up the object we just wrote so it doesn't leak forever.
+      await background(c, deleteImageObject(c.env.IMAGES, key));
+      return errorResponse("NOT_FOUND", "Menu item not found", 404);
+    }
+
+    if (item.image_key) {
+      await background(c, deleteImageObject(c.env.IMAGES, item.image_key));
+    }
+    return c.json({ data: result });
+  })
+
+  /**
+   * DELETE /api/menu/items/:id/image
+   * Clears the photo for a menu item owned by the authenticated store and
+   * deletes the R2 object, best-effort. No-op (200) if the item has no image.
+   * Returns 404 if not found or owned by a different store.
+   */
+  .delete("/items/:id/image", async (c) => {
+    const { id: storeId } = c.var.store;
+    const itemId = c.req.param("id");
+    const db = createDb(c.env.DB);
+
+    const existing = await db
+      .select({ image_key: schema.menuItems.image_key })
+      .from(schema.menuItems)
+      .where(
+        and(
+          eq(schema.menuItems.id, itemId),
+          eq(schema.menuItems.store_id, storeId),
+        ),
+      )
+      .limit(1);
+    const item = existing[0];
+    if (!item) {
+      return errorResponse("NOT_FOUND", "Menu item not found", 404);
+    }
+
+    const updated = await db
+      .update(schema.menuItems)
+      .set({ image_key: null })
+      .where(
+        and(
+          eq(schema.menuItems.id, itemId),
+          eq(schema.menuItems.store_id, storeId),
+        ),
+      )
+      .returning();
+    const result = updated[0];
+    if (!result) {
+      return errorResponse("NOT_FOUND", "Menu item not found", 404);
+    }
+
+    if (item.image_key) {
+      await background(c, deleteImageObject(c.env.IMAGES, item.image_key));
+    }
+    return c.json({ data: result });
   });

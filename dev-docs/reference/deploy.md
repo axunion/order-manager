@@ -15,19 +15,28 @@ All four apps deploy to Cloudflare Workers with `wrangler deploy`. Deployment is
 
    Copy the returned `database_id` into `apps/api/wrangler.jsonc`
    (`d1_databases[0].database_id` — currently a placeholder UUID).
-3. Set production values in `apps/api/wrangler.jsonc` `vars`:
+3. Create the R2 bucket for menu item images:
+
+   ```sh
+   wrangler r2 bucket create order-manager-images
+   ```
+
+   Update `bucket_name` in `apps/api/wrangler.jsonc` (`r2_buckets[0]`) if you
+   chose a different name. No `database_id`-style opaque ID to copy — R2
+   buckets are addressed by name.
+4. Set production values in `apps/api/wrangler.jsonc` `vars`:
    - `ADMIN_ORIGIN` / `ORDER_ORIGIN` / `SIGNUP_ORIGIN` — the deployed SPA URLs
      (currently localhost placeholders).
    - `COOKIE_DOMAIN` — e.g. `.example.com` for cross-subdomain cookie sharing.
    - `ENVIRONMENT` — must stay `"production"` (gates dev-only auth conveniences,
      see [auth.md](./auth.md)).
-4. Set secrets (never put these in `wrangler.jsonc`):
+5. Set secrets (never put these in `wrangler.jsonc`):
 
    ```sh
    wrangler secret put RESEND_API_KEY   # run inside apps/api
    wrangler secret put MAIL_FROM
    ```
-5. **Deploy-blocking — configure per-IP WAF rate limiting** on the API's
+6. **Deploy-blocking — configure per-IP WAF rate limiting** on the API's
    Cloudflare zone before exposing it publicly (see
    [auth.md](./auth.md#magic-link-flow) for the per-store per-hour cap,
    which is enforced in the Worker; this is the complementary per-IP

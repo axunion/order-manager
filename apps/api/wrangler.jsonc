@@ -13,6 +13,13 @@
       "migrations_dir": "../../packages/db/drizzle"
     }
   ],
+  "r2_buckets": [
+    {
+      "binding": "IMAGES",
+      // Replace with the real bucket name from `wrangler r2 bucket create`.
+      "bucket_name": "order-manager-images"
+    }
+  ],
   "vars": {
     // Replace with production origins (e.g. "https://admin.example.com").
     // For local dev, set these to the Vite dev server URLs in .dev.vars.

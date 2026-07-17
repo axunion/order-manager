@@ -3,6 +3,7 @@ import { createMiddleware } from "hono/factory";
 import { adminOrdersRouter } from "./routes/admin-orders";
 import { authRouter } from "./routes/auth";
 import { menuRouter } from "./routes/menu";
+import { menuImagesRouter } from "./routes/menu-images";
 import { orderRouter } from "./routes/order";
 import { paymentsRouter } from "./routes/payments";
 import { seatsRouter } from "./routes/seats";
@@ -58,6 +59,7 @@ app.use("*", corsMiddleware);
 // Public endpoints
 app.route("/api/stores", storesRouter);
 app.route("/api/auth", authRouter);
+app.route("/api/menu/images", menuImagesRouter);
 
 // Admin-authenticated endpoints (session_token cookie)
 app.route("/api/menu", menuRouter);

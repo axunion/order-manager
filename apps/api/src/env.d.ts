@@ -5,6 +5,8 @@
 // Cloudflare dashboard (production).
 interface Env {
   DB: D1Database;
+  /** Menu item images. Keys: menu/{store_id}/{item_id}/{random}.{ext}. */
+  IMAGES: R2Bucket;
   /** Origin of the admin SPA, e.g. "https://admin.example.com" */
   ADMIN_ORIGIN: string;
   /** Origin of the customer order SPA, e.g. "https://order.example.com" */
@@ -32,6 +34,7 @@ interface Env {
 declare namespace Cloudflare {
   interface Env {
     DB: D1Database;
+    IMAGES: R2Bucket;
     ADMIN_ORIGIN: string;
     ORDER_ORIGIN: string;
     SIGNUP_ORIGIN: string;
