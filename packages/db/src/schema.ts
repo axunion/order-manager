@@ -82,6 +82,13 @@ export const menuItems = sqliteTable(
       .notNull()
       .default(true),
     sort_order: integer("sort_order").notNull().default(0),
+    /** ≤ 500 chars, enforced by Zod (CreateItemInput/UpdateItemInput) */
+    description: text("description"), // nullable
+    /**
+     * R2 object key (not a URL), e.g. menu/{store_id}/{item_id}/{random}.{ext}.
+     * Nullable — items may have no photo. Served via GET /api/menu/images/:key.
+     */
+    image_key: text("image_key"), // nullable
   },
   (table) => [
     index("idx_menu_items_store").on(table.store_id),
