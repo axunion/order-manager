@@ -7,7 +7,7 @@ import {
   UpdateItemInput,
 } from "@order/core";
 import { createDb, type Database, schema } from "@order/db";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { type AuthEnv, requireStore } from "../middleware";
 import { bodyValidator } from "../validator";
@@ -78,6 +78,81 @@ async function validateCategoryOwnership(
     return errorResponse("VALIDATION_ERROR", "category_id is invalid", 400);
   }
   return undefined;
+}
+
+/**
+ * Verifies that every id in groupIds is an option group belonging to storeId.
+ * Returns an error Response if any id is invalid; undefined otherwise.
+ * Empty input is always valid (detaches all groups).
+ */
+async function validateOptionGroupIds(
+  db: Database,
+  groupIds: string[],
+  storeId: string,
+): Promise<Response | undefined> {
+  if (groupIds.length === 0) return undefined;
+  const uniqueIds = [...new Set(groupIds)];
+  const rows = await db
+    .select({ id: schema.optionGroups.id })
+    .from(schema.optionGroups)
+    .where(
+      and(
+        inArray(schema.optionGroups.id, uniqueIds),
+        eq(schema.optionGroups.store_id, storeId),
+      ),
+    );
+  if (rows.length !== uniqueIds.length) {
+    return errorResponse(
+      "VALIDATION_ERROR",
+      "option_group_ids contains an invalid group",
+      400,
+    );
+  }
+  return undefined;
+}
+
+/** Fetches attached option_group_ids for each item id, grouped by menu_item_id. */
+async function fetchOptionGroupIdsByItemId(
+  db: Database,
+  itemIds: string[],
+): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>();
+  if (itemIds.length === 0) return map;
+  const rows = await db
+    .select({
+      menu_item_id: schema.menuItemOptionGroups.menu_item_id,
+      group_id: schema.menuItemOptionGroups.group_id,
+    })
+    .from(schema.menuItemOptionGroups)
+    .where(inArray(schema.menuItemOptionGroups.menu_item_id, itemIds));
+  for (const row of rows) {
+    const list = map.get(row.menu_item_id) ?? [];
+    list.push(row.group_id);
+    map.set(row.menu_item_id, list);
+  }
+  return map;
+}
+
+/** Replaces an item's attached option groups with exactly groupIds. */
+async function setItemOptionGroups(
+  db: Database,
+  itemId: string,
+  groupIds: string[],
+): Promise<void> {
+  const uniqueIds = [...new Set(groupIds)];
+  await db.batch([
+    db
+      .delete(schema.menuItemOptionGroups)
+      .where(eq(schema.menuItemOptionGroups.menu_item_id, itemId)),
+    ...uniqueIds.map((groupId, index) =>
+      db.insert(schema.menuItemOptionGroups).values({
+        id: newId(),
+        menu_item_id: itemId,
+        group_id: groupId,
+        sort_order: index,
+      }),
+    ),
+  ]);
 }
 
 // ---------------------------------------------------------------------------
@@ -211,7 +286,16 @@ export const menuRouter = new Hono<AuthEnv>()
       .from(schema.menuItems)
       .where(eq(schema.menuItems.store_id, storeId))
       .orderBy(asc(schema.menuItems.sort_order));
-    return c.json({ data: rows });
+    const groupIdsByItem = await fetchOptionGroupIdsByItemId(
+      db,
+      rows.map((row) => row.id),
+    );
+    return c.json({
+      data: rows.map((row) => ({
+        ...row,
+        option_group_ids: groupIdsByItem.get(row.id) ?? [],
+      })),
+    });
   })
 
   /**
@@ -259,6 +343,9 @@ export const menuRouter = new Hono<AuthEnv>()
           sort_order,
           description,
           image_key: null,
+          // New items start with no option groups attached; use the
+          // dedicated attach flow on PATCH /items/:id to add some.
+          option_group_ids: [],
         },
       },
       201,
@@ -289,6 +376,16 @@ export const menuRouter = new Hono<AuthEnv>()
       if (err) return err;
     }
 
+    // option_group_ids is undefined when omitted → preserve current attachments.
+    if (input.option_group_ids !== undefined) {
+      const err = await validateOptionGroupIds(
+        db,
+        input.option_group_ids,
+        storeId,
+      );
+      if (err) return err;
+    }
+
     const { name, price, is_available, category_id, sort_order, description } =
       input;
     // Drizzle skips undefined fields in .set(), so omitting category_id
@@ -307,7 +404,16 @@ export const menuRouter = new Hono<AuthEnv>()
     if (!result) {
       return errorResponse("NOT_FOUND", "Menu item not found", 404);
     }
-    return c.json({ data: result });
+
+    if (input.option_group_ids !== undefined) {
+      await setItemOptionGroups(db, itemId, input.option_group_ids);
+    }
+    const optionGroupIds =
+      input.option_group_ids !== undefined
+        ? [...new Set(input.option_group_ids)]
+        : ((await fetchOptionGroupIdsByItemId(db, [itemId])).get(itemId) ?? []);
+
+    return c.json({ data: { ...result, option_group_ids: optionGroupIds } });
   })
 
   /**
@@ -361,14 +467,19 @@ export const menuRouter = new Hono<AuthEnv>()
       );
     }
 
-    await db
-      .delete(schema.menuItems)
-      .where(
-        and(
-          eq(schema.menuItems.id, itemId),
-          eq(schema.menuItems.store_id, storeId),
+    await db.batch([
+      db
+        .delete(schema.menuItemOptionGroups)
+        .where(eq(schema.menuItemOptionGroups.menu_item_id, itemId)),
+      db
+        .delete(schema.menuItems)
+        .where(
+          and(
+            eq(schema.menuItems.id, itemId),
+            eq(schema.menuItems.store_id, storeId),
+          ),
         ),
-      );
+    ]);
     if (item.image_key) {
       await background(c, deleteImageObject(c.env.IMAGES, item.image_key));
     }

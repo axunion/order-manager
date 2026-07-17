@@ -4,6 +4,7 @@ import { adminOrdersRouter } from "./routes/admin-orders";
 import { authRouter } from "./routes/auth";
 import { menuRouter } from "./routes/menu";
 import { menuImagesRouter } from "./routes/menu-images";
+import { menuOptionsRouter } from "./routes/menu-options";
 import { orderRouter } from "./routes/order";
 import { paymentsRouter } from "./routes/payments";
 import { seatsRouter } from "./routes/seats";
@@ -63,6 +64,7 @@ app.route("/api/menu/images", menuImagesRouter);
 
 // Admin-authenticated endpoints (session_token cookie)
 app.route("/api/menu", menuRouter);
+app.route("/api/menu/option-groups", menuOptionsRouter);
 app.route("/api/seats", seatsRouter);
 app.route("/api/admin/orders", adminOrdersRouter);
 app.route("/api/payments", paymentsRouter);
