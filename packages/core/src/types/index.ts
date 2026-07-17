@@ -94,6 +94,17 @@ export interface CategoryResponse {
 // Menu — items
 // ---------------------------------------------------------------------------
 
+/** Trimmed description, ≤ 500 chars; empty after trimming normalizes to null. */
+const itemDescription = z
+  .string()
+  .max(500)
+  .nullable()
+  .transform((s) => {
+    if (s === null) return null;
+    const trimmed = s.trim();
+    return trimmed.length === 0 ? null : trimmed;
+  });
+
 export const CreateItemInput = z.object({
   name: displayName,
   /** Price in JPY (tax-inclusive). Must be > 0. */
@@ -101,6 +112,7 @@ export const CreateItemInput = z.object({
   is_available: z.boolean().default(true),
   category_id: z.string().nullable().default(null),
   sort_order: z.number().int().min(0).default(0),
+  description: itemDescription.optional().default(null),
 });
 export type CreateItemInput = z.infer<typeof CreateItemInput>;
 
@@ -111,6 +123,7 @@ export const UpdateItemInput = z.object({
   // optional: omitting preserves the current DB value; null clears it.
   category_id: z.string().nullable().optional(),
   sort_order: z.number().int().min(0).optional(),
+  description: itemDescription.optional(),
 });
 export type UpdateItemInput = z.infer<typeof UpdateItemInput>;
 
@@ -122,6 +135,8 @@ export interface MenuItemResponse {
   price: number;
   is_available: boolean;
   sort_order: number;
+  description: string | null;
+  image_key: string | null;
 }
 
 // ---------------------------------------------------------------------------
