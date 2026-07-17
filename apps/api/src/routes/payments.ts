@@ -9,7 +9,11 @@ import { createDb, schema } from "@order/db";
 import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { Hono } from "hono";
 import { type AuthEnv, requireStore } from "../middleware";
-import { mapOrderItem, type OrderItemPayload } from "../order-item";
+import {
+  attachOrderItemOptions,
+  mapOrderItem,
+  type OrderItemPayload,
+} from "../order-item";
 import { bodyValidator } from "../validator";
 
 // ---------------------------------------------------------------------------
@@ -149,8 +153,13 @@ export const paymentsRouter = new Hono<AuthEnv>()
       ordersRows.map((o) => [o.id, seatNameById.get(o.seat_id) ?? ""]),
     );
 
-    const itemsByOrderId = new Map<string, typeof itemsRows>();
-    for (const item of itemsRows) {
+    const itemsWithOptions = await attachOrderItemOptions(
+      db,
+      storeId,
+      itemsRows,
+    );
+    const itemsByOrderId = new Map<string, typeof itemsWithOptions>();
+    for (const item of itemsWithOptions) {
       const list = itemsByOrderId.get(item.order_id) ?? [];
       list.push(item);
       itemsByOrderId.set(item.order_id, list);
@@ -232,10 +241,15 @@ export const paymentsRouter = new Hono<AuthEnv>()
     ]);
 
     const seatNameById = new Map(seatsRows.map((s) => [s.id, s.name]));
+    const itemsWithOptions = await attachOrderItemOptions(
+      db,
+      storeId,
+      itemsRows,
+    );
 
     // Group items by order_id
-    const itemsByOrderId = new Map<string, typeof itemsRows>();
-    for (const item of itemsRows) {
+    const itemsByOrderId = new Map<string, typeof itemsWithOptions>();
+    for (const item of itemsWithOptions) {
       const list = itemsByOrderId.get(item.order_id) ?? [];
       list.push(item);
       itemsByOrderId.set(item.order_id, list);
@@ -249,10 +263,7 @@ export const paymentsRouter = new Hono<AuthEnv>()
         seat_name: seatNameById.get(order.seat_id) ?? "",
         status: order.status,
         items: items.map(mapOrderItem),
-        // TODO(Phase 3 item 2): fetch order_item_options per item once the
-        // option-attach/submission API lands; [] is correct until then (no
-        // order can carry options yet).
-        total: sumOrderItems(items.map((item) => ({ ...item, options: [] }))),
+        total: sumOrderItems(items),
         created_at: order.created_at,
       };
     });
@@ -333,12 +344,8 @@ export const paymentsRouter = new Hono<AuthEnv>()
       );
     }
 
-    // TODO(Phase 3 item 2): fetch order_item_options per item once the
-    // option-attach/submission API lands; [] is correct until then (no
-    // order can carry options yet).
-    const totalAmount = sumOrderItems(
-      items.map((item) => ({ ...item, options: [] })),
-    );
+    const itemsWithOptions = await attachOrderItemOptions(db, storeId, items);
+    const totalAmount = sumOrderItems(itemsWithOptions);
     const paidAt = now();
     const paymentId = newId();
 

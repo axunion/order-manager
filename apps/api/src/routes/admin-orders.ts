@@ -3,7 +3,11 @@ import { createDb, schema } from "@order/db";
 import { and, asc, eq, gt, inArray, ne } from "drizzle-orm";
 import { Hono } from "hono";
 import { type AuthEnv, requireStore } from "../middleware";
-import { mapOrderItem, type OrderItemPayload } from "../order-item";
+import {
+  attachOrderItemOptions,
+  mapOrderItem,
+  type OrderItemPayload,
+} from "../order-item";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,15 +30,21 @@ type AdminOrderPayload = {
  * Maps an order_items row to the item-mutation response shape (includes
  * order_id, unlike mapOrderItem which is embedded in a parent order payload).
  */
-function mapAdminOrderItem(item: {
-  id: string;
-  order_id: string;
-  name_snapshot: string;
-  unit_price_snapshot: number;
-  quantity: number;
-  status: string;
-  created_at: number;
-}) {
+async function mapAdminOrderItem(
+  db: ReturnType<typeof createDb>,
+  storeId: string,
+  item: {
+    id: string;
+    order_id: string;
+    name_snapshot: string;
+    unit_price_snapshot: number;
+    quantity: number;
+    status: string;
+    note: string | null;
+    created_at: number;
+  },
+) {
+  const [withOptions] = await attachOrderItemOptions(db, storeId, [item]);
   return {
     id: item.id,
     order_id: item.order_id,
@@ -43,6 +53,8 @@ function mapAdminOrderItem(item: {
     quantity: item.quantity,
     status: item.status,
     created_at: item.created_at,
+    note: item.note,
+    options: withOptions?.options ?? [],
   };
 }
 
@@ -122,10 +134,15 @@ export const adminOrdersRouter = new Hono<AuthEnv>()
         .orderBy(asc(schema.orderItems.created_at)),
     ]);
     const seatNameById = new Map(seatsRows.map((s) => [s.id, s.name]));
+    const itemsWithOptions = await attachOrderItemOptions(
+      db,
+      storeId,
+      itemsRows,
+    );
 
     // Group items by order_id
-    const itemsByOrderId = new Map<string, typeof itemsRows>();
-    for (const item of itemsRows) {
+    const itemsByOrderId = new Map<string, typeof itemsWithOptions>();
+    for (const item of itemsWithOptions) {
       const list = itemsByOrderId.get(item.order_id) ?? [];
       list.push(item);
       itemsByOrderId.set(item.order_id, list);
@@ -139,10 +156,7 @@ export const adminOrdersRouter = new Hono<AuthEnv>()
         seat_name: seatNameById.get(order.seat_id) ?? "",
         status: order.status,
         items: items.map(mapOrderItem),
-        // TODO(Phase 3 item 2): fetch order_item_options per item once the
-        // option-attach/submission API lands; [] is correct until then (no
-        // order can carry options yet).
-        total: sumOrderItems(items.map((item) => ({ ...item, options: [] }))),
+        total: sumOrderItems(items),
         created_at: order.created_at,
       };
     });
@@ -187,7 +201,7 @@ export const adminOrdersRouter = new Hono<AuthEnv>()
       return errorResponse("NOT_FOUND", "注文明細が見つかりません。", 404);
     }
 
-    return c.json({ data: mapAdminOrderItem(result) });
+    return c.json({ data: await mapAdminOrderItem(db, storeId, result) });
   })
 
   /**
@@ -223,7 +237,7 @@ export const adminOrdersRouter = new Hono<AuthEnv>()
     }
 
     if (item.status === "cancelled") {
-      return c.json({ data: mapAdminOrderItem(item) });
+      return c.json({ data: await mapAdminOrderItem(db, storeId, item) });
     }
 
     const orderRows = await db
@@ -261,7 +275,7 @@ export const adminOrdersRouter = new Hono<AuthEnv>()
       return errorResponse("NOT_FOUND", "注文明細が見つかりません。", 404);
     }
 
-    return c.json({ data: mapAdminOrderItem(result) });
+    return c.json({ data: await mapAdminOrderItem(db, storeId, result) });
   })
 
   /**
@@ -323,7 +337,7 @@ export const adminOrdersRouter = new Hono<AuthEnv>()
     }
 
     if (item.status === "ordered") {
-      return c.json({ data: mapAdminOrderItem(item) });
+      return c.json({ data: await mapAdminOrderItem(db, storeId, item) });
     }
 
     const updated = await db
@@ -342,7 +356,7 @@ export const adminOrdersRouter = new Hono<AuthEnv>()
       return errorResponse("NOT_FOUND", "注文明細が見つかりません。", 404);
     }
 
-    return c.json({ data: mapAdminOrderItem(result) });
+    return c.json({ data: await mapAdminOrderItem(db, storeId, result) });
   })
 
   /**
