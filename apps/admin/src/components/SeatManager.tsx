@@ -1,14 +1,16 @@
 import { apiFetch, jsonFetch } from "@order/core/client";
 import { Button, ConfirmDialog, ErrorAlert } from "@order/ui";
 import QRCode from "qrcode";
-import { createSignal, For, onMount, Show } from "solid-js";
+import { createMemo, createSignal, For, onMount, Show } from "solid-js";
 import styles from "./SeatManager.module.css";
+import StatusBadge from "./StatusBadge";
 
 type Seat = {
   id: string;
   store_id: string;
   name: string;
   qr_token: string;
+  is_active: boolean;
   created_at: number;
 };
 
@@ -26,16 +28,25 @@ export default function SeatManager() {
   const [error, setError] = createSignal("");
   const [seatName, setSeatName] = createSignal("");
   const [submitting, setSubmitting] = createSignal(false);
+  const [showRetired, setShowRetired] = createSignal(false);
+  const [editingId, setEditingId] = createSignal<string | null>(null);
+  const [editName, setEditName] = createSignal("");
+  const [renaming, setRenaming] = createSignal(false);
+
+  const activeSeats = createMemo(() => seats().filter((s) => s.is_active));
+  const retiredSeats = createMemo(() => seats().filter((s) => !s.is_active));
 
   async function loadSeats() {
-    const result = await apiFetch<Seat[]>("/api/seats");
+    const result = await apiFetch<Seat[]>("/api/seats?include_inactive=true");
     if (result.ok && result.data) {
       setSeats(result.data);
       const settled = await Promise.allSettled(
-        result.data.map(async (seat) => ({
-          id: seat.id,
-          url: await generateQrDataUrl(seat.qr_token),
-        })),
+        result.data
+          .filter((seat) => seat.is_active)
+          .map(async (seat) => ({
+            id: seat.id,
+            url: await generateQrDataUrl(seat.qr_token),
+          })),
       );
       const urls: Record<string, string> = {};
       let hasQrError = false;
@@ -81,19 +92,71 @@ export default function SeatManager() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const startEdit = (seat: Seat) => {
+    setEditingId(seat.id);
+    setEditName(seat.name);
+    setError("");
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditName("");
+  };
+
+  const handleRenameSubmit = async (e: SubmitEvent, seatId: string) => {
+    e.preventDefault();
+    setError("");
+    setRenaming(true);
+    try {
+      const result = await jsonFetch<Seat>(`/api/seats/${seatId}`, "PATCH", {
+        name: editName(),
+      });
+      if (!result.ok || !result.data) {
+        setError(result.message ?? "座席名の変更に失敗しました。");
+        return;
+      }
+      const updated = result.data;
+      setSeats((prev) => prev.map((s) => (s.id === seatId ? updated : s)));
+      setEditingId(null);
+    } finally {
+      setRenaming(false);
+    }
+  };
+
+  const handleRetire = async (id: string) => {
     setError("");
     const result = await apiFetch(`/api/seats/${id}`, { method: "DELETE" });
     if (!result.ok) {
-      setError(result.message ?? "削除に失敗しました");
+      setError(result.message ?? "座席の無効化に失敗しました");
       return;
     }
-    setSeats((prev) => prev.filter((s) => s.id !== id));
+    setSeats((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, is_active: false } : s)),
+    );
     setQrUrls((prev) => {
       const next = { ...prev };
       delete next[id];
       return next;
     });
+  };
+
+  const handleRotateQr = async (seat: Seat) => {
+    setError("");
+    const result = await apiFetch<Seat>(`/api/seats/${seat.id}/rotate-qr`, {
+      method: "POST",
+    });
+    if (!result.ok || !result.data) {
+      setError(result.message ?? "QR コードの再発行に失敗しました。");
+      return;
+    }
+    const updated = result.data;
+    setSeats((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    try {
+      const qrUrl = await generateQrDataUrl(updated.qr_token);
+      setQrUrls((prev) => ({ ...prev, [updated.id]: qrUrl }));
+    } catch {
+      setError("QR コードの生成に失敗しました。");
+    }
   };
 
   const handleCopyUrl = async (qrToken: string) => {
@@ -139,11 +202,11 @@ export default function SeatManager() {
       <section class={styles.seatSection}>
         <h2>座席一覧</h2>
         <Show
-          when={seats().length > 0}
+          when={activeSeats().length > 0}
           fallback={<p class={styles.empty}>座席がまだありません</p>}
         >
           <ul class={styles.seatList}>
-            <For each={seats()}>
+            <For each={activeSeats()}>
               {(seat) => {
                 const orderBase =
                   (import.meta as { env?: Record<string, string> }).env
@@ -152,7 +215,49 @@ export default function SeatManager() {
                 return (
                   <li class={styles.seatListItem}>
                     <div class={styles.seatInfo}>
-                      <span class={styles.itemName}>{seat.name}</span>
+                      <Show
+                        when={editingId() === seat.id}
+                        fallback={
+                          <div class={styles.seatNameRow}>
+                            <span class={styles.itemName}>{seat.name}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              aria-label={`座席名を編集 ${seat.name}`}
+                              onClick={() => startEdit(seat)}
+                            >
+                              編集
+                            </Button>
+                          </div>
+                        }
+                      >
+                        <form
+                          class={styles.renameForm}
+                          onSubmit={(e) => handleRenameSubmit(e, seat.id)}
+                        >
+                          <input
+                            type="text"
+                            value={editName()}
+                            onInput={(e) => setEditName(e.currentTarget.value)}
+                            required
+                            maxLength={100}
+                            disabled={renaming()}
+                            aria-label={`座席名を編集 ${seat.name}`}
+                          />
+                          <Button type="submit" size="sm" disabled={renaming()}>
+                            {renaming() ? "保存中..." : "保存"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            disabled={renaming()}
+                            onClick={cancelEdit}
+                          >
+                            キャンセル
+                          </Button>
+                        </form>
+                      </Show>
                       <a
                         class={styles.seatUrl}
                         href={orderUrl()}
@@ -181,11 +286,22 @@ export default function SeatManager() {
                         URLをコピー
                       </Button>
                       <ConfirmDialog
-                        triggerLabel="削除"
-                        aria-label={`削除 ${seat.name}`}
-                        title="座席の削除"
-                        description={`「${seat.name}」を削除しますか？この操作は元に戻せません。`}
-                        onConfirm={() => handleDelete(seat.id)}
+                        triggerLabel="QR再発行"
+                        triggerVariant="secondary"
+                        triggerSize="sm"
+                        aria-label={`QRコードを再発行 ${seat.name}`}
+                        title="QRコードの再発行"
+                        description={`「${seat.name}」のQRコードを再発行しますか？印刷済みの旧QRコードはすぐに使えなくなります。`}
+                        confirmLabel="再発行する"
+                        onConfirm={() => handleRotateQr(seat)}
+                      />
+                      <ConfirmDialog
+                        triggerLabel="無効化"
+                        aria-label={`無効化 ${seat.name}`}
+                        title="座席の無効化"
+                        description={`「${seat.name}」を無効化しますか？QRコードから注文できなくなります。この操作は元に戻せません。`}
+                        confirmLabel="無効化する"
+                        onConfirm={() => handleRetire(seat.id)}
                       />
                     </div>
                   </li>
@@ -193,6 +309,38 @@ export default function SeatManager() {
               }}
             </For>
           </ul>
+        </Show>
+      </section>
+
+      <section class={styles.seatSection}>
+        <label class={styles.toggleLabel}>
+          <input
+            type="checkbox"
+            checked={showRetired()}
+            onChange={(e) => setShowRetired(e.currentTarget.checked)}
+          />
+          無効化した座席を表示
+        </label>
+        <Show when={showRetired()}>
+          <Show
+            when={retiredSeats().length > 0}
+            fallback={<p class={styles.empty}>無効化した座席はありません</p>}
+          >
+            <ul class={styles.seatList}>
+              <For each={retiredSeats()}>
+                {(seat) => (
+                  <li class={styles.seatListItem}>
+                    <div class={styles.seatInfo}>
+                      <div class={styles.seatNameRow}>
+                        <span class={styles.itemName}>{seat.name}</span>
+                        <StatusBadge tone="danger">無効</StatusBadge>
+                      </div>
+                    </div>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </Show>
         </Show>
       </section>
     </div>

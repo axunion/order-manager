@@ -119,3 +119,41 @@
   gap: var(--space-2);
   justify-content: flex-start;
 }
+
+.seatNameRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.renameForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.renameForm input {
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+}
+
+.renameForm input:focus {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.toggleLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-foreground);
+  cursor: pointer;
+}
