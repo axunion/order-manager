@@ -436,6 +436,19 @@ The menu list is a flat, border-driven layout optimised for scanning.
 
 ---
 
+### Seat Manager (`SeatManager`)
+
+Per-row actions on active seats: name + inline "編集" (`ghost` Button)
+toggling to a rename form (text input + 保存/キャンセル); "URLをコピー"
+(`secondary`); "QR再発行" (`ConfirmDialog`, regenerates the displayed QR
+image on confirm — old printed codes stop working immediately); "無効化"
+(`ConfirmDialog`, `danger` — the row disappears from the active list on
+success). A "無効化した座席を表示" checkbox toggle reveals a read-only
+retired-seats list (name + a `danger`-tone "無効" Status Badge, no
+actions — no un-retire in v1).
+
+---
+
 ### Store Settings (`StoreSettings`)
 
 Two independent forms, each a Surface card (`section` / `radius-lg` /

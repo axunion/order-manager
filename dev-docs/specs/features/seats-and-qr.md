@@ -7,29 +7,38 @@ Each seat's QR code is the customer's only credential.
 
 All endpoints require the `session_token` cookie (`requireStore`).
 
-- `GET /api/seats` — list, ordered by creation time.
-- `POST /api/seats` — creates a seat with a fresh `qr_token` (UUID v4).
-  The admin UI renders the QR code client-side (`qrcode` package) linking
-  to `{ORDER_ORIGIN}/order/{qr_token}` for printing.
-- `DELETE /api/seats/:id` — blocked with 409 if **any** order (including
-  historical paid ones) references the seat, because `orders.seat_id` is
-  NOT NULL. In practice a seat that has ever been used cannot be deleted.
+- `GET /api/seats` — active seats only, ordered by creation time.
+  `?include_inactive=true` also returns retired seats (admin history
+  views; the admin SeatManager uses this to power a "show retired"
+  toggle, filtering client-side into active/retired lists from one
+  fetch).
+- `POST /api/seats` — creates an active seat with a fresh `qr_token`
+  (UUID v4). The admin UI renders the QR code client-side (`qrcode`
+  package) linking to `{VITE_ORDER_BASE}/{qr_token}` for printing (the
+  order SPA's only route is `/:seatToken`, no `/order/` path segment).
+- `PATCH /api/seats/:id` — renames the seat (same 1–100 char rule as
+  create).
+- `DELETE /api/seats/:id` — soft-deletes (retires): sets
+  `seats.is_active = false`. The row — and its name — survives forever
+  so historical orders/sales stay intact. Idempotent on an
+  already-retired seat. Returns 409 if the seat has an active
+  (`open`/`payment_requested`) order. **No un-retire** in v1; create a
+  new seat instead.
+- `POST /api/seats/:id/rotate-qr` — generates a fresh `qr_token`. The
+  old printed QR 404s immediately (see below). Returns 409 while the
+  seat has an active order (rotating mid-meal would strand the
+  customer).
+- The customer-facing bootstrap (`GET /api/order/:seatToken`, via
+  `requireSeat`) rejects a retired seat's `qr_token` with the same 404
+  as an unknown token — a retired table's printed QR is dead.
 
 The `qr_token` is the security boundary for customers: possession of the
 URL grants ordering rights for that seat. Tokens are unguessable UUIDs
-and never expire.
+and never expire on their own (only replaced via rotation, or made
+unusable via retirement).
 
 ## Known limitations (→ roadmap)
 
-- **No seat rename** — no PATCH endpoint; fixing a typo means delete +
-  recreate, which is impossible once the seat has orders. (Phase 2,
-  small)
-- **Seats with history can never be deleted** — `orders.seat_id` is
-  NOT NULL, so any order history blocks the FK delete. (Phase 2)
-- **No QR token rotation** — if a printed QR leaks (photo posted online,
-  reused after the table moved), the only fix is deleting the seat, which
-  the above makes impossible. Rotation regenerates `qr_token` and
-  invalidates old printouts. (Phase 2)
 - **No occupancy view** — admin cannot see "which tables are currently
   active" at a glance outside the order board. (Backlog, likely falls
   out of a table-status dashboard)

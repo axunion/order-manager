@@ -64,9 +64,8 @@ simulated) full service day with zero manual DB intervention.
    → [authentication](specs/features/authentication.md), [domain-model](specs/domain-model.md)
    Edit store name; change owner email with re-verification via Magic
    Link to the new address.
-5. **Seat lifecycle fixes**
-   → [proposal](proposals/seat-lifecycle.md)
-   ([seats-and-qr](specs/features/seats-and-qr.md))
+5. **✅ Shipped — Seat lifecycle fixes**
+   → [seats-and-qr](specs/features/seats-and-qr.md), [domain-model](specs/domain-model.md)
    Rename, retire seats that have order history, and rotate QR tokens
    for leaked codes.
 6. **Auth rate limiting** *(deploy-blocking, see engineering track)*

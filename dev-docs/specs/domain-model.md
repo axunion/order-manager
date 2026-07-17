@@ -21,7 +21,10 @@ stores 1 ──── * menu_categories 1 ──── * menu_items
   uncategorized (`category_id` nullable). Prices are tax-inclusive JPY
   integers.
 - **seats** — physical tables. Each has an unguessable `qr_token` (UUID)
-  that authenticates the customer order screen.
+  that authenticates the customer order screen; `is_active` soft-deletes
+  a retired seat (row and name survive forever for historical
+  orders/sales) instead of a hard `DELETE`, which `orders.seat_id NOT
+  NULL` would block anyway once the seat has any order history.
 - **orders** — one "check" per table visit, not per submission. Items
   accumulate on the same order until it is paid.
 - **order_items** — line items with `name_snapshot` /
