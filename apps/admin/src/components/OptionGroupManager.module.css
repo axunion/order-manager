@@ -1,0 +1,176 @@
+.optionGroupManager {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.section {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+}
+
+.section h2 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-foreground);
+}
+
+.hint {
+  margin: 0 0 var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--color-subtle-foreground);
+}
+
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-end;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 150px;
+}
+
+.field label {
+  font-size: var(--text-xs);
+  color: var(--color-muted-foreground);
+  font-weight: var(--font-medium);
+}
+
+.field input {
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  width: 100%;
+  font-family: var(--font-sans);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+}
+
+.field input:focus {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.empty,
+.emptyOptions {
+  color: var(--color-subtle-foreground);
+  text-align: center;
+  padding: var(--space-3) 0;
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.groupList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.groupCard {
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.groupHeaderRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.groupName {
+  font-weight: var(--font-semibold);
+  color: var(--color-foreground);
+  font-size: var(--text-base);
+}
+
+.groupSelectRange {
+  color: var(--color-subtle-foreground);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.optionList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
+}
+
+.optionRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  font-size: var(--text-sm);
+}
+
+.optionName {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-foreground);
+}
+
+.optionPriceDelta {
+  color: var(--color-foreground);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.addOptionForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
+}
+
+.addOptionForm input {
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  min-width: 140px;
+}
+
+.editForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.editForm input {
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+}

@@ -186,6 +186,36 @@
   white-space: pre-wrap;
 }
 
+.itemOptionGroups {
+  margin: 0;
+  color: var(--color-subtle-foreground);
+  font-size: var(--text-xs);
+}
+
+.hint {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-subtle-foreground);
+}
+
+.optionGroupFieldset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  margin: 0;
+}
+
+.optionGroupFieldset legend {
+  font-size: var(--text-xs);
+  color: var(--color-muted-foreground);
+  font-weight: var(--font-medium);
+  padding: 0 var(--space-1);
+}
+
 .itemActions {
   display: flex;
   flex-wrap: wrap;

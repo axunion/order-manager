@@ -22,11 +22,18 @@ type Item = {
   sort_order: number;
   description: string | null;
   image_key: string | null;
+  option_group_ids: string[];
+};
+
+type OptionGroup = {
+  id: string;
+  name: string;
 };
 
 export default function MenuManager() {
   const [categories, setCategories] = createSignal<Category[]>([]);
   const [items, setItems] = createSignal<Item[]>([]);
+  const [optionGroups, setOptionGroups] = createSignal<OptionGroup[]>([]);
   const [error, setError] = createSignal("");
 
   const [catName, setCatName] = createSignal("");
@@ -48,6 +55,9 @@ export default function MenuManager() {
   const [editItemIsAvailable, setEditItemIsAvailable] = createSignal(true);
   const [editItemSortOrder, setEditItemSortOrder] = createSignal(0);
   const [editItemDescription, setEditItemDescription] = createSignal("");
+  const [editItemOptionGroupIds, setEditItemOptionGroupIds] = createSignal<
+    string[]
+  >([]);
   const [itemUpdating, setItemUpdating] = createSignal(false);
 
   // Keyed by item id so concurrent uploads to different items don't clobber
@@ -69,9 +79,23 @@ export default function MenuManager() {
     if (result.ok && result.data) setItems(result.data);
   }
 
+  async function loadOptionGroups() {
+    const result = await apiFetch<OptionGroup[]>("/api/menu/option-groups");
+    if (result.ok && result.data) setOptionGroups(result.data);
+  }
+
   onMount(async () => {
-    await Promise.all([loadCategories(), loadItems()]);
+    await Promise.all([loadCategories(), loadItems(), loadOptionGroups()]);
   });
+
+  function toggleOptionGroupId(
+    ids: string[],
+    setIds: (ids: string[]) => void,
+    groupId: string,
+    checked: boolean,
+  ) {
+    setIds(checked ? [...ids, groupId] : ids.filter((id) => id !== groupId));
+  }
 
   const handleCategorySubmit = async (e: SubmitEvent) => {
     e.preventDefault();
@@ -173,7 +197,7 @@ export default function MenuManager() {
     setItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
   };
 
-  const startItemEdit = (item: Item) => {
+  const startItemEdit = async (item: Item) => {
     setEditingItemId(item.id);
     setEditItemName(item.name);
     setEditItemPrice(String(item.price));
@@ -181,7 +205,12 @@ export default function MenuManager() {
     setEditItemIsAvailable(item.is_available);
     setEditItemSortOrder(item.sort_order);
     setEditItemDescription(item.description ?? "");
+    setEditItemOptionGroupIds(item.option_group_ids ?? []);
     setError("");
+    // Option groups live in a separate component (OptionGroupManager) with
+    // its own copy of this list — refetch so a group created/renamed/deleted
+    // there is reflected in these checkboxes without a full page reload.
+    await loadOptionGroups();
   };
 
   const cancelItemEdit = () => {
@@ -203,6 +232,7 @@ export default function MenuManager() {
           category_id: editItemCategoryId() || null,
           sort_order: editItemSortOrder(),
           description: editItemDescription() || null,
+          option_group_ids: editItemOptionGroupIds(),
         },
       );
       if (!result.ok || !result.data) {
@@ -418,6 +448,11 @@ export default function MenuManager() {
             {itemSubmitting() ? "追加中..." : "商品を追加"}
           </Button>
         </form>
+        <Show when={optionGroups().length > 0}>
+          <p class={styles.hint}>
+            オプショングループの割り当ては、商品を追加した後に「編集」から行えます。
+          </p>
+        </Show>
         <Show
           when={items().length > 0}
           fallback={<p class={styles.empty}>商品がまだありません</p>}
@@ -428,6 +463,10 @@ export default function MenuManager() {
                 const itemCategoryName = () =>
                   categories().find((c) => c.id === item.category_id)?.name ??
                   "なし";
+                const attachedGroupNames = () =>
+                  (item.option_group_ids ?? [])
+                    .map((id) => optionGroups().find((g) => g.id === id)?.name)
+                    .filter((name): name is string => Boolean(name));
                 const thumbSrc = () =>
                   pendingPreviews()[item.id] ??
                   (item.image_key ? menuImageUrl(item.image_key) : null);
@@ -470,6 +509,11 @@ export default function MenuManager() {
                             <Show when={item.description}>
                               <p class={styles.itemDescription}>
                                 {item.description}
+                              </p>
+                            </Show>
+                            <Show when={attachedGroupNames().length > 0}>
+                              <p class={styles.itemOptionGroups}>
+                                オプション: {attachedGroupNames().join("、")}
                               </p>
                             </Show>
                           </>
@@ -545,6 +589,33 @@ export default function MenuManager() {
                             disabled={itemUpdating()}
                             aria-label={`商品説明を編集 ${item.name}`}
                           />
+                          <Show when={optionGroups().length > 0}>
+                            <fieldset class={styles.optionGroupFieldset}>
+                              <legend>オプショングループ</legend>
+                              <For each={optionGroups()}>
+                                {(group) => (
+                                  <label class={styles.editCheck}>
+                                    <input
+                                      type="checkbox"
+                                      checked={editItemOptionGroupIds().includes(
+                                        group.id,
+                                      )}
+                                      onChange={(e) =>
+                                        toggleOptionGroupId(
+                                          editItemOptionGroupIds(),
+                                          setEditItemOptionGroupIds,
+                                          group.id,
+                                          e.currentTarget.checked,
+                                        )
+                                      }
+                                      disabled={itemUpdating()}
+                                    />
+                                    {group.name}
+                                  </label>
+                                )}
+                              </For>
+                            </fieldset>
+                          </Show>
                           <Button
                             type="submit"
                             size="sm"

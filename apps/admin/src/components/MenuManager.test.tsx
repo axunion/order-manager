@@ -23,12 +23,20 @@ type MockRoute = {
 function mockFetch(routes: MockRoute[]) {
   return vi.fn().mockImplementation((url: string, init?: RequestInit) => {
     const method = (init?.method ?? "GET").toUpperCase();
-    const route = routes.find((r) => {
+    const candidates = routes.filter((r) => {
       const urlMatch =
         typeof r.url === "string" ? url.includes(r.url) : r.url.test(url);
       const methodMatch = !r.method || r.method.toUpperCase() === method;
       return urlMatch && methodMatch;
     });
+    // Nested routes (e.g. a future ".../:groupId/options") are substrings of
+    // their parent's URL, so prefer the longest — most specific — string
+    // match rather than array order.
+    const route = candidates.sort((a, b) => {
+      const lenA = typeof a.url === "string" ? a.url.length : 0;
+      const lenB = typeof b.url === "string" ? b.url.length : 0;
+      return lenB - lenA;
+    })[0];
     if (!route) {
       return Promise.resolve({
         ok: false,
@@ -692,5 +700,213 @@ describe("MenuManager", () => {
 
     const alert = await findByRole("alert");
     expect(alert.textContent).toContain("name is required");
+  });
+});
+
+describe("MenuManager option group attachment", () => {
+  it("renders attached option group names on the item row", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        { url: "/api/menu/categories", method: "GET", json: { data: [] } },
+        {
+          url: "/api/menu/option-groups",
+          method: "GET",
+          json: {
+            data: [
+              {
+                id: "g1",
+                store_id: "s1",
+                name: "Size",
+                min_select: 1,
+                max_select: 1,
+                sort_order: 0,
+              },
+            ],
+          },
+        },
+        {
+          url: "/api/menu/items",
+          method: "GET",
+          json: {
+            data: [
+              {
+                id: "i1",
+                name: "Latte",
+                price: 500,
+                is_available: true,
+                category_id: null,
+                sort_order: 0,
+                store_id: "s1",
+                description: null,
+                image_key: null,
+                option_group_ids: ["g1"],
+              },
+            ],
+          },
+        },
+      ]),
+    );
+
+    const { findByText } = render(() => <MenuManager />);
+    await findByText("オプション: Size");
+  });
+
+  it("shows a checkbox per option group in the edit form, pre-checked for attached groups", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        { url: "/api/menu/categories", method: "GET", json: { data: [] } },
+        {
+          url: "/api/menu/option-groups",
+          method: "GET",
+          json: {
+            data: [
+              {
+                id: "g1",
+                store_id: "s1",
+                name: "Size",
+                min_select: 1,
+                max_select: 1,
+                sort_order: 0,
+              },
+              {
+                id: "g2",
+                store_id: "s1",
+                name: "Toppings",
+                min_select: 0,
+                max_select: 3,
+                sort_order: 1,
+              },
+            ],
+          },
+        },
+        {
+          url: "/api/menu/items",
+          method: "GET",
+          json: {
+            data: [
+              {
+                id: "i2",
+                name: "Ramen",
+                price: 800,
+                is_available: true,
+                category_id: null,
+                sort_order: 0,
+                store_id: "s1",
+                description: null,
+                image_key: null,
+                option_group_ids: ["g1"],
+              },
+            ],
+          },
+        },
+      ]),
+    );
+
+    const { findByRole } = render(() => <MenuManager />);
+    const editBtn = await findByRole("button", { name: /商品を編集 Ramen/ });
+    await user.click(editBtn);
+
+    const sizeCheckbox = (await findByRole("checkbox", {
+      name: "Size",
+    })) as HTMLInputElement;
+    const toppingsCheckbox = (await findByRole("checkbox", {
+      name: "Toppings",
+    })) as HTMLInputElement;
+    expect(sizeCheckbox.checked).toBe(true);
+    expect(toppingsCheckbox.checked).toBe(false);
+  });
+
+  it("submits the toggled set of option_group_ids when the edit form is saved", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch([
+      { url: "/api/menu/categories", method: "GET", json: { data: [] } },
+      {
+        url: "/api/menu/option-groups",
+        method: "GET",
+        json: {
+          data: [
+            {
+              id: "g1",
+              store_id: "s1",
+              name: "Size",
+              min_select: 1,
+              max_select: 1,
+              sort_order: 0,
+            },
+            {
+              id: "g2",
+              store_id: "s1",
+              name: "Toppings",
+              min_select: 0,
+              max_select: 3,
+              sort_order: 1,
+            },
+          ],
+        },
+      },
+      {
+        url: "/api/menu/items",
+        method: "GET",
+        json: {
+          data: [
+            {
+              id: "i3",
+              name: "Udon",
+              price: 700,
+              is_available: true,
+              category_id: null,
+              sort_order: 0,
+              store_id: "s1",
+              description: null,
+              image_key: null,
+              option_group_ids: ["g1"],
+            },
+          ],
+        },
+      },
+      {
+        url: "/api/menu/items/i3",
+        method: "PATCH",
+        json: {
+          data: {
+            id: "i3",
+            name: "Udon",
+            price: 700,
+            is_available: true,
+            category_id: null,
+            sort_order: 0,
+            store_id: "s1",
+            description: null,
+            image_key: null,
+            option_group_ids: ["g2"],
+          },
+        },
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { findByRole } = render(() => <MenuManager />);
+    const editBtn = await findByRole("button", { name: /商品を編集 Udon/ });
+    await user.click(editBtn);
+
+    // Uncheck Size (was attached), check Toppings (was not).
+    const sizeCheckbox = await findByRole("checkbox", { name: "Size" });
+    const toppingsCheckbox = await findByRole("checkbox", {
+      name: "Toppings",
+    });
+    await user.click(sizeCheckbox);
+    await user.click(toppingsCheckbox);
+    await user.click(await findByRole("button", { name: "保存" }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/menu/items/i3",
+      expect.objectContaining({
+        method: "PATCH",
+        body: expect.stringContaining('"option_group_ids":["g2"]'),
+      }),
+    );
   });
 });
