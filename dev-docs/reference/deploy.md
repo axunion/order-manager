@@ -27,6 +27,17 @@ All four apps deploy to Cloudflare Workers with `wrangler deploy`. Deployment is
    wrangler secret put RESEND_API_KEY   # run inside apps/api
    wrangler secret put MAIL_FROM
    ```
+5. **Deploy-blocking — configure per-IP WAF rate limiting** on the API's
+   Cloudflare zone before exposing it publicly (see
+   [auth.md](./auth.md#magic-link-flow) for the per-store per-hour cap,
+   which is enforced in the Worker; this is the complementary per-IP
+   layer that only the platform can do well):
+   - `POST /api/auth/login` and `POST /api/stores`: e.g. 10 requests /
+     10 minutes per IP → block. Configure under **Security → WAF →
+     Rate limiting rules** in the Cloudflare dashboard (or `wrangler`
+     API) for the zone hosting the API Worker.
+   - This is config, not code — no test covers it; verify manually
+     against the deployed zone before announcing the pilot publicly.
 
 ## Deploying
 
