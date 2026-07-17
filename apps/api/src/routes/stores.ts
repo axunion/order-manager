@@ -56,13 +56,19 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
       );
     }
 
-    // Issue a signup Magic Link (also invalidates any previous unused signup token).
-    let token: string;
+    // Issue a signup Magic Link (also invalidates any previous unused signup
+    // token). A null return (MAGIC_LINK_HOURLY_CAP hit) is practically
+    // unreachable for a brand-new store_id, but is handled the same as an
+    // issuance failure for type-safety and future-proofing.
+    let token: string | null = null;
     try {
       token = await issueMagicLink(db, id, "signup");
     } catch {
-      // Token insert failed — compensate by removing the store row so the
-      // user can retry registration without hitting "email already registered".
+      token = null;
+    }
+    if (!token) {
+      // Compensate by removing the store row so the user can retry
+      // registration without hitting "email already registered".
       await db.delete(schema.stores).where(eq(schema.stores.id, id));
       return errorResponse(
         "INTERNAL_ERROR",
@@ -197,7 +203,7 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
         );
       }
 
-      let token: string;
+      let token: string | null;
       try {
         token = await issueMagicLink(db, storeId, "email_change", new_email);
       } catch {
@@ -208,30 +214,36 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
         );
       }
 
-      const baseUrl = new URL(c.req.url).origin;
-      const magicLinkUrl = `${baseUrl}${MAGIC_LINK_VERIFY_PATH}?token=${token}`;
+      // null means the store hit MAGIC_LINK_HOURLY_CAP — silently skip
+      // sending but keep the response identical to the success case, same
+      // anti-abuse posture as /api/auth/login.
+      let magicLinkUrl: string | undefined;
+      if (token) {
+        const baseUrl = new URL(c.req.url).origin;
+        magicLinkUrl = `${baseUrl}${MAGIC_LINK_VERIFY_PATH}?token=${token}`;
 
-      try {
-        await sendMagicLinkEmail(
-          { to: new_email, magicLinkUrl, purpose: "email_change" },
-          {
-            resendApiKey: c.env.RESEND_API_KEY,
-            mailFrom: c.env.MAIL_FROM,
-          },
-        );
-      } catch {
-        return errorResponse(
-          "INTERNAL_ERROR",
-          "メール送信に失敗しました。しばらくしてから再度お試しください。",
-          500,
-        );
+        try {
+          await sendMagicLinkEmail(
+            { to: new_email, magicLinkUrl, purpose: "email_change" },
+            {
+              resendApiKey: c.env.RESEND_API_KEY,
+              mailFrom: c.env.MAIL_FROM,
+            },
+          );
+        } catch {
+          return errorResponse(
+            "INTERNAL_ERROR",
+            "メール送信に失敗しました。しばらくしてから再度お試しください。",
+            500,
+          );
+        }
       }
 
       const isDev = c.env.ENVIRONMENT === "development";
       return c.json({
         data: {
           sent: true,
-          ...(isDev && { verify_url: magicLinkUrl }),
+          ...(isDev && magicLinkUrl && { verify_url: magicLinkUrl }),
         },
       });
     },

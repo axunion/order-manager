@@ -1,8 +1,15 @@
 import type { SeatSession, StoreSession } from "@order/core";
-import { MAGIC_LINK_TTL_MS, newId, now } from "@order/core";
+import {
+  MAGIC_LINK_HOURLY_CAP,
+  MAGIC_LINK_TTL_MS,
+  newId,
+  now,
+} from "@order/core";
 import type { Database } from "@order/db";
 import { schema } from "@order/db";
 import { and, eq, gt, isNull, ne } from "drizzle-orm";
+
+const HOUR_MS = 60 * 60 * 1000;
 
 /**
  * Whether the Set-Cookie Secure attribute should be set for this request.
@@ -28,25 +35,53 @@ export function isSecureRequest(
 }
 
 /**
- * Issues a Magic Link token for the given store and purpose.
- * Invalidates any previous unused token for the same store+purpose so only
- * one link is valid at a time.
+ * Issues a Magic Link token for the given store and purpose, or returns
+ * null if the store has hit MAGIC_LINK_HOURLY_CAP issuances in the last
+ * rolling hour (login, signup-resend, and email-change combined) — callers
+ * must treat null as "silently skip sending" and keep their response
+ * identical to the success case (anti-enumeration; a visible 429 would
+ * leak that the email/store exists).
+ *
+ * Supersedes (not deletes) any previous unused token for the same
+ * store+purpose so only one link is valid at a time: consumed tokens are
+ * already kept for audit, and `verify` already rejects any token with
+ * `used_at` set, so marking a superseded token used is equally safe —
+ * but unlike DELETE, the row (and its created_at) survives for the cap
+ * count above to see.
  *
  * `newEmail` is required for purpose 'email_change' — it is the pending
  * target address, applied to stores.email only once the token is verified.
  *
- * Insert-first ordering: the new token is written before old ones are deleted
- * so a DELETE failure leaves two temporarily valid tokens (harmless — the old
- * one expires naturally) while an INSERT failure leaves the old token intact.
+ * Insert-first ordering: the new token is written before old ones are
+ * superseded so an UPDATE failure leaves two temporarily valid tokens
+ * (harmless — the old one expires naturally) while an INSERT failure
+ * leaves the old token intact.
  */
 export async function issueMagicLink(
   db: Database,
   storeId: string,
   purpose: "signup" | "login" | "email_change",
   newEmail?: string,
-): Promise<string> {
+): Promise<string | null> {
+  const ts = now();
+
+  const recent = await db
+    .select({ id: schema.magicLinkTokens.id })
+    .from(schema.magicLinkTokens)
+    .where(
+      and(
+        eq(schema.magicLinkTokens.store_id, storeId),
+        gt(schema.magicLinkTokens.created_at, ts - HOUR_MS),
+      ),
+    )
+    .limit(MAGIC_LINK_HOURLY_CAP);
+  if (recent.length >= MAGIC_LINK_HOURLY_CAP) {
+    console.log(`[auth] rate-limited magic link for store ${storeId}`);
+    return null;
+  }
+
   const token = newId();
-  const expires_at = now() + MAGIC_LINK_TTL_MS;
+  const expires_at = ts + MAGIC_LINK_TTL_MS;
 
   await db.insert(schema.magicLinkTokens).values({
     id: newId(),
@@ -58,7 +93,8 @@ export async function issueMagicLink(
   });
 
   await db
-    .delete(schema.magicLinkTokens)
+    .update(schema.magicLinkTokens)
+    .set({ used_at: ts })
     .where(
       and(
         eq(schema.magicLinkTokens.store_id, storeId),

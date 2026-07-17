@@ -161,25 +161,29 @@ export const authRouter = new Hono<{ Bindings: Env }>()
       try {
         const purpose = store.status === "active" ? "login" : "signup";
         const token = await issueMagicLink(db, store.id, purpose);
-        // Magic Link verify URL is always on the API origin.
-        const baseUrl = new URL(c.req.url).origin;
-        magicLinkUrl = `${baseUrl}${MAGIC_LINK_VERIFY_PATH}?token=${token}`;
+        // null means the store hit MAGIC_LINK_HOURLY_CAP — skip sending but
+        // keep the response identical to the success case (anti-enumeration).
+        if (token) {
+          // Magic Link verify URL is always on the API origin.
+          const baseUrl = new URL(c.req.url).origin;
+          magicLinkUrl = `${baseUrl}${MAGIC_LINK_VERIFY_PATH}?token=${token}`;
 
-        // Defer email delivery so its latency is not observable to the caller.
-        // Without this, response time reveals whether the email address is registered.
-        const emailPromise = sendMagicLinkEmail(
-          { to: email, magicLinkUrl, purpose },
-          {
-            resendApiKey: c.env.RESEND_API_KEY,
-            mailFrom: c.env.MAIL_FROM,
-          },
-        ).catch(() => {
-          console.error(`[auth/login] Email delivery failed for ${email}`);
-        });
-        if (c.executionCtx?.waitUntil) {
-          c.executionCtx.waitUntil(emailPromise);
-        } else {
-          await emailPromise;
+          // Defer email delivery so its latency is not observable to the caller.
+          // Without this, response time reveals whether the email address is registered.
+          const emailPromise = sendMagicLinkEmail(
+            { to: email, magicLinkUrl, purpose },
+            {
+              resendApiKey: c.env.RESEND_API_KEY,
+              mailFrom: c.env.MAIL_FROM,
+            },
+          ).catch(() => {
+            console.error(`[auth/login] Email delivery failed for ${email}`);
+          });
+          if (c.executionCtx?.waitUntil) {
+            c.executionCtx.waitUntil(emailPromise);
+          } else {
+            await emailPromise;
+          }
         }
       } catch {
         // Silent failure — the "always 200" contract must hold even if token
