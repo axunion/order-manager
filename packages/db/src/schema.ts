@@ -97,6 +97,99 @@ export const menuItems = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
+// option_groups — store-level, reusable across items (e.g. "Size").
+// Per-item groups would force duplication across every item that shares
+// the same choices (e.g. every drink needs a "Size" group).
+// ---------------------------------------------------------------------------
+export const optionGroups = sqliteTable(
+  "option_groups",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    name: text("name").notNull(),
+    /** Minimum selections required from this group at order time. */
+    min_select: integer("min_select").notNull().default(0),
+    /** Maximum selections allowed from this group at order time. */
+    max_select: integer("max_select").notNull().default(1),
+    sort_order: integer("sort_order").notNull().default(0),
+  },
+  (table) => [
+    index("idx_option_groups_store").on(table.store_id),
+    check("option_groups_min_select_nonneg_chk", sql`${table.min_select} >= 0`),
+    check(
+      "option_groups_max_select_positive_chk",
+      sql`${table.max_select} > 0`,
+    ),
+    check(
+      "option_groups_min_le_max_chk",
+      sql`${table.min_select} <= ${table.max_select}`,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// options — individual choices within a group (e.g. "Large", +100 JPY).
+// price_delta may be negative; the invariant "unit price + selected deltas
+// stays positive" spans multiple rows, so it's enforced in the order
+// submission API, not a DB CHECK constraint.
+// ---------------------------------------------------------------------------
+export const options = sqliteTable(
+  "options",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    group_id: text("group_id")
+      .notNull()
+      .references(() => optionGroups.id),
+    name: text("name").notNull(),
+    /** JPY delta applied to unit price when selected; may be negative. */
+    price_delta: integer("price_delta").notNull().default(0),
+    sort_order: integer("sort_order").notNull().default(0),
+  },
+  (table) => [
+    index("idx_options_group").on(table.group_id),
+    index("idx_options_store").on(table.store_id),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// menu_item_option_groups — join: which groups are attached to which items.
+// No store_id: every access path starts from an already tenant-validated
+// item or group, unlike order_items/order_item_options below which are
+// queried in bulk across a store's history and need direct filtering.
+// ---------------------------------------------------------------------------
+export const menuItemOptionGroups = sqliteTable(
+  "menu_item_option_groups",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    menu_item_id: text("menu_item_id")
+      .notNull()
+      .references(() => menuItems.id),
+    group_id: text("group_id")
+      .notNull()
+      .references(() => optionGroups.id),
+    sort_order: integer("sort_order").notNull().default(0),
+  },
+  (table) => [
+    index("idx_menu_item_option_groups_item").on(table.menu_item_id),
+    uniqueIndex("idx_menu_item_option_groups_unique").on(
+      table.menu_item_id,
+      table.group_id,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // sessions — admin login sessions (one store can have many active sessions)
 // ---------------------------------------------------------------------------
 export const sessions = sqliteTable(
@@ -276,6 +369,8 @@ export const orderItems = sqliteTable(
     status: text("status", {
       enum: ["ordered", "served", "cancelled"],
     }).notNull(),
+    /** Customer free-text note, e.g. "no onions". ≤ 200 chars, enforced by Zod. */
+    note: text("note"), // nullable
     created_at: integer("created_at")
       .notNull()
       .$defaultFn(() => Date.now()), // Unix ms
@@ -288,6 +383,37 @@ export const orderItems = sqliteTable(
       sql`${table.status} IN ('ordered', 'served', 'cancelled')`,
     ),
     check("order_items_quantity_positive_chk", sql`${table.quantity} > 0`),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// order_item_options — snapshot of each selected option at order time.
+// Snapshot semantics extend to options: the bill never changes when the
+// owner edits option definitions after an order is placed.
+// store_id is denormalized for the same reason as order_items.
+// ---------------------------------------------------------------------------
+export const orderItemOptions = sqliteTable(
+  "order_item_options",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    order_item_id: text("order_item_id")
+      .notNull()
+      .references(() => orderItems.id),
+    /** snapshot of options.name at order time */
+    name_snapshot: text("name_snapshot").notNull(),
+    /** snapshot of option_groups.name at order time, e.g. "Size" */
+    group_name_snapshot: text("group_name_snapshot").notNull(),
+    /** snapshot of options.price_delta at order time */
+    price_delta_snapshot: integer("price_delta_snapshot").notNull(),
+  },
+  (table) => [
+    index("idx_order_item_options_order_item").on(table.order_item_id),
+    index("idx_order_item_options_store").on(table.store_id),
   ],
 );
 
