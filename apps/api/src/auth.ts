@@ -119,7 +119,9 @@ export async function deleteSession(
 
 /**
  * Looks up the seat matching the given qr_token.
- * Returns a SeatSession (id, store_id, name) or null if the token is invalid.
+ * Returns a SeatSession (id, store_id, name) or null if the token is
+ * invalid OR the seat has been retired (is_active = false) — a retired
+ * table's printed QR must 404 exactly like an unknown one.
  *
  * Selects only the columns needed — qr_token is never returned to callers.
  */
@@ -134,7 +136,9 @@ export async function getSeatByQrToken(
       name: schema.seats.name,
     })
     .from(schema.seats)
-    .where(eq(schema.seats.qr_token, token))
+    .where(
+      and(eq(schema.seats.qr_token, token), eq(schema.seats.is_active, true)),
+    )
     .limit(1);
   return result[0] ?? null;
 }

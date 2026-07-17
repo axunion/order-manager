@@ -133,11 +133,17 @@ export const CreateSeatInput = z.object({
 });
 export type CreateSeatInput = z.infer<typeof CreateSeatInput>;
 
+export const UpdateSeatInput = z.object({
+  name: displayName,
+});
+export type UpdateSeatInput = z.infer<typeof UpdateSeatInput>;
+
 export interface SeatResponse {
   id: string;
   store_id: string;
   name: string;
   qr_token: string;
+  is_active: boolean;
   created_at: number;
 }
 
