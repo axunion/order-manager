@@ -15,6 +15,18 @@ returned `items` array with `status: 'cancelled'` (for a strikethrough
 display) rather than disappearing; the order `total` already excludes
 them.
 
+Each menu item also carries `description` and `image_key` (both
+nullable). The order screen (`MenuList.tsx`) renders a fixed-aspect
+photo thumbnail — sized independently of the `<img>` load state, so it
+never causes layout shift — only when `image_key` is present; items
+without one keep a compact card with no reserved thumbnail space.
+Description text renders independently of the photo. Photo `alt` text
+carries the item name (the description doesn't describe what the dish
+looks like, so an empty `alt` would drop that information for screen
+reader users). See
+[menu-management.md](./menu-management.md#item-photos-apimenuitemsidimage-apimenuimageskey)
+for how `image_key` resolves to a servable URL.
+
 ### Adding items (`POST /api/order/:seatToken/items`)
 
 - Accepts 1..n items of `{ menu_item_id, quantity 1–99 }`.

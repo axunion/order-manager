@@ -421,11 +421,30 @@ The menu list is a flat, border-driven layout optimised for scanning.
 - Background: `#F8FAFC` (Surface Alt)
 - Border radius: `radius-md` (8px)
 - Padding: 8px 12px
-- Item name: 14px / 500 / `#0F172A` — flex 1, truncated with ellipsis
+- Thumbnail (only when a photo exists): 64×64px, `radius-sm`,
+  `object-fit: cover`, flex-shrink 0, placed before the info column
+- Item name: 14px / 500 / `#0F172A`
 - Price: 14px / `#0F172A` / `tabular-nums`
 - Category, sort order: 12px / `#94A3B8`
+- Description (only when set): 12px / `#94A3B8`, `white-space: pre-wrap`,
+  under the header row
 - Status badge: see §4 Status Badges
 - Unavailable row: `opacity: 0.6`
+- Per-row actions (停止/再開, image upload/change, image delete,
+  delete): right-aligned action column, `flex-wrap: wrap`
+
+**Inline edit** ("編集" `ghost` Button toggles the header row into a
+form): name, price, category `Select`, availability checkbox, sort
+order, and a description `textarea`, plus 保存/キャンセル — mirrors
+`SeatManager`'s rename-in-place pattern.
+
+**Image upload**: a styled `<label>` wrapping a visually-hidden file
+input (`image/jpeg,image/png,image/webp`), reading "画像を追加" /
+"画像を変更" / "アップロード中...". Files are downscaled client-side
+(canvas, max 1200px long edge, JPEG ~0.8 quality —
+`apps/admin/src/lib/downscaleImage.ts`) before upload. "画像を削除" is a
+`ConfirmDialog` (`secondary` trigger), shown only when the item has a
+photo.
 
 **Add-item form**
 
@@ -433,6 +452,7 @@ The menu list is a flat, border-driven layout optimised for scanning.
 - Separated from list by `border-bottom: 1px solid border` + `margin-bottom: space-5`
 - Field label: 12px / 500 / `#475569`
 - Input: see §4 Inputs
+- Description: `textarea`, same field styling as inputs, `resize: vertical`
 
 ---
 

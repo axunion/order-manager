@@ -79,11 +79,12 @@ simulated) full service day with zero manual DB intervention.
 **Goal:** the customer-facing menu competes with a laminated menu +
 photos, and customers stop needing to flag down staff.
 
-1. **Menu item descriptions & photos**
-   → [proposal](proposals/menu-photos-descriptions.md)
-   ([menu-management](specs/features/menu-management.md))
+1. **✅ Shipped — Menu item descriptions & photos**
+   → [menu-management](specs/features/menu-management.md#item-photos-apimenuitemsidimage-apimenuimageskey),
+   [customer-ordering](specs/features/customer-ordering.md),
+   [domain-model](specs/domain-model.md)
    Largest customer-UX gap; first feature to touch R2 storage.
-   Descriptions ride along as a plain schema addition.
+   Descriptions rode along as a plain schema addition.
 2. **Item options / modifiers**
    → [proposal](proposals/item-options.md)
    ([menu-management](specs/features/menu-management.md),
@@ -159,7 +160,8 @@ Sequenced against product needs rather than after them:
   smoke checklist (`dev-docs/reference/deploy.md` has the runbook).
   Auth rate limiting (Phase 2 item 6) is shipped; the WAF per-IP config
   step in that runbook is still a required manual action before public
-  exposure.
+  exposure. Phase 3 item 1 (menu photos) added a real R2 bucket
+  creation step to the same runbook.
 - **CI deploy** — manual `wrangler deploy` is fine until the pilot;
   automate on `main` once deploys become routine.
 - **Browser E2E** — API-level cycle coverage exists

@@ -19,7 +19,10 @@ stores 1 ──── * menu_categories 1 ──── * menu_items
   Magic Link before it takes effect.
 - **menu_categories / menu_items** — the sellable catalog. Items may be
   uncategorized (`category_id` nullable). Prices are tax-inclusive JPY
-  integers.
+  integers. Items also carry a nullable `description` (≤ 500 chars) and
+  a nullable `image_key` — an R2 object key, not a URL, so the serving
+  origin can change without touching data (see
+  [features/menu-management.md](./features/menu-management.md#item-photos-apimenuitemsidimage-apimenuimageskey)).
 - **seats** — physical tables. Each has an unguessable `qr_token` (UUID)
   that authenticates the customer order screen; `is_active` soft-deletes
   a retired seat (row and name survive forever for historical

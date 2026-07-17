@@ -250,8 +250,8 @@ mobile-optimized layout.
 
 ```
 ┌──────────────────────────────────────────────┐
-│  Item name                       ¥1,200      │
-│  Description (optional)                      │
+│ [photo]  Item name                ¥1,200     │
+│          Description (optional)               │
 │                      [−][ 1 ][＋]  [Order]  │
 └──────────────────────────────────────────────┘
 ```
@@ -259,7 +259,17 @@ mobile-optimized layout.
 - Background: `#FFFFFF`
 - Separator: `border-bottom: 1px solid #FAF6F1` (matches page bg — soft visual divider)
 - Padding: 12px 0
+- Photo thumbnail (only rendered when the item has one — items without a
+  photo keep the compact two-column layout, no reserved space): 72×72px
+  (`calc(space-8 + space-10)`), `aspect-ratio: 1/1`, `radius-sm` (6px),
+  `object-fit: cover`, `background: #FAF6F1` (matches page bg — fills the
+  box while the image loads, so there is no shift once it resolves),
+  `flex-shrink: 0`, placed before the info column. `loading="lazy"`.
+  `alt` carries the item name (the description doesn't describe what the
+  dish looks like, so it can't stand in for alt text).
 - Item name: 16px / 500 / `#2B221C`
+- Description (only when set): 12px / `#9A8E82` (Subtle Foreground),
+  `white-space: normal` — sits between name and price
 - Price: 14px / 600 / `#C0552F` (terracotta draws the eye to the price)
 - Stepper + button: flex row, right-aligned
 

@@ -20,9 +20,13 @@ All endpoints require the `session_token` cookie (`requireStore`).
   unavailable ones.
 - `POST` / `PATCH /:id` — fields: name (1–100 chars), price (positive
   integer, tax-inclusive JPY), optional `category_id`, `sort_order`,
-  `is_available` (default true).
+  `is_available` (default true), `description` (nullable, ≤ 500 chars,
+  trimmed; empty after trimming normalizes to null — `POST` omits to
+  null, `PATCH` omits to preserve the current value, explicit `null`
+  clears it).
 - `DELETE /:id` — permanent. Historical order items are unaffected
-  because they carry name/price snapshots.
+  because they carry name/price snapshots. Also best-effort-deletes the
+  item's R2 image object, if any.
 
 ### Availability toggle
 
@@ -30,11 +34,29 @@ All endpoints require the `session_token` cookie (`requireStore`).
 customer menu and blocks ordering it (409 with the item name), but keeps
 it visible in admin for re-enabling.
 
+### Item photos (`/api/menu/items/:id/image`, `/api/menu/images/:key`)
+
+- `PUT /api/menu/items/:id/image` (`requireStore`) — raw binary body,
+  `Content-Type` must be `image/jpeg | image/png | image/webp`, size
+  cap 1 MB (413 otherwise). Writes to the `IMAGES` R2 bucket under key
+  `menu/{store_id}/{item_id}/{random}.{ext}` (the random segment makes
+  each upload a new immutable URL, avoiding stale caches on
+  replacement), updates `menu_items.image_key`, and best-effort-deletes
+  the previous object. Returns the updated item.
+- `DELETE /api/menu/items/:id/image` — clears `image_key` and deletes
+  the object, best-effort. No-op success if the item has no image.
+- `GET /api/menu/images/:key` — public, no auth (menu photos are public
+  by nature; the key acts as an unguessable capability). Streams the R2
+  object with `Cache-Control: public, max-age=31536000, immutable` and
+  `X-Content-Type-Options: nosniff`. Rejects keys outside the `menu/`
+  prefix as defense-in-depth.
+- Resizing happens client-side (`apps/admin/src/lib/downscaleImage.ts`):
+  canvas downscale to max 1200 px long edge, re-encoded as JPEG at
+  ~0.8 quality, before upload. Workers cannot resize images natively
+  and Cloudflare Images is a paid product.
+
 ## Known limitations (→ roadmap)
 
-- **No description or photo** — items are name + price only. Photos need
-  an R2 bucket and upload flow. (Phase 3, the single biggest customer-UX
-  gap)
 - **No options/modifiers** — no size, toppings, doneness, or free-text
   requests. (Phase 3)
 - **No allergen / dietary info.** (Phase 3, alongside descriptions)
@@ -45,3 +67,16 @@ it visible in admin for re-enabling.
 - Deleting an item that sits in an *active* order is allowed; the order
   keeps its snapshot but the kitchen may be surprised. Acceptable for
   now; revisit with cancellation work. (Phase 2, note only)
+- **No optimistic-concurrency guard on image upload** — two concurrent
+  uploads to the *same* item (e.g. two admin tabs) can leak the losing
+  request's R2 object (it's written before the DB update, and only the
+  request that read the "old" key deletes it). Same-tenant only,
+  storage-cost impact, not a cross-tenant exposure. Revisit if it comes
+  up in practice.
+- Photo content is not verified to match its declared `Content-Type`
+  (no magic-byte check) — `X-Content-Type-Options: nosniff` on the
+  serving endpoint is the mitigation, not a substitute for validation.
+  Acceptable v1 trade-off given uploads require an authenticated store
+  session.
+- Allergen/dietary labels and category images / multiple photos per
+  item are deferred, not designed here.
