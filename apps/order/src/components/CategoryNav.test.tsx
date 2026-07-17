@@ -18,6 +18,8 @@ describe("CategoryNav", () => {
         name: "コーヒー",
         price: 500,
         sort_order: 0,
+        description: null,
+        image_key: null,
       },
       {
         id: "item2",
@@ -25,6 +27,8 @@ describe("CategoryNav", () => {
         name: "サンドイッチ",
         price: 700,
         sort_order: 0,
+        description: null,
+        image_key: null,
       },
     ];
 
@@ -48,6 +52,8 @@ describe("CategoryNav", () => {
         name: "サラダ",
         price: 400,
         sort_order: 0,
+        description: null,
+        image_key: null,
       },
       {
         id: "item4",
@@ -55,6 +61,8 @@ describe("CategoryNav", () => {
         name: "おまけ",
         price: 100,
         sort_order: 1,
+        description: null,
+        image_key: null,
       },
     ];
 
@@ -76,6 +84,8 @@ describe("CategoryNav", () => {
         name: "ラーメン",
         price: 800,
         sort_order: 0,
+        description: null,
+        image_key: null,
       },
     ];
     const scrollSpy = vi
@@ -108,6 +118,8 @@ describe("CategoryNav", () => {
         name: "牛丼",
         price: 600,
         sort_order: 0,
+        description: null,
+        image_key: null,
       },
       {
         id: "item7",
@@ -115,6 +127,8 @@ describe("CategoryNav", () => {
         name: "握り",
         price: 900,
         sort_order: 0,
+        description: null,
+        image_key: null,
       },
     ];
 

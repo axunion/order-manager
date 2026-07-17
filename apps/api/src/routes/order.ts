@@ -118,6 +118,8 @@ export const orderRouter = new Hono<SeatEnv>()
           name: schema.menuItems.name,
           price: schema.menuItems.price,
           sort_order: schema.menuItems.sort_order,
+          description: schema.menuItems.description,
+          image_key: schema.menuItems.image_key,
         })
         .from(schema.menuItems)
         .where(

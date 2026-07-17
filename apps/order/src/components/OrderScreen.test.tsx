@@ -149,6 +149,101 @@ describe("OrderScreen", () => {
     await findByText("紅茶");
   });
 
+  it("renders an item's description and photo when present", async () => {
+    const bootstrap = {
+      data: {
+        ...bootstrapWithMenu.data,
+        menu: {
+          categories: bootstrapWithMenu.data.menu.categories,
+          items: [
+            {
+              id: "item1",
+              category_id: "cat1",
+              name: "コーヒー",
+              price: 500,
+              sort_order: 0,
+              description: "深煎り豆を使用した自家製ブレンド",
+              image_key: "menu/store1/item1/abc.jpg",
+            },
+          ],
+        },
+      },
+    };
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([{ url: "/api/order/", method: "GET", json: bootstrap }]),
+    );
+
+    const { findByText, findByAltText } = render(() => (
+      <OrderScreen seatToken="test-token" />
+    ));
+    await findByText("深煎り豆を使用した自家製ブレンド");
+    const img = (await findByAltText("コーヒー")) as HTMLImageElement;
+    expect(img.src).toContain("/api/menu/images/menu/store1/item1/abc.jpg");
+  });
+
+  it("renders a compact item card with no photo or description text when absent", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        { url: "/api/order/", method: "GET", json: bootstrapWithMenu },
+      ]),
+    );
+
+    const { findByText, queryByRole, container } = render(() => (
+      <OrderScreen seatToken="test-token" />
+    ));
+    await findByText("コーヒー");
+    expect(queryByRole("img")).toBeNull();
+    // Guards the proposal's "compact layout" requirement: no reserved
+    // thumbnail space, not just no <img> tag.
+    expect(container.querySelector('[class*="itemThumb"]')).toBeNull();
+  });
+
+  it("renders a photo without a description, and a description without a photo, independently", async () => {
+    const bootstrap = {
+      data: {
+        ...bootstrapWithMenu.data,
+        menu: {
+          categories: bootstrapWithMenu.data.menu.categories,
+          items: [
+            {
+              id: "item1",
+              category_id: "cat1",
+              name: "コーヒー",
+              price: 500,
+              sort_order: 0,
+              description: null,
+              image_key: "menu/store1/item1/abc.jpg",
+            },
+            {
+              id: "item2",
+              category_id: "cat1",
+              name: "紅茶",
+              price: 450,
+              sort_order: 1,
+              description: "香り高い茶葉を使用",
+              image_key: null,
+            },
+          ],
+        },
+      },
+    };
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([{ url: "/api/order/", method: "GET", json: bootstrap }]),
+    );
+
+    const { findByAltText, findByText, queryByAltText } = render(() => (
+      <OrderScreen seatToken="test-token" />
+    ));
+    // コーヒー: photo present, no description text rendered for it.
+    await findByAltText("コーヒー");
+    // 紅茶: description present, no photo rendered for it.
+    await findByText("香り高い茶葉を使用");
+    expect(queryByAltText("紅茶")).toBeNull();
+  });
+
   it("shows empty state when menu has no items", async () => {
     vi.stubGlobal(
       "fetch",

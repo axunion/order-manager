@@ -17,7 +17,12 @@ import { createDb, schema } from "@order/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { app } from "../app";
-import { extractSessionToken, jsonInit, withAuth } from "../test-helpers";
+import {
+  extractSessionToken,
+  jsonInit,
+  seedStore,
+  withAuth,
+} from "../test-helpers";
 
 // ---------------------------------------------------------------------------
 // Shared setup helper
@@ -685,5 +690,84 @@ describe("Business cycle: order cancellation (注文キャンセル・修正)", 
     };
     expect(reorderBody.data.order.id).not.toBe(orderId);
     expect(reorderBody.data.order.status).toBe("open");
+  });
+});
+
+describe("Business cycle: menu item photos/descriptions (Phase 3)", () => {
+  it("returns description and image_key on the customer bootstrap menu", async () => {
+    const { session_token: token } = await seedStore(
+      `Photos Descriptions ${crypto.randomUUID()}`,
+    );
+
+    const withPhotoRes = await app.request(
+      "/api/menu/items",
+      withAuth(
+        token,
+        jsonInit("POST", {
+          name: "唐揚げ",
+          price: 500,
+          description: "国産鶏もも肉を使用",
+        }),
+      ),
+      env,
+    );
+    const { data: withPhoto } = (await withPhotoRes.json()) as {
+      data: { id: string };
+    };
+    const imageRes = await app.request(
+      `/api/menu/items/${withPhoto.id}/image`,
+      withAuth(token, {
+        method: "PUT",
+        headers: { "Content-Type": "image/jpeg" },
+        body: new Uint8Array([0xff, 0xd8, 0xff, 0xe0]),
+      }),
+      env,
+    );
+    const { data: uploaded } = (await imageRes.json()) as {
+      data: { image_key: string };
+    };
+
+    const withoutPhotoRes = await app.request(
+      "/api/menu/items",
+      withAuth(token, jsonInit("POST", { name: "ビール", price: 600 })),
+      env,
+    );
+    const { data: withoutPhoto } = (await withoutPhotoRes.json()) as {
+      data: { id: string };
+    };
+
+    const seatRes = await app.request(
+      "/api/seats",
+      withAuth(token, jsonInit("POST", { name: "テーブル1" })),
+      env,
+    );
+    const { data: seat } = (await seatRes.json()) as {
+      data: { qr_token: string };
+    };
+
+    const bootstrapRes = await app.request(
+      `/api/order/${seat.qr_token}`,
+      {},
+      env,
+    );
+    expect(bootstrapRes.status).toBe(200);
+    const bootstrapBody = (await bootstrapRes.json()) as {
+      data: {
+        menu: {
+          items: {
+            id: string;
+            description: string | null;
+            image_key: string | null;
+          }[];
+        };
+      };
+    };
+    const items = bootstrapBody.data.menu.items;
+    const karaage = items.find((i) => i.id === withPhoto.id);
+    const beer = items.find((i) => i.id === withoutPhoto.id);
+    expect(karaage?.description).toBe("国産鶏もも肉を使用");
+    expect(karaage?.image_key).toBe(uploaded.image_key);
+    expect(beer?.description).toBeNull();
+    expect(beer?.image_key).toBeNull();
   });
 });

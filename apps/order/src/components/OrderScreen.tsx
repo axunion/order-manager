@@ -19,6 +19,8 @@ export type MenuItem = {
   name: string;
   price: number;
   sort_order: number;
+  description: string | null;
+  image_key: string | null;
 };
 
 export type OrderItem = {

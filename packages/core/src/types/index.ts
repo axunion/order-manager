@@ -207,6 +207,8 @@ export interface BootstrapResponse {
       name: string;
       price: number;
       sort_order: number;
+      description: string | null;
+      image_key: string | null;
     }[];
   };
   order: OrderResponse | null;

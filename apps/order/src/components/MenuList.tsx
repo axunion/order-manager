@@ -1,3 +1,4 @@
+import { menuImageUrl } from "@order/core/client";
 import { Button } from "@order/ui";
 import { createSignal, For, Show } from "solid-js";
 import styles from "./MenuList.module.css";
@@ -77,8 +78,22 @@ export default function MenuList(props: {
                 <For each={group.items}>
                   {(item) => (
                     <li class={styles.item}>
+                      <Show when={item.image_key}>
+                        <div class={styles.itemThumb}>
+                          <img
+                            src={menuImageUrl(item.image_key ?? "")}
+                            alt={item.name}
+                            loading="lazy"
+                          />
+                        </div>
+                      </Show>
                       <div class={styles.itemInfo}>
                         <span class={styles.itemName}>{item.name}</span>
+                        <Show when={item.description}>
+                          <p class={styles.itemDescription}>
+                            {item.description}
+                          </p>
+                        </Show>
                         <span class={styles.itemPrice}>
                           ¥{item.price.toLocaleString()}
                         </span>
