@@ -29,8 +29,8 @@ Conventions:
 | Phase | Theme | Status |
 | --- | --- | --- |
 | 1 | Core business cycle | ✅ Shipped |
-| 2 | Operate a real day | 🔜 Next |
-| 3 | Customer experience | Planned |
+| 2 | Operate a real day | ✅ Shipped |
+| 3 | Customer experience | 🔜 Next |
 | 4 | Money: payments, receipts, adjustments | Planned |
 | 5 | Team, scale, and account lifecycle | Planned |
 | — | Engineering track (parallel) | Ongoing |
@@ -68,12 +68,11 @@ simulated) full service day with zero manual DB intervention.
    → [seats-and-qr](specs/features/seats-and-qr.md), [domain-model](specs/domain-model.md)
    Rename, retire seats that have order history, and rotate QR tokens
    for leaked codes.
-6. **Auth rate limiting** *(deploy-blocking, see engineering track)*
-   → [proposal](proposals/auth-rate-limiting.md)
-   ([authentication](specs/features/authentication.md))
-   Throttle signup/login per IP + per email to protect the Resend quota
-   and victims' inboxes. Includes a prerequisite change to
-   `issueMagicLink` (supersede instead of delete — see the proposal).
+6. **✅ Shipped — Auth rate limiting** *(deploy-blocking, see engineering track)*
+   → [authentication](specs/features/authentication.md), [reference/auth.md](reference/auth.md), [reference/deploy.md](reference/deploy.md)
+   Throttle signup/login/email-change per store (Worker-enforced) and
+   per IP (Cloudflare WAF, deploy config) to protect the Resend quota
+   and victims' inboxes.
 
 ## Phase 3 — Customer experience
 
@@ -158,7 +157,9 @@ Sequenced against product needs rather than after them:
 - **Production deployment** — *before or with Phase 2's pilot*: real D1
   `database_id`, production origins/cookie domain, Resend secrets, and a
   smoke checklist (`dev-docs/reference/deploy.md` has the runbook).
-  Auth rate limiting (Phase 2 item 6) gates public exposure.
+  Auth rate limiting (Phase 2 item 6) is shipped; the WAF per-IP config
+  step in that runbook is still a required manual action before public
+  exposure.
 - **CI deploy** — manual `wrangler deploy` is fine until the pilot;
   automate on `main` once deploys become routine.
 - **Browser E2E** — API-level cycle coverage exists

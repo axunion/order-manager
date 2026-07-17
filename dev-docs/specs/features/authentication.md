@@ -30,6 +30,7 @@ behavior.
   `waitUntil` so response latency doesn't leak registration status either.
 - Per store status: `active` → login link; `pending` → signup link
   resent; `suspended` / unknown → silently no email.
+- Rate limited per store: see "Magic Link issuance cap" below.
 
 ### Verification (`GET /api/auth/verify?token=`)
 
@@ -71,6 +72,39 @@ behavior.
   `new_email` column holds the pending target address for that purpose
   only (see [domain-model.md](../domain-model.md)).
 
+### Magic Link issuance cap (rate limiting)
+
+- `issueMagicLink` (`apps/api/src/auth.ts`) refuses to issue a token —
+  returning `null` instead — once a store has reached
+  `MAGIC_LINK_HOURLY_CAP` (5, `@order/core` `domain/auth.ts`) issuances
+  in the last rolling hour, across signup-resend, login, and
+  email-change combined. Callers (`POST /api/auth/login`,
+  `POST /api/stores/me/email-change`) skip sending on `null` but return
+  the exact same response as success — the anti-enumeration contract
+  must not change shape when a store is rate-limited.
+  `POST /api/stores` (initial signup) treats `null` as an issuance
+  failure (compensating store-row delete, 500) since a brand-new
+  `store_id` can never realistically hit the cap.
+- Superseding the previous unused token for a store+purpose (so only
+  one link is valid at a time) is done via `UPDATE ... SET used_at =
+  now()`, not `DELETE` — the row must survive for the cap's count
+  query to see it. `verify` already rejects any token with `used_at`
+  set, so this changes nothing about which tokens are accepted.
+- Complementary per-IP flood protection is Cloudflare WAF config, not
+  Worker code — see
+  [reference/deploy.md](../../reference/deploy.md).
+- Known gaps (both accepted trade-offs, not oversights): concurrent
+  requests can each pass the count check before any of their inserts
+  commit, so a client firing many requests in parallel can exceed the
+  cap (the original design explicitly accepts this — "an attacker
+  squeezing 6 instead of 5 emails changes nothing" — but unbounded
+  concurrency was not separately modeled); and the extra DB
+  read/write on the "issued" path versus the single read on the
+  "rate-limited" or "not-found" paths is a residual timing side
+  channel that a sufficiently patient attacker could use to infer
+  when a target has been rate-limited. Both are candidates for
+  hardening if abuse is observed in practice.
+
 ### Dev conveniences
 
 When `ENVIRONMENT === "development"` (explicit opt-in, never inferred),
@@ -89,7 +123,5 @@ works without email delivery.
   here — no roadmap phase assigned yet.
 - **No session revocation UI** ("log out everywhere") and no sliding
   expiry (`last_used_at` is reserved but unused). (Phase 5)
-- **No rate limiting** on login/signup/email-change — an attacker can
-  burn email quota or spam a victim inbox. (Phase 2, deploy-blocking)
 - **`suspended` has no admin tooling** — the state exists but nothing can
   set it. (Phase 5)

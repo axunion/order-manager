@@ -101,6 +101,18 @@ token, never a 500 or a distinguishing message.
 **Key point**: The `verify` redirect must be an absolute URL (`c.env.ADMIN_ORIGIN`) because the
 verify endpoint is served from `api.example.com`, not `admin.example.com`.
 
+**Rate limiting**: `issueMagicLink` (`apps/api/src/auth.ts`) caps
+issuance at `MAGIC_LINK_HOURLY_CAP` (5) per store per rolling hour,
+combining signup-resend/login/email-change, and returns `null` instead
+of a token once hit — every call site skips sending but returns its
+normal success response (anti-enumeration). Superseding the previous
+unused token per store+purpose is a `used_at` `UPDATE`, not a `DELETE`,
+so the row survives for that count query. See
+[specs/features/authentication.md](../specs/features/authentication.md#magic-link-issuance-cap-rate-limiting)
+for the accepted concurrency/timing trade-offs. Complementary per-IP
+WAF rate limiting is deploy config, not Worker code — see
+[deploy.md](./deploy.md).
+
 ### Local dev: skipping email delivery
 
 Resend delivery is implemented (`packages/core/src/domain/email.ts` calls the Resend REST
