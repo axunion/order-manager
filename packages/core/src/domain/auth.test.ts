@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildClearSessionCookie,
   buildSessionCookie,
+  MAGIC_LINK_HOURLY_CAP,
   MAGIC_LINK_TTL_MS,
   SESSION_TOKEN_COOKIE,
   SESSION_TTL_MS,
@@ -22,6 +23,12 @@ describe("SESSION_TTL_MS", () => {
 describe("MAGIC_LINK_TTL_MS", () => {
   it("is 15 minutes in milliseconds", () => {
     expect(MAGIC_LINK_TTL_MS).toBe(15 * 60 * 1000);
+  });
+});
+
+describe("MAGIC_LINK_HOURLY_CAP", () => {
+  it("is 5", () => {
+    expect(MAGIC_LINK_HOURLY_CAP).toBe(5);
   });
 });
 
