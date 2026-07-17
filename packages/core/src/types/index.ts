@@ -124,6 +124,8 @@ export const UpdateItemInput = z.object({
   category_id: z.string().nullable().optional(),
   sort_order: z.number().int().min(0).optional(),
   description: itemDescription.optional(),
+  // optional: omitting preserves current attachments; [] detaches all groups.
+  option_group_ids: z.array(z.string()).optional(),
 });
 export type UpdateItemInput = z.infer<typeof UpdateItemInput>;
 
@@ -137,6 +139,99 @@ export interface MenuItemResponse {
   sort_order: number;
   description: string | null;
   image_key: string | null;
+  /** Option groups currently attached to this item, for pre-filling the edit form. */
+  option_group_ids: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Menu — option groups & options
+// ---------------------------------------------------------------------------
+
+const optionGroupSelectFields = {
+  /** Minimum selections required from this group at order time. */
+  min_select: z.number().int().min(0).default(0),
+  /** Maximum selections allowed from this group at order time. */
+  max_select: z.number().int().positive().default(1),
+};
+
+const optionGroupSelectRefinement = {
+  message: "min_select must be <= max_select",
+  path: ["min_select"],
+};
+
+export const CreateOptionGroupInput = z
+  .object({
+    name: displayName,
+    sort_order: z.number().int().min(0).default(0),
+    ...optionGroupSelectFields,
+  })
+  .refine(
+    (data) => data.min_select <= data.max_select,
+    optionGroupSelectRefinement,
+  );
+export type CreateOptionGroupInput = z.infer<typeof CreateOptionGroupInput>;
+
+// Full-replace, not partial: mirrors UpdateCategoryInput's convention where
+// every field is required on PATCH, unlike UpdateItemInput's omit-preserves
+// fields. min_select/max_select must always be resent together.
+export const UpdateOptionGroupInput = z
+  .object({
+    name: displayName,
+    sort_order: z.number().int().min(0).default(0),
+    ...optionGroupSelectFields,
+  })
+  .refine(
+    (data) => data.min_select <= data.max_select,
+    optionGroupSelectRefinement,
+  );
+export type UpdateOptionGroupInput = z.infer<typeof UpdateOptionGroupInput>;
+
+export interface OptionGroupResponse {
+  id: string;
+  store_id: string;
+  name: string;
+  min_select: number;
+  max_select: number;
+  sort_order: number;
+}
+
+export const CreateOptionInput = z.object({
+  name: displayName,
+  /** JPY delta applied to the item's unit price when selected; may be negative. */
+  price_delta: z.number().int(),
+  sort_order: z.number().int().min(0).default(0),
+});
+export type CreateOptionInput = z.infer<typeof CreateOptionInput>;
+
+export const UpdateOptionInput = z.object({
+  name: displayName,
+  price_delta: z.number().int(),
+  sort_order: z.number().int().min(0).default(0),
+});
+export type UpdateOptionInput = z.infer<typeof UpdateOptionInput>;
+
+export interface OptionResponse {
+  id: string;
+  store_id: string;
+  group_id: string;
+  name: string;
+  price_delta: number;
+  sort_order: number;
+}
+
+/** An option group with its options, as embedded per-item in bootstrap. */
+export interface MenuItemOptionGroup {
+  id: string;
+  name: string;
+  min_select: number;
+  max_select: number;
+  sort_order: number;
+  options: {
+    id: string;
+    name: string;
+    price_delta: number;
+    sort_order: number;
+  }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -166,6 +261,17 @@ export interface SeatResponse {
 // Order (customer screen)
 // ---------------------------------------------------------------------------
 
+/** Trimmed customer note, ≤ 200 chars; empty after trimming normalizes to null. */
+const orderItemNote = z
+  .string()
+  .max(200)
+  .nullable()
+  .transform((s) => {
+    if (s === null) return null;
+    const trimmed = s.trim();
+    return trimmed.length === 0 ? null : trimmed;
+  });
+
 export const AddOrderItemsInput = z.object({
   items: z
     .array(
@@ -175,11 +281,20 @@ export const AddOrderItemsInput = z.object({
           .transform((s) => s.trim())
           .pipe(z.string().min(1)),
         quantity: z.number().int().min(1).max(99),
+        option_ids: z.array(z.string()).default([]),
+        note: orderItemNote.optional().default(null),
       }),
     )
     .min(1),
 });
 export type AddOrderItemsInput = z.infer<typeof AddOrderItemsInput>;
+
+export interface OrderItemOptionResponse {
+  id: string;
+  name_snapshot: string;
+  group_name_snapshot: string;
+  price_delta_snapshot: number;
+}
 
 export interface OrderItemResponse {
   id: string;
@@ -188,6 +303,8 @@ export interface OrderItemResponse {
   quantity: number;
   status: "ordered" | "served" | "cancelled";
   created_at: number;
+  options: OrderItemOptionResponse[];
+  note: string | null;
 }
 
 export interface OrderResponse {
@@ -209,6 +326,7 @@ export interface BootstrapResponse {
       sort_order: number;
       description: string | null;
       image_key: string | null;
+      option_groups: MenuItemOptionGroup[];
     }[];
   };
   order: OrderResponse | null;
@@ -223,6 +341,8 @@ export interface AdminOrderItemResponse {
   name_snapshot: string;
   unit_price_snapshot: number;
   quantity: number;
+  options: OrderItemOptionResponse[];
+  note: string | null;
   status: "ordered" | "served" | "cancelled";
   created_at: number;
 }

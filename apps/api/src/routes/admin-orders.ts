@@ -139,7 +139,10 @@ export const adminOrdersRouter = new Hono<AuthEnv>()
         seat_name: seatNameById.get(order.seat_id) ?? "",
         status: order.status,
         items: items.map(mapOrderItem),
-        total: sumOrderItems(items),
+        // TODO(Phase 3 item 2): fetch order_item_options per item once the
+        // option-attach/submission API lands; [] is correct until then (no
+        // order can carry options yet).
+        total: sumOrderItems(items.map((item) => ({ ...item, options: [] }))),
         created_at: order.created_at,
       };
     });
