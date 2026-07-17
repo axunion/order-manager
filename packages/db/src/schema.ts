@@ -169,6 +169,14 @@ export const seats = sqliteTable(
     name: text("name").notNull(),
     /** UUID v4 embedded in QR code URL: /order/:qr_token */
     qr_token: text("qr_token").notNull().unique(),
+    /**
+     * Soft-delete flag. Retired seats (false) keep their row — and name —
+     * forever so historical orders/sales stay intact; requireSeat rejects
+     * their qr_token like an unknown one.
+     */
+    is_active: integer("is_active", { mode: "boolean" })
+      .notNull()
+      .default(true),
     created_at: integer("created_at")
       .notNull()
       .$defaultFn(() => Date.now()), // Unix ms

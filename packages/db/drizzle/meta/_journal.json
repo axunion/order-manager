@@ -29,6 +29,13 @@
       "when": 1784214901827,
       "tag": "0003_zippy_blue_blade",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1784246391463,
+      "tag": "0004_keen_scorpion",
+      "breakpoints": true
     }
   ]
 }
