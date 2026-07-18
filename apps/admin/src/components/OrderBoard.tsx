@@ -9,6 +9,13 @@ import {
   onMount,
   Show,
 } from "solid-js";
+import {
+  createHighlightTracker,
+  formatElapsed,
+  loadSoundPreference,
+  playAlertBeep,
+  saveSoundPreference,
+} from "../lib/orderAlerts";
 import styles from "./OrderBoard.module.css";
 import StatusBadge from "./StatusBadge";
 
@@ -54,69 +61,36 @@ type AdminOrder = {
   created_at: number;
 };
 
-const SOUND_STORAGE_KEY = "order-alert-sound";
-const HIGHLIGHT_DURATION_MS = 10_000;
-const BASE_TITLE = "Order Manager — Admin";
+type AdminCall = {
+  id: string;
+  seat_name: string;
+  status: "open" | "resolved";
+  created_at: number;
+  resolved_at: number | null;
+};
 
-/** Plays a short beep via a Web Audio oscillator. No-ops if unsupported. */
-function playAlertBeep() {
-  try {
-    const AudioCtx =
-      window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext })
-        .webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const oscillator = ctx.createOscillator();
-    const gain = ctx.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.value = 880;
-    gain.gain.value = 0.2;
-    oscillator.connect(gain);
-    gain.connect(ctx.destination);
-    oscillator.start();
-    oscillator.stop(ctx.currentTime + 0.15);
-  } catch {
-    // Web Audio unsupported or blocked — the visual alert still fires.
-  }
-}
+const BASE_TITLE = "Order Manager — Admin";
 
 export default function OrderBoard() {
   const [orders, setOrders] = createSignal<AdminOrder[]>([]);
+  const [calls, setCalls] = createSignal<AdminCall[]>([]);
   const [error, setError] = createSignal("");
-  const [pendingItems, setPendingItems] = createSignal<Set<string>>(new Set());
-  const [soundEnabled, setSoundEnabled] = createSignal(
-    localStorage.getItem(SOUND_STORAGE_KEY) === "true",
+  const [pendingActions, setPendingActions] = createSignal<Set<string>>(
+    new Set(),
   );
-  const [highlightedOrderIds, setHighlightedOrderIds] = createSignal<
-    Set<string>
-  >(new Set());
+  const [soundEnabled, setSoundEnabled] = createSignal(loadSoundPreference());
+  const { highlightedIds, highlight } = createHighlightTracker();
 
-  // Not signals: only used inside loadOrders to diff polls, never read in JSX.
+  // Not signals: only used inside loadOrders/loadCalls to diff polls, never
+  // read in JSX.
   let watermark = -Infinity;
   let hasLoadedOnce = false;
-  const highlightTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  let callWatermark = -Infinity;
+  let hasLoadedCallsOnce = false;
 
-  function highlightOrders(orderIds: Set<string>) {
-    setHighlightedOrderIds((prev) => new Set([...prev, ...orderIds]));
-    for (const id of orderIds) {
-      // A second alert on the same order before its highlight expires
-      // restarts the 10s window instead of letting the old timer clear
-      // the newer highlight early.
-      const existing = highlightTimers.get(id);
-      if (existing) clearTimeout(existing);
-      highlightTimers.set(
-        id,
-        setTimeout(() => {
-          setHighlightedOrderIds((prev) => {
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-          });
-          highlightTimers.delete(id);
-        }, HIGHLIGHT_DURATION_MS),
-      );
-    }
+  function triggerAlert(ids: Set<string>) {
+    if (ids.size === 0) return;
+    highlight(ids);
     if (soundEnabled()) {
       playAlertBeep();
     }
@@ -143,9 +117,7 @@ export default function OrderBoard() {
           (max, i) => Math.max(max, i.created_at),
           watermark,
         );
-        if (newOrderIds.size > 0) {
-          highlightOrders(newOrderIds);
-        }
+        triggerAlert(newOrderIds);
       }
       setOrders(result.data);
       setError("");
@@ -155,13 +127,42 @@ export default function OrderBoard() {
     }
   }
 
+  async function loadCalls() {
+    const result = await apiFetch<AdminCall[]>("/api/admin/calls");
+    if (result.ok && result.data) {
+      if (!hasLoadedCallsOnce) {
+        // Initial load: set the watermark silently, no alert.
+        callWatermark = result.data.reduce(
+          (max, c) => Math.max(max, c.created_at),
+          callWatermark,
+        );
+        hasLoadedCallsOnce = true;
+      } else {
+        const newCallIds = new Set(
+          result.data
+            .filter((c) => c.created_at > callWatermark)
+            .map((c) => c.id),
+        );
+        callWatermark = result.data.reduce(
+          (max, c) => Math.max(max, c.created_at),
+          callWatermark,
+        );
+        triggerAlert(newCallIds);
+      }
+      setCalls(result.data);
+    } else {
+      setCalls([]);
+    }
+  }
+
   onMount(() => {
     loadOrders();
-    const timerId = setInterval(loadOrders, 5000);
-    onCleanup(() => clearInterval(timerId));
+    loadCalls();
+    const orderTimerId = setInterval(loadOrders, 5000);
+    const callTimerId = setInterval(loadCalls, 5000);
     onCleanup(() => {
-      for (const timer of highlightTimers.values()) clearTimeout(timer);
-      highlightTimers.clear();
+      clearInterval(orderTimerId);
+      clearInterval(callTimerId);
     });
     onCleanup(() => {
       document.title = BASE_TITLE;
@@ -183,7 +184,7 @@ export default function OrderBoard() {
   const toggleSound = () => {
     const next = !soundEnabled();
     setSoundEnabled(next);
-    localStorage.setItem(SOUND_STORAGE_KEY, String(next));
+    saveSoundPreference(next);
     if (next) {
       // The toggle-on click doubles as the audio-unlocking user gesture.
       playAlertBeep();
@@ -195,7 +196,7 @@ export default function OrderBoard() {
     path: string,
     failureMessage: string,
   ) => {
-    setPendingItems((prev) => new Set([...prev, itemId]));
+    setPendingActions((prev) => new Set([...prev, itemId]));
     try {
       const result = await apiFetch(path, { method: "PATCH" });
       if (!result.ok) {
@@ -204,7 +205,7 @@ export default function OrderBoard() {
       }
       await loadOrders();
     } finally {
-      setPendingItems((prev) => {
+      setPendingActions((prev) => {
         const next = new Set(prev);
         next.delete(itemId);
         return next;
@@ -244,6 +245,26 @@ export default function OrderBoard() {
     await loadOrders();
   };
 
+  const handleResolveCall = async (callId: string) => {
+    setPendingActions((prev) => new Set([...prev, callId]));
+    try {
+      const result = await apiFetch(`/api/admin/calls/${callId}/resolve`, {
+        method: "PATCH",
+      });
+      if (!result.ok) {
+        setError(result.message ?? "呼び出しの解決に失敗しました。");
+        return;
+      }
+      await loadCalls();
+    } finally {
+      setPendingActions((prev) => {
+        const next = new Set(prev);
+        next.delete(callId);
+        return next;
+      });
+    }
+  };
+
   const formatCurrency = (amount: number) =>
     `¥${amount.toLocaleString("ja-JP")}`;
 
@@ -264,6 +285,32 @@ export default function OrderBoard() {
         <ErrorAlert>{error()}</ErrorAlert>
       </Show>
 
+      <Show when={calls().length > 0}>
+        <ul class={styles.callBanner}>
+          <For each={calls()}>
+            {(call) => (
+              <li
+                class={`${styles.callBannerItem ?? ""} ${highlightedIds().has(call.id) ? (styles.callBannerItemNewAlert ?? "") : ""}`}
+              >
+                <span class={styles.pulseDot} aria-hidden="true" />
+                <span class={styles.callBannerSeatName}>{call.seat_name}</span>
+                <span class={styles.callBannerElapsed}>
+                  {formatElapsed(call.created_at)}
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={pendingActions().has(call.id)}
+                  onClick={() => handleResolveCall(call.id)}
+                >
+                  {pendingActions().has(call.id) ? "処理中..." : "対応済み"}
+                </Button>
+              </li>
+            )}
+          </For>
+        </ul>
+      </Show>
+
       <Show when={orders().length === 0 && !error()}>
         <div class={styles.orderBoardEmpty}>
           <p>アクティブな注文はありません</p>
@@ -274,7 +321,7 @@ export default function OrderBoard() {
         <For each={orders()}>
           {(order) => (
             <article
-              class={`${styles.orderCard ?? ""} ${order.status === "payment_requested" ? (styles.orderCardWarning ?? "") : (styles.orderCardAlert ?? "")} ${highlightedOrderIds().has(order.id) ? (styles.orderCardNewAlert ?? "") : ""}`}
+              class={`${styles.orderCard ?? ""} ${order.status === "payment_requested" ? (styles.orderCardWarning ?? "") : (styles.orderCardAlert ?? "")} ${highlightedIds().has(order.id) ? (styles.orderCardNewAlert ?? "") : ""}`}
             >
               <div class={styles.orderCardHeader}>
                 <Show when={order.status === "open"}>
@@ -330,10 +377,10 @@ export default function OrderBoard() {
                               <Button
                                 variant="success"
                                 size="sm"
-                                disabled={pendingItems().has(item.id)}
+                                disabled={pendingActions().has(item.id)}
                                 onClick={() => handleServe(item.id)}
                               >
-                                {pendingItems().has(item.id)
+                                {pendingActions().has(item.id)
                                   ? "処理中..."
                                   : "提供済み"}
                               </Button>
@@ -342,10 +389,10 @@ export default function OrderBoard() {
                             <Button
                               variant="secondary"
                               size="sm"
-                              disabled={pendingItems().has(item.id)}
+                              disabled={pendingActions().has(item.id)}
                               onClick={() => handleUnserve(item.id)}
                             >
-                              {pendingItems().has(item.id)
+                              {pendingActions().has(item.id)
                                 ? "処理中..."
                                 : "提供取消"}
                             </Button>

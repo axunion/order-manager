@@ -508,6 +508,187 @@ describe("OrderBoard", () => {
   });
 });
 
+describe("OrderBoard call banner", () => {
+  const mockCall = {
+    id: "call-1",
+    seat_name: "テーブル9",
+    status: "open",
+    created_at: Date.now() - 30_000,
+    resolved_at: null,
+  };
+
+  it("renders an open call with the seat name and elapsed time", async () => {
+    vi.useFakeTimers();
+    const now = Date.now();
+    vi.setSystemTime(now);
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        { url: "/api/admin/orders", method: "GET", json: { data: [] } },
+        {
+          url: "/api/admin/calls",
+          method: "GET",
+          json: { data: [{ ...mockCall, created_at: now - 30_000 }] },
+        },
+      ]),
+    );
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByText("テーブル9")).toBeTruthy();
+    expect(screen.getByText("30秒前")).toBeTruthy();
+  });
+
+  it("does not render the call banner when there are no open calls", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        { url: "/api/admin/orders", method: "GET", json: { data: [] } },
+        { url: "/api/admin/calls", method: "GET", json: { data: [] } },
+      ]),
+    );
+
+    const { findByText, queryByText, container } = render(() => <OrderBoard />);
+    await findByText(/アクティブな注文はありません/);
+    expect(queryByText("テーブル9")).toBeNull();
+    expect(container.querySelector('[class*="callBanner"]')).toBeNull();
+  });
+
+  it("resolves a call via the 対応済み button", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch([
+      { url: "/api/admin/orders", method: "GET", json: { data: [] } },
+      { url: "/api/admin/calls", method: "GET", json: { data: [mockCall] } },
+      {
+        url: "/api/admin/calls/call-1/resolve",
+        method: "PATCH",
+        json: {
+          data: { id: "call-1", status: "resolved", resolved_at: Date.now() },
+        },
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { findByRole } = render(() => <OrderBoard />);
+    const resolveBtn = await findByRole("button", { name: "対応済み" });
+    await user.click(resolveBtn);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/admin/calls/call-1/resolve",
+      expect.objectContaining({ method: "PATCH" }),
+    );
+  });
+
+  it("shows an error when resolving a call fails", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        { url: "/api/admin/orders", method: "GET", json: { data: [] } },
+        {
+          url: "/api/admin/calls",
+          method: "GET",
+          json: { data: [mockCall] },
+        },
+        {
+          url: "/api/admin/calls/call-1/resolve",
+          method: "PATCH",
+          ok: false,
+          json: {
+            error: { code: "NOT_FOUND", message: "呼び出しが見つかりません。" },
+          },
+        },
+      ]),
+    );
+
+    const { findByRole } = render(() => <OrderBoard />);
+    const resolveBtn = await findByRole("button", { name: "対応済み" });
+    await user.click(resolveBtn);
+
+    const alert = await findByRole("alert");
+    expect(alert.textContent).toContain("呼び出しが見つかりません");
+  });
+});
+
+describe("OrderBoard new-call alerts", () => {
+  function sequentialCallFetch(callResponses: unknown[][]) {
+    let callIndex = 0;
+    return vi.fn().mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/api/admin/calls")) {
+        const data =
+          callResponses[Math.min(callIndex, callResponses.length - 1)];
+        callIndex += 1;
+        return Promise.resolve({ ok: true, json: async () => ({ data }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ data: [] }) });
+    });
+  }
+
+  const initialCall = {
+    id: "call-1",
+    seat_name: "テーブル1",
+    status: "open",
+    created_at: 1000,
+    resolved_at: null,
+  };
+  const newCall = {
+    id: "call-2",
+    seat_name: "テーブル2",
+    status: "open",
+    created_at: 2000,
+    resolved_at: null,
+  };
+
+  it("sets the call watermark on first load without highlighting", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", sequentialCallFetch([[initialCall]]));
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const item = screen.getByText("テーブル1").closest("li");
+    expect(item?.className).not.toMatch(/callBannerItemNewAlert/);
+  });
+
+  it("highlights and beeps when a new call arrives on a later poll", async () => {
+    vi.useFakeTimers();
+    localStorage.setItem("order-alert-sound", "true");
+    const audioCtor = vi.fn().mockImplementation(() => new MockAudioContext());
+    vi.stubGlobal("AudioContext", audioCtor);
+    vi.stubGlobal(
+      "fetch",
+      sequentialCallFetch([[initialCall], [initialCall, newCall]]),
+    );
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+    audioCtor.mockClear(); // ignore any unlock-gesture call from init
+    await vi.advanceTimersByTimeAsync(5000);
+
+    const newItem = screen.getByText("テーブル2").closest("li");
+    const oldItem = screen.getByText("テーブル1").closest("li");
+    expect(newItem?.className).toMatch(/callBannerItemNewAlert/);
+    expect(oldItem?.className).not.toMatch(/callBannerItemNewAlert/);
+    expect(audioCtor).toHaveBeenCalled();
+  });
+
+  it("does not re-highlight or beep when a later poll returns no calls newer than the watermark", async () => {
+    vi.useFakeTimers();
+    const audioCtor = vi.fn().mockImplementation(() => new MockAudioContext());
+    vi.stubGlobal("AudioContext", audioCtor);
+    vi.stubGlobal("fetch", sequentialCallFetch([[initialCall], [initialCall]]));
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+    audioCtor.mockClear();
+    await vi.advanceTimersByTimeAsync(5000);
+
+    const item = screen.getByText("テーブル1").closest("li");
+    expect(item?.className).not.toMatch(/callBannerItemNewAlert/);
+    expect(audioCtor).not.toHaveBeenCalled();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // New-order alerts
 // ---------------------------------------------------------------------------
@@ -530,7 +711,14 @@ class MockAudioContext {
 
 function sequentialFetch(responses: unknown[][]) {
   let call = 0;
-  return vi.fn().mockImplementation(() => {
+  return vi.fn().mockImplementation((url: string) => {
+    // OrderBoard also polls /api/admin/calls independently of the order
+    // sequence under test here; these tests aren't exercising call-banner
+    // behavior, so give it an empty, unrelated response rather than
+    // advancing (and desyncing) the shared `call` counter.
+    if (typeof url === "string" && url.includes("/api/admin/calls")) {
+      return Promise.resolve({ ok: true, json: async () => ({ data: [] }) });
+    }
     const data = responses[Math.min(call, responses.length - 1)];
     call += 1;
     return Promise.resolve({ ok: true, json: async () => ({ data }) });
