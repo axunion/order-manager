@@ -5,6 +5,7 @@ packages:
 # Shared dependency versions — workspaces reference these as "catalog:".
 catalog:
   "@cloudflare/workers-types": ^4.20260621.1
+  "@kobalte/core": ^0.13.11
   "@solidjs/router": ^0.15.3
   "@solidjs/testing-library": ^0.8.10
   "@testing-library/user-event": ^14.6.1

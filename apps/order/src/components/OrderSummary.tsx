@@ -1,6 +1,21 @@
 import { For, Show } from "solid-js";
-import type { Order } from "./OrderScreen";
+import type { Order, OrderItem } from "./OrderScreen";
 import styles from "./OrderSummary.module.css";
+
+function lineTotal(item: OrderItem): number {
+  const optionDelta = item.options.reduce(
+    (sum, option) => sum + option.price_delta_snapshot,
+    0,
+  );
+  return (item.unit_price_snapshot + optionDelta) * item.quantity;
+}
+
+/** Formats a price delta as a signed yen amount, or "" when it's 0. */
+function formatDelta(delta: number): string {
+  if (delta === 0) return "";
+  const sign = delta > 0 ? "+" : "-";
+  return `${sign}¥${Math.abs(delta).toLocaleString()}`;
+}
 
 export default function OrderSummary(props: { order: Order | null }) {
   return (
@@ -17,13 +32,33 @@ export default function OrderSummary(props: { order: Order | null }) {
               <li
                 class={`${styles.item} ${item.status === "cancelled" ? styles.itemCancelled : ""}`}
               >
-                <span class={styles.itemName}>{item.name_snapshot}</span>
-                <span class={styles.itemQty}>× {item.quantity}</span>
-                <span class={styles.itemPrice}>
-                  ¥{(item.unit_price_snapshot * item.quantity).toLocaleString()}
-                </span>
-                <Show when={item.status === "cancelled"}>
-                  <span class={styles.itemCancelledLabel}>取消済み</span>
+                <div class={styles.itemRow}>
+                  <span class={styles.itemName}>{item.name_snapshot}</span>
+                  <span class={styles.itemQty}>× {item.quantity}</span>
+                  <span class={styles.itemPrice}>
+                    ¥{lineTotal(item).toLocaleString()}
+                  </span>
+                  <Show when={item.status === "cancelled"}>
+                    <span class={styles.itemCancelledLabel}>取消済み</span>
+                  </Show>
+                </div>
+                <Show when={item.options.length > 0}>
+                  <ul class={styles.optionList}>
+                    <For each={item.options}>
+                      {(option) => (
+                        <li class={styles.optionItem}>
+                          {option.name_snapshot}
+                          <Show when={option.price_delta_snapshot !== 0}>
+                            {" "}
+                            ({formatDelta(option.price_delta_snapshot)})
+                          </Show>
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                </Show>
+                <Show when={item.note}>
+                  <p class={styles.itemNote}>{item.note}</p>
                 </Show>
               </li>
             )}

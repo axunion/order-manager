@@ -13,6 +13,22 @@ export type Category = {
   sort_order: number;
 };
 
+export type MenuItemOption = {
+  id: string;
+  name: string;
+  price_delta: number;
+  sort_order: number;
+};
+
+export type MenuItemOptionGroup = {
+  id: string;
+  name: string;
+  min_select: number;
+  max_select: number;
+  sort_order: number;
+  options: MenuItemOption[];
+};
+
 export type MenuItem = {
   id: string;
   category_id: string | null;
@@ -21,6 +37,14 @@ export type MenuItem = {
   sort_order: number;
   description: string | null;
   image_key: string | null;
+  option_groups: MenuItemOptionGroup[];
+};
+
+export type OrderItemOption = {
+  id: string;
+  name_snapshot: string;
+  group_name_snapshot: string;
+  price_delta_snapshot: number;
 };
 
 export type OrderItem = {
@@ -30,6 +54,8 @@ export type OrderItem = {
   quantity: number;
   status: "ordered" | "served" | "cancelled";
   created_at: number;
+  options: OrderItemOption[];
+  note: string | null;
 };
 
 export type Order = {
@@ -45,7 +71,12 @@ type BootstrapData = {
   order: Order | null;
 };
 
-export type AddItemsInput = { menu_item_id: string; quantity: number }[];
+export type AddItemsInput = {
+  menu_item_id: string;
+  quantity: number;
+  option_ids?: string[];
+  note?: string | null;
+}[];
 
 export type MenuGroup = {
   key: string;

@@ -11,6 +11,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@kobalte/core": "catalog:",
     "@order/core": "workspace:*",
     "@order/ui": "workspace:*",
     "@solidjs/router": "catalog:",

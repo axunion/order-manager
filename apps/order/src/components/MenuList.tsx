@@ -1,8 +1,9 @@
 import { menuImageUrl } from "@order/core/client";
 import { Button } from "@order/ui";
 import { createSignal, For, Show } from "solid-js";
+import ItemDetailSheet from "./ItemDetailSheet";
 import styles from "./MenuList.module.css";
-import type { AddItemsInput, MenuGroup } from "./OrderScreen";
+import type { AddItemsInput, MenuGroup, MenuItem } from "./OrderScreen";
 import { categoryElementId } from "./OrderScreen";
 import QuantityStepper from "./QuantityStepper";
 
@@ -16,6 +17,7 @@ export default function MenuList(props: {
   const [submitting, setSubmitting] = createSignal(false);
   const [error, setError] = createSignal("");
   const [success, setSuccess] = createSignal("");
+  const [detailItem, setDetailItem] = createSignal<MenuItem | null>(null);
 
   function getQuantity(itemId: string): number {
     return quantities()[itemId] ?? 1;
@@ -48,6 +50,18 @@ export default function MenuList(props: {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleDetailAddItems(
+    items: AddItemsInput,
+  ): Promise<{ ok: boolean; message?: string }> {
+    setError("");
+    const result = await props.onAddItems(items);
+    if (result.ok) {
+      setSuccess("注文しました！");
+      setTimeout(() => setSuccess(""), 2000);
+    }
+    return result;
   }
 
   return (
@@ -98,31 +112,47 @@ export default function MenuList(props: {
                           ¥{item.price.toLocaleString()}
                         </span>
                       </div>
-                      <div class={styles.itemOrder}>
-                        <QuantityStepper
-                          itemName={item.name}
-                          quantity={getQuantity(item.id)}
-                          decreaseDisabled={
-                            submitting() || getQuantity(item.id) <= 1
-                          }
-                          increaseDisabled={submitting()}
-                          onDecrease={() =>
-                            setQuantity(item.id, getQuantity(item.id) - 1)
-                          }
-                          onIncrease={() =>
-                            setQuantity(item.id, getQuantity(item.id) + 1)
-                          }
-                        />
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          aria-label={`${item.name}を注文する`}
-                          onClick={() => handleOrderItem(item.id)}
-                          disabled={submitting()}
-                        >
-                          {submitting() ? "注文中..." : "注文する"}
-                        </Button>
-                      </div>
+                      <Show
+                        when={item.option_groups.length === 0}
+                        fallback={
+                          <div class={styles.itemOrder}>
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              aria-label={`${item.name}のオプションを選ぶ`}
+                              onClick={() => setDetailItem(item)}
+                            >
+                              オプションを選ぶ
+                            </Button>
+                          </div>
+                        }
+                      >
+                        <div class={styles.itemOrder}>
+                          <QuantityStepper
+                            itemName={item.name}
+                            quantity={getQuantity(item.id)}
+                            decreaseDisabled={
+                              submitting() || getQuantity(item.id) <= 1
+                            }
+                            increaseDisabled={submitting()}
+                            onDecrease={() =>
+                              setQuantity(item.id, getQuantity(item.id) - 1)
+                            }
+                            onIncrease={() =>
+                              setQuantity(item.id, getQuantity(item.id) + 1)
+                            }
+                          />
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            aria-label={`${item.name}を注文する`}
+                            onClick={() => handleOrderItem(item.id)}
+                            disabled={submitting()}
+                          >
+                            {submitting() ? "注文中..." : "注文する"}
+                          </Button>
+                        </div>
+                      </Show>
                     </li>
                   )}
                 </For>
@@ -130,6 +160,17 @@ export default function MenuList(props: {
             </div>
           )}
         </For>
+      </Show>
+
+      <Show when={detailItem()}>
+        {(item) => (
+          <ItemDetailSheet
+            item={item()}
+            open={true}
+            onOpenChange={(open) => !open && setDetailItem(null)}
+            onAddItems={handleDetailAddItems}
+          />
+        )}
       </Show>
     </section>
   );

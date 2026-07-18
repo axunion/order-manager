@@ -11,7 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@kobalte/core": "^0.13.11",
+    "@kobalte/core": "catalog:",
     "@order/core": "workspace:*",
     "solid-js": "catalog:"
   },

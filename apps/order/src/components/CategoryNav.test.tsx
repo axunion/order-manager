@@ -20,6 +20,7 @@ describe("CategoryNav", () => {
         sort_order: 0,
         description: null,
         image_key: null,
+        option_groups: [],
       },
       {
         id: "item2",
@@ -29,6 +30,7 @@ describe("CategoryNav", () => {
         sort_order: 0,
         description: null,
         image_key: null,
+        option_groups: [],
       },
     ];
 
@@ -54,6 +56,7 @@ describe("CategoryNav", () => {
         sort_order: 0,
         description: null,
         image_key: null,
+        option_groups: [],
       },
       {
         id: "item4",
@@ -63,6 +66,7 @@ describe("CategoryNav", () => {
         sort_order: 1,
         description: null,
         image_key: null,
+        option_groups: [],
       },
     ];
 
@@ -86,6 +90,7 @@ describe("CategoryNav", () => {
         sort_order: 0,
         description: null,
         image_key: null,
+        option_groups: [],
       },
     ];
     const scrollSpy = vi
@@ -120,6 +125,7 @@ describe("CategoryNav", () => {
         sort_order: 0,
         description: null,
         image_key: null,
+        option_groups: [],
       },
       {
         id: "item7",
@@ -129,6 +135,7 @@ describe("CategoryNav", () => {
         sort_order: 0,
         description: null,
         image_key: null,
+        option_groups: [],
       },
     ];
 
