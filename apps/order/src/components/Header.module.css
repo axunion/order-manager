@@ -5,6 +5,14 @@
   background: var(--color-primary);
   color: var(--color-primary-foreground);
   padding: var(--space-4) var(--space-6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.titleGroup {
+  min-width: 0;
 }
 
 .title {
@@ -21,4 +29,24 @@
   margin: var(--space-1) 0 0;
   font-size: var(--text-xs);
   opacity: 0.8;
+}
+
+.callGroup {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+.callStatus {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--color-primary-foreground);
+}
+
+.callButton {
+  white-space: normal;
+  text-align: center;
 }

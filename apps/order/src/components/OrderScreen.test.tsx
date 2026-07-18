@@ -1,10 +1,11 @@
-import { render } from "@solidjs/testing-library";
+import { render, screen } from "@solidjs/testing-library";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import OrderScreen from "./OrderScreen";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 type MockRoute = {
@@ -41,6 +42,7 @@ const bootstrapEmpty = {
     seat: { name: "テーブル1" },
     menu: { categories: [], items: [] },
     order: null,
+    call: null,
   },
 };
 
@@ -69,6 +71,7 @@ const bootstrapWithMenu = {
       ],
     },
     order: null,
+    call: null,
   },
 };
 
@@ -105,6 +108,7 @@ const bootstrapWithOrder = {
       ],
       total: 1600,
     },
+    call: null,
   },
 };
 
@@ -461,5 +465,123 @@ describe("OrderScreen", () => {
       expect.stringContaining("/request-payment"),
       expect.objectContaining({ method: "PATCH" }),
     );
+  });
+});
+
+describe("OrderScreen call staff", () => {
+  it("shows the waiting status from bootstrap immediately, without tapping the button", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/order/",
+          method: "GET",
+          json: {
+            data: {
+              ...bootstrapEmpty.data,
+              call: { id: "call1", status: "open", created_at: 1000 },
+            },
+          },
+        },
+      ]),
+    );
+
+    const { findByText, findByRole } = render(() => (
+      <OrderScreen seatToken="test-token" />
+    ));
+    await findByText("呼んでいます");
+    // The button stays enabled: the API is idempotent, so re-tapping is
+    // harmless, and a disabled control risks reading as broken mid-wait.
+    const button = await findByRole("button", { name: "スタッフを呼ぶ" });
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("tapping 呼ぶ posts to /call and shows the waiting status", async () => {
+    const fetchMock = mockFetch([
+      { url: "/api/order/", method: "GET", json: bootstrapEmpty },
+      {
+        url: /\/call$/,
+        method: "POST",
+        json: { data: { id: "call1", status: "open", created_at: 2000 } },
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    const { findByRole, findByText } = render(() => (
+      <OrderScreen seatToken="test-token" />
+    ));
+    const button = await findByRole("button", { name: "スタッフを呼ぶ" });
+    await user.click(button);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/call"),
+      expect.objectContaining({ method: "POST" }),
+    );
+    await findByText("呼んでいます");
+  });
+
+  it("shows an error when the POST /call fails", async () => {
+    const fetchMock = mockFetch([
+      { url: "/api/order/", method: "GET", json: bootstrapEmpty },
+      {
+        url: /\/call$/,
+        method: "POST",
+        ok: false,
+        json: {
+          error: { code: "NOT_FOUND", message: "座席が見つかりません。" },
+        },
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    const { findByRole } = render(() => <OrderScreen seatToken="test-token" />);
+    const button = await findByRole("button", { name: "スタッフを呼ぶ" });
+    await user.click(button);
+
+    const alert = await findByRole("alert");
+    expect(alert.textContent).toContain("座席が見つかりません");
+  });
+
+  it("clears the waiting status once a background poll sees the call resolved, without disturbing menu state", async () => {
+    vi.useFakeTimers();
+    let resolved = false;
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/api/order/")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            data: {
+              ...bootstrapWithMenu.data,
+              call: resolved
+                ? null
+                : { id: "call1", status: "open", created_at: 1000 },
+            },
+          }),
+        });
+      }
+      return Promise.resolve({
+        ok: false,
+        json: async () => ({ error: { code: "NOT_FOUND", message: "" } }),
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(() => <OrderScreen seatToken="test-token" />);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByText("呼んでいます")).toBeTruthy();
+    const menuItemBefore = screen.getByText("コーヒー");
+
+    resolved = true;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(screen.queryByText("呼んでいます")).toBeNull();
+    // A full loadBootstrap() would call setMenuItems() with fresh objects,
+    // which <For> renders as a full remove-and-recreate (a new DOM node),
+    // even though the mock data is unchanged; pollCall must not do that.
+    // An identity check is the only way to actually distinguish the two —
+    // queryByText("コーヒー") alone would pass for both, since the *text*
+    // reappears either way.
+    expect(screen.getByText("コーヒー")).toBe(menuItemBefore);
   });
 });

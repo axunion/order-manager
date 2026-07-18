@@ -1,5 +1,5 @@
 import { apiFetch, jsonFetch } from "@order/core/client";
-import { createMemo, createSignal, onMount, Show } from "solid-js";
+import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import CategoryNav from "./CategoryNav";
 import CheckoutBar from "./CheckoutBar";
 import Header from "./Header";
@@ -65,11 +65,20 @@ export type Order = {
   total: number;
 };
 
+export type Call = {
+  id: string;
+  status: "open" | "resolved";
+  created_at: number;
+};
+
 type BootstrapData = {
   seat: { name: string };
   menu: { categories: Category[]; items: MenuItem[] };
   order: Order | null;
+  call: Call | null;
 };
+
+const CALL_POLL_INTERVAL_MS = 5000;
 
 export type AddItemsInput = {
   menu_item_id: string;
@@ -119,6 +128,7 @@ export default function OrderScreen(props: { seatToken: string }) {
   const [categories, setCategories] = createSignal<Category[]>([]);
   const [menuItems, setMenuItems] = createSignal<MenuItem[]>([]);
   const [order, setOrder] = createSignal<Order | null>(null);
+  const [call, setCall] = createSignal<Call | null>(null);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal("");
   const ready = createMemo(() => !loading() && !error());
@@ -142,13 +152,42 @@ export default function OrderScreen(props: { seatToken: string }) {
       setCategories(result.data.menu.categories);
       setMenuItems(result.data.menu.items);
       setOrder(result.data.order);
+      setCall(result.data.call);
     }
     setLoading(false);
   }
 
-  onMount(async () => {
-    await loadBootstrap();
+  // Polls only the call status, not the full menu/order state, so an open
+  // call resolving in the background doesn't reset in-progress UI (e.g. an
+  // open item detail sheet) the way re-running loadBootstrap would.
+  async function pollCall() {
+    const result = await apiFetch<BootstrapData>(
+      `/api/order/${props.seatToken}`,
+    );
+    if (result.ok && result.data) {
+      setCall(result.data.call);
+    }
+  }
+
+  onMount(() => {
+    loadBootstrap();
+    const timerId = setInterval(pollCall, CALL_POLL_INTERVAL_MS);
+    onCleanup(() => clearInterval(timerId));
   });
+
+  async function handleCallStaff() {
+    setError("");
+    const result = await apiFetch<Call>(`/api/order/${props.seatToken}/call`, {
+      method: "POST",
+    });
+    if (!result.ok) {
+      setError(result.message ?? "呼び出しに失敗しました。");
+      return;
+    }
+    if (result.data) {
+      setCall(result.data);
+    }
+  }
 
   async function handleAddItems(
     items: AddItemsInput,
@@ -186,7 +225,11 @@ export default function OrderScreen(props: { seatToken: string }) {
 
   return (
     <>
-      <Header seatName={seatName() || "セルフオーダー"} />
+      <Header
+        seatName={seatName() || "セルフオーダー"}
+        callOpen={call()?.status === "open"}
+        onCallStaff={handleCallStaff}
+      />
       <Show when={ready()}>
         <CategoryNav groups={menuGroups()} />
       </Show>
