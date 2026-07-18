@@ -38,7 +38,16 @@ export default function OrderSummary(props: { order: Order | null }) {
                   <span class={styles.itemPrice}>
                     ¥{lineTotal(item).toLocaleString()}
                   </span>
-                  <Show when={item.status === "cancelled"}>
+                  <Show
+                    when={item.status === "cancelled"}
+                    fallback={
+                      <span
+                        class={`${styles.itemStatusLabel} ${item.status === "served" ? styles.itemStatusLabelServed : ""}`}
+                      >
+                        {item.status === "served" ? "提供済み" : "注文済み"}
+                      </span>
+                    }
+                  >
                     <span class={styles.itemCancelledLabel}>取消済み</span>
                   </Show>
                 </div>

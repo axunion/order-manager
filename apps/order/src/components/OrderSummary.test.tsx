@@ -131,4 +131,86 @@ describe("OrderSummary", () => {
     expect(container.querySelector('[class*="optionList"]')).toBeNull();
     expect(container.querySelector('[class*="itemNote"]')).toBeNull();
   });
+
+  it("labels an ordered line as 注文済み", () => {
+    const order: Order = {
+      id: "order1",
+      status: "open",
+      items: [
+        {
+          id: "oi1",
+          name_snapshot: "コーヒー",
+          unit_price_snapshot: 500,
+          quantity: 1,
+          status: "ordered",
+          created_at: 1000,
+          options: [],
+          note: null,
+        },
+      ],
+      total: 500,
+    };
+
+    const { getByText, queryByText } = render(() => (
+      <OrderSummary order={order} />
+    ));
+
+    expect(getByText("注文済み")).toBeTruthy();
+    expect(queryByText("提供済み")).toBeNull();
+  });
+
+  it("labels a served line as 提供済み", () => {
+    const order: Order = {
+      id: "order1",
+      status: "open",
+      items: [
+        {
+          id: "oi1",
+          name_snapshot: "コーヒー",
+          unit_price_snapshot: 500,
+          quantity: 1,
+          status: "served",
+          created_at: 1000,
+          options: [],
+          note: null,
+        },
+      ],
+      total: 500,
+    };
+
+    const { getByText, queryByText } = render(() => (
+      <OrderSummary order={order} />
+    ));
+
+    expect(getByText("提供済み")).toBeTruthy();
+    expect(queryByText("注文済み")).toBeNull();
+  });
+
+  it("labels a cancelled line as 取消済み instead of an ordered/served status", () => {
+    const order: Order = {
+      id: "order1",
+      status: "open",
+      items: [
+        {
+          id: "oi1",
+          name_snapshot: "コーヒー",
+          unit_price_snapshot: 500,
+          quantity: 1,
+          status: "cancelled",
+          created_at: 1000,
+          options: [],
+          note: null,
+        },
+      ],
+      total: 0,
+    };
+
+    const { getByText, queryByText } = render(() => (
+      <OrderSummary order={order} />
+    ));
+
+    expect(getByText("取消済み")).toBeTruthy();
+    expect(queryByText("注文済み")).toBeNull();
+    expect(queryByText("提供済み")).toBeNull();
+  });
 });

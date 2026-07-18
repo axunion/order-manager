@@ -81,6 +81,16 @@
   white-space: nowrap;
 }
 
+.itemStatusLabel {
+  color: var(--color-muted-foreground);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.itemStatusLabelServed {
+  color: var(--color-success-fg);
+}
+
 .optionList {
   list-style: none;
   margin: 0;

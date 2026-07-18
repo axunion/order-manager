@@ -585,3 +585,148 @@ describe("OrderScreen call staff", () => {
     expect(screen.getByText("コーヒー")).toBe(menuItemBefore);
   });
 });
+
+describe("OrderScreen order progress polling", () => {
+  it("polls order status every 10s while an active order exists, picking up a 提供済み update", async () => {
+    vi.useFakeTimers();
+    let served = false;
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/api/order/")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            data: {
+              ...bootstrapWithOrder.data,
+              order: {
+                ...bootstrapWithOrder.data.order,
+                items: [
+                  {
+                    ...bootstrapWithOrder.data.order.items[0],
+                    status: served ? "served" : "ordered",
+                  },
+                ],
+              },
+            },
+          }),
+        });
+      }
+      return Promise.resolve({
+        ok: false,
+        json: async () => ({ error: { code: "NOT_FOUND", message: "" } }),
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(() => <OrderScreen seatToken="test-token" />);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByText("注文済み")).toBeTruthy();
+
+    served = true;
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(screen.getByText("提供済み")).toBeTruthy();
+  });
+
+  it("does not poll while there is no active order", async () => {
+    vi.useFakeTimers();
+    const fetchMock = mockFetch([
+      { url: "/api/order/", method: "GET", json: bootstrapEmpty },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(() => <OrderScreen seatToken="test-token" />);
+    await vi.advanceTimersByTimeAsync(0);
+    const callsAfterInitialLoad = fetchMock.mock.calls.length;
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    // Only the 5s call-poll should have fired again (at t=5000 and
+    // t=10000); the 10s order-poll must not add any request while order
+    // is null.
+    expect(fetchMock.mock.calls.length).toBe(callsAfterInitialLoad + 2);
+  });
+
+  it("does not let a slow order-status poll response overwrite a fresher request-payment result", async () => {
+    vi.useFakeTimers();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    // Both the 5s call-poll and the 10s order-poll hit this same GET
+    // endpoint, so this test doesn't try to distinguish them by call
+    // count — instead, every GET made while `hangGets` is true is held
+    // open (never resolved) until the test explicitly releases it, all
+    // still carrying the stale "open" status. Since none of them can
+    // affect the outcome unless released, this reproduces "a slow poll
+    // response lands after a mutation" regardless of which poller it
+    // came from.
+    let hangGets = false;
+    let paymentRequested = false;
+    const hungResolvers: (() => void)[] = [];
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((url: string, init?: RequestInit) => {
+        const method = (init?.method ?? "GET").toUpperCase();
+        if (typeof url === "string" && url.includes("/request-payment")) {
+          paymentRequested = true;
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              data: { id: "order1", status: "payment_requested" },
+            }),
+          });
+        }
+        if (
+          typeof url === "string" &&
+          url.includes("/api/order/") &&
+          method === "GET"
+        ) {
+          if (hangGets) {
+            return new Promise((resolve) => {
+              hungResolvers.push(() =>
+                resolve({
+                  ok: true,
+                  json: async () => ({ data: bootstrapWithOrder.data }), // still "open"
+                }),
+              );
+            });
+          }
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              data: {
+                ...bootstrapWithOrder.data,
+                order: {
+                  ...bootstrapWithOrder.data.order,
+                  status: paymentRequested ? "payment_requested" : "open",
+                },
+              },
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: false,
+          json: async () => ({ error: { code: "NOT_FOUND", message: "" } }),
+        });
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(() => <OrderScreen seatToken="test-token" />);
+    await vi.advanceTimersByTimeAsync(0); // initial bootstrap: order "open"
+
+    hangGets = true;
+    await vi.advanceTimersByTimeAsync(10_000); // fires poll GETs, all hung
+    hangGets = false;
+
+    const payBtn = screen.getByRole("button", { name: /会計をお願いする/ });
+    await user.click(payBtn);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByText(/会計をお待ちください/)).toBeTruthy();
+
+    // Now let every stale hung response (still carrying "open") land.
+    for (const release of hungResolvers) release();
+    await vi.advanceTimersByTimeAsync(0);
+
+    // None of them must have reverted the UI back to the pre-request state.
+    expect(
+      screen.queryByRole("button", { name: /会計をお願いする/ }),
+    ).toBeNull();
+    expect(screen.getByText(/会計をお待ちください/)).toBeTruthy();
+  });
+});

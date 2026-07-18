@@ -79,6 +79,7 @@ type BootstrapData = {
 };
 
 const CALL_POLL_INTERVAL_MS = 5000;
+const ORDER_POLL_INTERVAL_MS = 10_000;
 
 export type AddItemsInput = {
   menu_item_id: string;
@@ -136,22 +137,32 @@ export default function OrderScreen(props: { seatToken: string }) {
     groupMenuItems(categories(), menuItems()),
   );
 
+  // Guards setOrder against out-of-order network responses: whichever
+  // order-affecting request started most recently wins, so a slow
+  // pollOrder response can't clobber a mutation's fresher result (e.g.
+  // 会計をお願いする) if it happens to resolve after it.
+  let orderSeq = 0;
+  function setOrderIfCurrent(seq: number, value: Order | null) {
+    if (seq === orderSeq) setOrder(value);
+  }
+
   async function loadBootstrap() {
     setLoading(true);
     setError("");
+    const seq = ++orderSeq;
     const result = await apiFetch<BootstrapData>(
       `/api/order/${props.seatToken}`,
     );
     if (!result.ok || !result.data) {
       setCategories([]);
       setMenuItems([]);
-      setOrder(null);
+      setOrderIfCurrent(seq, null);
       setError(result.message ?? "データの読み込みに失敗しました。");
     } else {
       setSeatName(result.data.seat.name);
       setCategories(result.data.menu.categories);
       setMenuItems(result.data.menu.items);
-      setOrder(result.data.order);
+      setOrderIfCurrent(seq, result.data.order);
       setCall(result.data.call);
     }
     setLoading(false);
@@ -169,10 +180,30 @@ export default function OrderScreen(props: { seatToken: string }) {
     }
   }
 
+  // Gentle polling for order-item status (ordered/served ticks) — only
+  // while an active order exists, so a customer still browsing the menu
+  // doesn't generate background traffic for nothing. Slower than the
+  // call poll since a served tick is informational, not something the
+  // customer is actively waiting on the way an open call is.
+  async function pollOrder() {
+    if (order() === null) return;
+    const seq = ++orderSeq;
+    const result = await apiFetch<BootstrapData>(
+      `/api/order/${props.seatToken}`,
+    );
+    if (result.ok && result.data) {
+      setOrderIfCurrent(seq, result.data.order);
+    }
+  }
+
   onMount(() => {
     loadBootstrap();
-    const timerId = setInterval(pollCall, CALL_POLL_INTERVAL_MS);
-    onCleanup(() => clearInterval(timerId));
+    const callTimerId = setInterval(pollCall, CALL_POLL_INTERVAL_MS);
+    const orderTimerId = setInterval(pollOrder, ORDER_POLL_INTERVAL_MS);
+    onCleanup(() => {
+      clearInterval(callTimerId);
+      clearInterval(orderTimerId);
+    });
   });
 
   async function handleCallStaff() {
@@ -193,6 +224,7 @@ export default function OrderScreen(props: { seatToken: string }) {
     items: AddItemsInput,
   ): Promise<{ ok: boolean; message?: string }> {
     setError("");
+    const seq = ++orderSeq;
     const result = await jsonFetch<{ order: Order }>(
       `/api/order/${props.seatToken}/items`,
       "POST",
@@ -202,7 +234,7 @@ export default function OrderScreen(props: { seatToken: string }) {
       return { ok: false, message: result.message };
     }
     if (result.data) {
-      setOrder(result.data.order);
+      setOrderIfCurrent(seq, result.data.order);
     }
     return { ok: true };
   }
