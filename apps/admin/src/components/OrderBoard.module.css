@@ -132,12 +132,18 @@
 
 .orderItem {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
   background: var(--color-surface);
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
+}
+
+.orderItemRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 
@@ -170,8 +176,32 @@
   font-variant-numeric: tabular-nums;
 }
 
+.orderItemOptions {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.orderItemOption {
+  color: var(--color-muted-foreground);
+  font-size: var(--text-xs);
+}
+
+.orderItemNote {
+  margin: 0;
+  padding-left: var(--space-2);
+  color: var(--color-muted-foreground);
+  font-size: var(--text-xs);
+  font-style: italic;
+}
+
 .orderItemCancelled .orderItemName,
 .orderItemCancelled .orderItemQty,
-.orderItemCancelled .orderItemPrice {
+.orderItemCancelled .orderItemPrice,
+.orderItemCancelled .orderItemOption,
+.orderItemCancelled .orderItemNote {
   text-decoration: line-through;
 }

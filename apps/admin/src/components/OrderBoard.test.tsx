@@ -48,6 +48,8 @@ const mockOrder = {
       name_snapshot: "ラーメン",
       unit_price_snapshot: 800,
       quantity: 2,
+      options: [],
+      note: null,
       status: "ordered",
     },
   ],
@@ -402,6 +404,108 @@ describe("OrderBoard", () => {
     await vi.advanceTimersByTimeAsync(5000);
     expect(fetchMock.mock.calls.length).toBeGreaterThan(callsAfterMount);
   });
+
+  it("includes selected option price deltas in the line price", async () => {
+    const orderWithOptions = {
+      ...mockOrder,
+      items: [
+        {
+          ...mockOrder.items[0],
+          options: [
+            {
+              id: "opt-1",
+              name_snapshot: "大盛り",
+              group_name_snapshot: "麺の量",
+              price_delta_snapshot: 100,
+            },
+          ],
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/admin/orders",
+          method: "GET",
+          json: { data: [orderWithOptions] },
+        },
+      ]),
+    );
+
+    const { findByText } = render(() => <OrderBoard />);
+    // (800 + 100) * 2 = 1800
+    await findByText("¥1,800");
+  });
+
+  it("renders selected option names with signed deltas and the line note", async () => {
+    const orderWithOptions = {
+      ...mockOrder,
+      items: [
+        {
+          ...mockOrder.items[0],
+          options: [
+            {
+              id: "opt-1",
+              name_snapshot: "大盛り",
+              group_name_snapshot: "麺の量",
+              price_delta_snapshot: 100,
+            },
+          ],
+          note: "ネギ抜き",
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/admin/orders",
+          method: "GET",
+          json: { data: [orderWithOptions] },
+        },
+      ]),
+    );
+
+    const { findByText } = render(() => <OrderBoard />);
+    await findByText(/大盛り/);
+    await findByText(/\+¥100/);
+    await findByText("ネギ抜き");
+  });
+
+  it("renders a zero-delta option's name without a parenthesized amount", async () => {
+    const orderWithZeroDeltaOption = {
+      ...mockOrder,
+      items: [
+        {
+          ...mockOrder.items[0],
+          options: [
+            {
+              id: "opt-1",
+              name_snapshot: "普通",
+              group_name_snapshot: "麺の量",
+              price_delta_snapshot: 0,
+            },
+          ],
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/admin/orders",
+          method: "GET",
+          json: { data: [orderWithZeroDeltaOption] },
+        },
+      ]),
+    );
+
+    const { findByText, container } = render(() => <OrderBoard />);
+    const optionLine = await findByText("普通");
+    expect(optionLine.textContent).toBe("普通");
+    expect(container.querySelector('[class*="orderItemOption"]')).toBeTruthy();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -443,6 +547,8 @@ const initialOrder = {
       name_snapshot: "唐揚げ",
       unit_price_snapshot: 500,
       quantity: 1,
+      options: [],
+      note: null,
       status: "ordered",
       created_at: 1000,
     },
@@ -463,6 +569,8 @@ const withNewOrder = [
         name_snapshot: "ビール",
         unit_price_snapshot: 600,
         quantity: 1,
+        options: [],
+        note: null,
         status: "ordered",
         created_at: 2000,
       },

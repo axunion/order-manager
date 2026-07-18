@@ -12,14 +12,38 @@ import {
 import styles from "./OrderBoard.module.css";
 import StatusBadge from "./StatusBadge";
 
+type OrderItemOption = {
+  id: string;
+  name_snapshot: string;
+  group_name_snapshot: string;
+  price_delta_snapshot: number;
+};
+
 type OrderItem = {
   id: string;
   name_snapshot: string;
   unit_price_snapshot: number;
   quantity: number;
+  options: OrderItemOption[];
+  note: string | null;
   status: "ordered" | "served" | "cancelled";
   created_at: number;
 };
+
+function lineTotal(item: OrderItem): number {
+  const optionDelta = item.options.reduce(
+    (sum, option) => sum + option.price_delta_snapshot,
+    0,
+  );
+  return (item.unit_price_snapshot + optionDelta) * item.quantity;
+}
+
+/** Formats a price delta as a signed yen amount, or "" when it's 0. */
+function formatDelta(delta: number): string {
+  if (delta === 0) return "";
+  const sign = delta > 0 ? "+" : "-";
+  return `${sign}¥${Math.abs(delta).toLocaleString("ja-JP")}`;
+}
 
 type AdminOrder = {
   id: string;
@@ -284,57 +308,77 @@ export default function OrderBoard() {
                     <li
                       class={`${styles.orderItem ?? ""} ${item.status === "served" ? (styles.orderItemServed ?? "") : ""} ${item.status === "cancelled" ? (styles.orderItemCancelled ?? "") : ""}`}
                     >
-                      <span class={styles.orderItemName}>
-                        {item.name_snapshot}
-                      </span>
-                      <span class={styles.orderItemQty}>× {item.quantity}</span>
-                      <span class={styles.orderItemPrice}>
-                        {formatCurrency(
-                          item.unit_price_snapshot * item.quantity,
-                        )}
-                      </span>
-                      <Show
-                        when={item.status !== "cancelled"}
-                        fallback={
-                          <StatusBadge tone="danger">取消済み</StatusBadge>
-                        }
-                      >
+                      <div class={styles.orderItemRow}>
+                        <span class={styles.orderItemName}>
+                          {item.name_snapshot}
+                        </span>
+                        <span class={styles.orderItemQty}>
+                          × {item.quantity}
+                        </span>
+                        <span class={styles.orderItemPrice}>
+                          {formatCurrency(lineTotal(item))}
+                        </span>
                         <Show
-                          when={item.status === "served"}
+                          when={item.status !== "cancelled"}
                           fallback={
+                            <StatusBadge tone="danger">取消済み</StatusBadge>
+                          }
+                        >
+                          <Show
+                            when={item.status === "served"}
+                            fallback={
+                              <Button
+                                variant="success"
+                                size="sm"
+                                disabled={pendingItems().has(item.id)}
+                                onClick={() => handleServe(item.id)}
+                              >
+                                {pendingItems().has(item.id)
+                                  ? "処理中..."
+                                  : "提供済み"}
+                              </Button>
+                            }
+                          >
                             <Button
-                              variant="success"
+                              variant="secondary"
                               size="sm"
                               disabled={pendingItems().has(item.id)}
-                              onClick={() => handleServe(item.id)}
+                              onClick={() => handleUnserve(item.id)}
                             >
                               {pendingItems().has(item.id)
                                 ? "処理中..."
-                                : "提供済み"}
+                                : "提供取消"}
                             </Button>
-                          }
-                        >
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={pendingItems().has(item.id)}
-                            onClick={() => handleUnserve(item.id)}
-                          >
-                            {pendingItems().has(item.id)
-                              ? "処理中..."
-                              : "提供取消"}
-                          </Button>
+                          </Show>
+                          <ConfirmDialog
+                            triggerLabel="取消"
+                            triggerVariant="danger"
+                            triggerSize="sm"
+                            aria-label={`明細を取消 ${item.name_snapshot} (${item.id})`}
+                            title="明細の取消"
+                            description={`「${item.name_snapshot}」を取消しますか？この操作は元に戻せません。`}
+                            confirmLabel="取消する"
+                            onConfirm={() => handleVoidItem(item.id)}
+                          />
                         </Show>
-                        <ConfirmDialog
-                          triggerLabel="取消"
-                          triggerVariant="danger"
-                          triggerSize="sm"
-                          aria-label={`明細を取消 ${item.name_snapshot} (${item.id})`}
-                          title="明細の取消"
-                          description={`「${item.name_snapshot}」を取消しますか？この操作は元に戻せません。`}
-                          confirmLabel="取消する"
-                          onConfirm={() => handleVoidItem(item.id)}
-                        />
+                      </div>
+                      <Show when={item.options.length > 0}>
+                        <ul class={styles.orderItemOptions}>
+                          <For each={item.options}>
+                            {(option) => (
+                              <li class={styles.orderItemOption}>
+                                {option.name_snapshot}
+                                <Show when={option.price_delta_snapshot !== 0}>
+                                  {" "}
+                                  ({formatDelta(option.price_delta_snapshot)})
+                                </Show>
+                              </li>
+                            )}
+                          </For>
+                        </ul>
+                      </Show>
+                      <Show when={item.note}>
+                        <p class={styles.orderItemNote}>{item.note}</p>
                       </Show>
                     </li>
                   )}

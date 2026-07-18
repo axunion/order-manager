@@ -4,14 +4,38 @@ import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import styles from "./CheckoutPanel.module.css";
 import StatusBadge from "./StatusBadge";
 
+type CheckoutItemOption = {
+  id: string;
+  name_snapshot: string;
+  group_name_snapshot: string;
+  price_delta_snapshot: number;
+};
+
 type CheckoutItem = {
   id: string;
   name_snapshot: string;
   unit_price_snapshot: number;
   quantity: number;
+  options: CheckoutItemOption[];
+  note: string | null;
   status: string;
   created_at: number;
 };
+
+function lineTotal(item: CheckoutItem): number {
+  const optionDelta = item.options.reduce(
+    (sum, option) => sum + option.price_delta_snapshot,
+    0,
+  );
+  return (item.unit_price_snapshot + optionDelta) * item.quantity;
+}
+
+/** Formats a price delta as a signed yen amount, or "" when it's 0. */
+function formatDelta(delta: number): string {
+  if (delta === 0) return "";
+  const sign = delta > 0 ? "+" : "-";
+  return `${sign}¥${Math.abs(delta).toLocaleString("ja-JP")}`;
+}
 
 type PendingOrder = {
   id: string;
@@ -129,17 +153,35 @@ export default function CheckoutPanel() {
                 <For each={order.items}>
                   {(item) => (
                     <li class={styles.checkoutItem}>
-                      <span class={styles.checkoutItemName}>
-                        {item.name_snapshot}
-                      </span>
-                      <span class={styles.checkoutItemQty}>
-                        × {item.quantity}
-                      </span>
-                      <span class={styles.checkoutItemPrice}>
-                        {formatCurrency(
-                          item.unit_price_snapshot * item.quantity,
-                        )}
-                      </span>
+                      <div class={styles.checkoutItemRow}>
+                        <span class={styles.checkoutItemName}>
+                          {item.name_snapshot}
+                        </span>
+                        <span class={styles.checkoutItemQty}>
+                          × {item.quantity}
+                        </span>
+                        <span class={styles.checkoutItemPrice}>
+                          {formatCurrency(lineTotal(item))}
+                        </span>
+                      </div>
+                      <Show when={item.options.length > 0}>
+                        <ul class={styles.checkoutItemOptions}>
+                          <For each={item.options}>
+                            {(option) => (
+                              <li class={styles.checkoutItemOption}>
+                                {option.name_snapshot}
+                                <Show when={option.price_delta_snapshot !== 0}>
+                                  {" "}
+                                  ({formatDelta(option.price_delta_snapshot)})
+                                </Show>
+                              </li>
+                            )}
+                          </For>
+                        </ul>
+                      </Show>
+                      <Show when={item.note}>
+                        <p class={styles.checkoutItemNote}>{item.note}</p>
+                      </Show>
                     </li>
                   )}
                 </For>

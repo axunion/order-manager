@@ -47,6 +47,8 @@ const mockPendingOrder = {
       name_snapshot: "ビール",
       unit_price_snapshot: 600,
       quantity: 2,
+      options: [],
+      note: null,
       status: "ordered",
       created_at: 2_000_000,
     },
@@ -354,5 +356,106 @@ describe("CheckoutPanel", () => {
 
     await vi.advanceTimersByTimeAsync(5000);
     expect(fetchMock.mock.calls.length).toBeGreaterThan(callsAfterMount);
+  });
+
+  it("includes selected option price deltas in the line price", async () => {
+    const orderWithOptions = {
+      ...mockPendingOrder,
+      items: [
+        {
+          ...mockPendingOrder.items[0],
+          options: [
+            {
+              id: "opt-1",
+              name_snapshot: "氷なし",
+              group_name_snapshot: "氷の量",
+              price_delta_snapshot: -50,
+            },
+          ],
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/payments/pending",
+          method: "GET",
+          json: { data: [orderWithOptions] },
+        },
+      ]),
+    );
+
+    const { findByText } = render(() => <CheckoutPanel />);
+    // (600 - 50) * 2 = 1100
+    await findByText("¥1,100");
+  });
+
+  it("renders selected option names with signed deltas and the line note", async () => {
+    const orderWithOptions = {
+      ...mockPendingOrder,
+      items: [
+        {
+          ...mockPendingOrder.items[0],
+          options: [
+            {
+              id: "opt-1",
+              name_snapshot: "氷なし",
+              group_name_snapshot: "氷の量",
+              price_delta_snapshot: -50,
+            },
+          ],
+          note: "コップ2つ",
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/payments/pending",
+          method: "GET",
+          json: { data: [orderWithOptions] },
+        },
+      ]),
+    );
+
+    const { findByText } = render(() => <CheckoutPanel />);
+    await findByText(/氷なし/);
+    await findByText(/-¥50/);
+    await findByText("コップ2つ");
+  });
+
+  it("renders a zero-delta option's name without a parenthesized amount", async () => {
+    const orderWithZeroDeltaOption = {
+      ...mockPendingOrder,
+      items: [
+        {
+          ...mockPendingOrder.items[0],
+          options: [
+            {
+              id: "opt-1",
+              name_snapshot: "普通",
+              group_name_snapshot: "氷の量",
+              price_delta_snapshot: 0,
+            },
+          ],
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/payments/pending",
+          method: "GET",
+          json: { data: [orderWithZeroDeltaOption] },
+        },
+      ]),
+    );
+
+    const { findByText } = render(() => <CheckoutPanel />);
+    const optionLine = await findByText("普通");
+    expect(optionLine.textContent).toBe("普通");
   });
 });
