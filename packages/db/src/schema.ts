@@ -285,6 +285,57 @@ export const seats = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
+// staff_calls — customer "call staff" requests, one open call per seat.
+// A partial unique index enforces "at most one open call per seat" at the
+// DB level (same pattern as idx_one_active_order_per_seat below), so
+// concurrent taps of the call button race safely: the loser's INSERT
+// fails the constraint and the API re-reads the winner's row instead.
+// ---------------------------------------------------------------------------
+export const staffCalls = sqliteTable(
+  "staff_calls",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    seat_id: text("seat_id")
+      .notNull()
+      .references(() => seats.id),
+    /**
+     * State machine:
+     *   open → resolved (terminal; staff acknowledges the call)
+     */
+    status: text("status", {
+      enum: ["open", "resolved"],
+    })
+      .notNull()
+      .default("open"),
+    created_at: integer("created_at")
+      .notNull()
+      .$defaultFn(() => Date.now()), // Unix ms
+    /** set when status transitions to 'resolved' */
+    resolved_at: integer("resolved_at"), // Unix ms, nullable
+  },
+  (table) => [
+    index("idx_staff_calls_store_status").on(table.store_id, table.status),
+    // Enforce the one-open-call-per-seat invariant at the DB level.
+    uniqueIndex("idx_one_open_call_per_seat")
+      .on(table.seat_id)
+      .where(sql`${table.status} = 'open'`),
+    check(
+      "staff_calls_status_chk",
+      sql`${table.status} IN ('open', 'resolved')`,
+    ),
+    check(
+      "staff_calls_resolved_has_resolved_at_chk",
+      sql`${table.status} != 'resolved' OR ${table.resolved_at} IS NOT NULL`,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // orders — one "check" per table visit
 // ---------------------------------------------------------------------------
 export const orders = sqliteTable(
