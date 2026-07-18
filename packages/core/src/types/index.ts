@@ -330,6 +330,8 @@ export interface BootstrapResponse {
     }[];
   };
   order: OrderResponse | null;
+  /** The seat's open call-staff request, if any (null once resolved). */
+  call: CallResponse | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -374,4 +376,22 @@ export interface PaymentResponse {
   total_amount: number;
   method: "cash";
   paid_at: number;
+}
+
+// ---------------------------------------------------------------------------
+// Staff calls
+// ---------------------------------------------------------------------------
+
+export interface CallResponse {
+  id: string;
+  status: "open" | "resolved";
+  created_at: number;
+}
+
+export interface AdminCallResponse {
+  id: string;
+  seat_name: string;
+  status: "open" | "resolved";
+  created_at: number;
+  resolved_at: number | null;
 }

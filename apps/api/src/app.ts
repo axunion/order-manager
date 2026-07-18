@@ -8,6 +8,7 @@ import { menuOptionsRouter } from "./routes/menu-options";
 import { orderRouter } from "./routes/order";
 import { paymentsRouter } from "./routes/payments";
 import { seatsRouter } from "./routes/seats";
+import { staffCallsRouter } from "./routes/staff-calls";
 import { storesRouter } from "./routes/stores";
 
 // ---------------------------------------------------------------------------
@@ -67,6 +68,7 @@ app.route("/api/menu", menuRouter);
 app.route("/api/menu/option-groups", menuOptionsRouter);
 app.route("/api/seats", seatsRouter);
 app.route("/api/admin/orders", adminOrdersRouter);
+app.route("/api/admin/calls", staffCallsRouter);
 app.route("/api/payments", paymentsRouter);
 
 // Customer-facing order API — authenticated via qr_token URL parameter

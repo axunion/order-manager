@@ -119,6 +119,31 @@ async function fetchOptionGroupsForItems(
 }
 
 /**
+ * Returns the seat's open staff call, or null if none exists.
+ *
+ * Extracted as a helper because the same WHERE clause is used in the GET
+ * bootstrap and POST /call handlers.
+ */
+async function findOpenCall(
+  db: ReturnType<typeof createDb>,
+  seatId: string,
+  storeId: string,
+) {
+  const rows = await db
+    .select()
+    .from(schema.staffCalls)
+    .where(
+      and(
+        eq(schema.staffCalls.seat_id, seatId),
+        eq(schema.staffCalls.store_id, storeId),
+        eq(schema.staffCalls.status, "open"),
+      ),
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
  * Returns the single active order (status 'open' or 'payment_requested')
  * for a seat, or null if none exists.
  *
@@ -196,7 +221,7 @@ export const orderRouter = new Hono<SeatEnv>()
     const db = createDb(c.env.DB);
 
     // Fetch menu categories and available items in parallel with active order
-    const [categories, items, order] = await Promise.all([
+    const [categories, items, order, call] = await Promise.all([
       db
         .select({
           id: schema.menuCategories.id,
@@ -225,6 +250,7 @@ export const orderRouter = new Hono<SeatEnv>()
         )
         .orderBy(asc(schema.menuItems.sort_order)),
       getActiveOrderWithItems(db, seatId, storeId),
+      findOpenCall(db, seatId, storeId),
     ]);
 
     const optionGroupsByItemId = await fetchOptionGroupsForItems(
@@ -244,8 +270,70 @@ export const orderRouter = new Hono<SeatEnv>()
           })),
         },
         order,
+        call,
       },
     });
+  })
+
+  /**
+   * POST /api/order/:seatToken/call
+   * Creates an open call-staff request for the seat.
+   *
+   * Idempotent per seat: if an open call already exists, returns it with
+   * 200 instead of creating a duplicate — this also throttles repeated
+   * taps to at most one outstanding call per table. The partial unique
+   * index idx_one_open_call_per_seat makes concurrent first-taps safe.
+   *
+   * Response: 201 (new call) or 200 (existing open call), both with
+   * { data: { id, status, created_at } }.
+   */
+  .post("/:seatToken/call", requireSeat, async (c) => {
+    const { id: seatId, store_id: storeId } = c.var.seat;
+    const db = createDb(c.env.DB);
+
+    const existing = await findOpenCall(db, seatId, storeId);
+    if (existing) {
+      return c.json({
+        data: {
+          id: existing.id,
+          status: existing.status,
+          created_at: existing.created_at,
+        },
+      });
+    }
+
+    const id = newId();
+    const created_at = now();
+    try {
+      await db.insert(schema.staffCalls).values({
+        id,
+        store_id: storeId,
+        seat_id: seatId,
+        status: "open",
+        created_at,
+      });
+    } catch {
+      // A concurrent request may have created the call first (unique
+      // constraint on the partial index). Re-fetch to distinguish that
+      // from a real error.
+      const concurrent = await findOpenCall(db, seatId, storeId);
+      if (!concurrent) {
+        return errorResponse(
+          "INTERNAL_ERROR",
+          "呼び出しの処理中にエラーが発生しました。再度お試しください。",
+          500,
+        );
+      }
+      return c.json({
+        data: {
+          id: concurrent.id,
+          status: concurrent.status,
+          created_at: concurrent.created_at,
+        },
+      });
+    }
+
+    return c.json({ data: { id, status: "open" as const, created_at } }, 201);
   })
 
   /**
