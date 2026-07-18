@@ -8,7 +8,9 @@ have requested. Requires the `session_token` cookie (`requireStore`).
 ### Pending bills (`GET /api/payments/pending`)
 
 Returns all `payment_requested` orders with seat name, items, and total,
-oldest first. Polled every 5 seconds by the UI.
+oldest first. Polled every 5 seconds by the UI. Each line item includes
+its selected options and note, same as the order board — CheckoutPanel
+renders both so staff can double-check the bill before settling it.
 
 ### Completing payment (`POST /api/payments`)
 
@@ -35,7 +37,11 @@ oldest first. Polled every 5 seconds by the UI.
 - Returns completed payments with `paid_at` in `[from, to)`, newest
   first, each joined with its order's seat name and line items.
   Cancelled lines are included and flagged by status — they explain the
-  bill, but their amounts are already excluded from `total_amount`.
+  bill, but their amounts are already excluded from `total_amount`. Line
+  items carry the same selected-options/note fields as the board and
+  pending-bills endpoints, but the admin SalesPage does not render them
+  yet (not required by the proposal that shipped options/notes; only
+  OrderBoard and CheckoutPanel display them).
 - Validation (400): both params required, integers, `from < to`, range
   ≤ 62 days.
 - No pagination and no server-side aggregation — the admin SalesPage

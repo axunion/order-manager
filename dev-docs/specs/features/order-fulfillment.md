@@ -8,7 +8,10 @@ orders. Requires the `session_token` cookie (`requireStore`).
 ### Board (`GET /api/admin/orders`)
 
 - Returns all `open` and `payment_requested` orders with seat name, line
-  items, and total, oldest first.
+  items, and total, oldest first. Each line item includes its selected
+  options (name + signed price delta) and free-text note, if any —
+  OrderBoard renders both under the item name so the kitchen sees them
+  without opening anything.
 - Optional `?since=<unix_ms>` filters to orders created after the
   timestamp (currently unused by the UI; groundwork for incremental
   polling).

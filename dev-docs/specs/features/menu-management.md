@@ -55,10 +55,34 @@ it visible in admin for re-enabling.
   ~0.8 quality, before upload. Workers cannot resize images natively
   and Cloudflare Images is a paid product.
 
+### Item options / modifiers (`/api/menu/option-groups`)
+
+Option groups are **store-level and reusable across items** (a "Size"
+group attaches to every drink; per-item groups would force
+duplication). See
+[domain-model](../domain-model.md#entity-overview) for the schema.
+
+- `GET` / `POST /api/menu/option-groups` — list / create. Fields: name
+  (1–100 chars), `min_select` (int ≥ 0, default 0), `max_select` (int
+  ≥ 1, default 1), `sort_order`. `min_select ≤ max_select` enforced.
+- `PATCH` / `DELETE /api/menu/option-groups/:id` — full-replace update
+  (like categories, not omit-preserves like items); delete cascades to
+  the group's options and its attachments to items in one `db.batch`.
+- `GET` / `POST /api/menu/option-groups/:groupId/options` — nested
+  option list / create. Fields: name (1–100 chars), `price_delta` (int
+  JPY, **may be negative**, no bound — the resulting unit price must
+  stay positive, enforced at order-submission time not here),
+  `sort_order`.
+- `PATCH` / `DELETE /api/menu/option-groups/:groupId/options/:optionId`
+  — full-replace update / delete.
+- Attach/detach on the item form: `PATCH /api/menu/items/:id` accepts
+  `option_group_ids: string[]` (omit preserves the current attachment
+  set, matching the rest of that endpoint's omit-preserves semantics;
+  `[]` detaches all). `GET`/`POST`/`PATCH` item responses embed
+  `option_group_ids`.
+
 ## Known limitations (→ roadmap)
 
-- **No options/modifiers** — no size, toppings, doneness, or free-text
-  requests. (Phase 3)
 - **No allergen / dietary info.** (Phase 3, alongside descriptions)
 - **No tax-rate metadata** — needed for 8%/10% receipt breakdown.
   (Phase 4)

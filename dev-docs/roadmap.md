@@ -85,13 +85,12 @@ photos, and customers stop needing to flag down staff.
    [domain-model](specs/domain-model.md)
    Largest customer-UX gap; first feature to touch R2 storage.
    Descriptions rode along as a plain schema addition.
-2. **Item options / modifiers**
-   → [proposal](proposals/item-options.md)
-   ([menu-management](specs/features/menu-management.md),
-   [customer-ordering](specs/features/customer-ordering.md))
+2. **✅ Shipped — Item options / modifiers**
+   → [menu-management](specs/features/menu-management.md#item-options--modifiers-apimenuoption-groups),
+   [customer-ordering](specs/features/customer-ordering.md),
+   [domain-model](specs/domain-model.md)
    Option groups (size, toppings) with price deltas, plus a free-text
-   note per item. The biggest schema change in the roadmap — review its
-   proposal before starting.
+   note per item. The biggest schema change in the roadmap.
 3. **Staff call**
    → [proposal](proposals/staff-call.md)
    ([customer-ordering](specs/features/customer-ordering.md))

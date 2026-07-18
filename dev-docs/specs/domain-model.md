@@ -6,9 +6,9 @@ Source of truth: `packages/db/src/schema.ts`. This document explains the
 ## Entity overview
 
 ```
-stores 1 ──── * menu_categories 1 ──── * menu_items
+stores 1 ──── * menu_categories 1 ──── * menu_items 1 ──── * menu_item_option_groups * ──── 1 option_groups 1 ──── * options
    │                                        │ (snapshot at order time)
-   ├──── * seats 1 ──── * orders 1 ──── * order_items
+   ├──── * seats 1 ──── * orders 1 ──── * order_items 1 ──── * order_item_options
    │                        │
    ├──── * sessions         └──── 0..1 payments
    └──── * magic_link_tokens
@@ -23,6 +23,13 @@ stores 1 ──── * menu_categories 1 ──── * menu_items
   a nullable `image_key` — an R2 object key, not a URL, so the serving
   origin can change without touching data (see
   [features/menu-management.md](./features/menu-management.md#item-photos-apimenuitemsidimage-apimenuimageskey)).
+- **option_groups / options** — store-level, reusable across items (a
+  "Size" group attaches to every drink; per-item groups would force
+  duplication). A group has `min_select`/`max_select` (e.g. 1/1 = choose
+  exactly one size, 0/3 = up to three toppings). An option carries a
+  `price_delta` (int JPY, may be negative). `menu_item_option_groups`
+  joins groups to items (see
+  [features/menu-management.md](./features/menu-management.md#item-options--modifiers-apimenuoption-groups)).
 - **seats** — physical tables. Each has an unguessable `qr_token` (UUID)
   that authenticates the customer order screen; `is_active` soft-deletes
   a retired seat (row and name survive forever for historical
@@ -32,7 +39,10 @@ stores 1 ──── * menu_categories 1 ──── * menu_items
   accumulate on the same order until it is paid.
 - **order_items** — line items with `name_snapshot` /
   `unit_price_snapshot` copied at order time, so later menu edits never
-  change a bill.
+  change a bill. Also carries a nullable free-text `note` (≤ 200 chars,
+  e.g. "no onions"). `order_item_options` snapshots each selected option
+  (`name_snapshot`, `group_name_snapshot`, `price_delta_snapshot`) so
+  editing or deleting the live option later never changes a past bill.
 - **payments** — exactly one per paid order (`order_id` UNIQUE).
 - **sessions / magic_link_tokens** — auth artifacts; see
   [features/authentication.md](./features/authentication.md).
@@ -121,4 +131,6 @@ concurrently.
   client concern via `jstDayRange`/`toJstDateString` (`@order/core`,
   `domain/time.ts`), used by the sales-history date range.
 - Billing totals are always computed from
-  `unit_price_snapshot × quantity`, never from live menu prices.
+  `(unit_price_snapshot + Σ price_delta_snapshot) × quantity` per line
+  (`sumOrderItems`, `@order/core`), never from live menu or option
+  prices.
