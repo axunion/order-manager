@@ -9,7 +9,8 @@ Source of truth: `packages/db/src/schema.ts`. This document explains the
 stores 1 ──── * menu_categories 1 ──── * menu_items 1 ──── * menu_item_option_groups * ──── 1 option_groups 1 ──── * options
    │                                        │ (snapshot at order time)
    ├──── * seats 1 ──── * orders 1 ──── * order_items 1 ──── * order_item_options
-   │                        │
+   │        │               │
+   │        └──── * staff_calls
    ├──── * sessions         └──── 0..1 payments
    └──── * magic_link_tokens
 ```
@@ -43,6 +44,12 @@ stores 1 ──── * menu_categories 1 ──── * menu_items 1 ───�
   e.g. "no onions"). `order_item_options` snapshots each selected option
   (`name_snapshot`, `group_name_snapshot`, `price_delta_snapshot`) so
   editing or deleting the live option later never changes a past bill.
+- **staff_calls** — a seat's "call staff" request, independent of
+  `orders` (a table can call staff with no order yet). At most one
+  `open` call per seat is enforced by a partial unique index; see
+  [features/customer-ordering.md](./features/customer-ordering.md#calling-staff-post-apiorderseattokencall)
+  and
+  [features/order-fulfillment.md](./features/order-fulfillment.md#staff-calls-apiadmincalls).
 - **payments** — exactly one per paid order (`order_id` UNIQUE).
 - **sessions / magic_link_tokens** — auth artifacts; see
   [features/authentication.md](./features/authentication.md).
@@ -99,15 +106,33 @@ ordered ──(staff marks served)──▶ served
   `cancelled`. `sumOrderItems` excludes `cancelled` items from every
   total, so voiding a line never requires recomputation elsewhere.
 
+### staff_calls.status
+
+```
+open ──(staff resolves)──▶ resolved
+```
+
+- `open → resolved` (`PATCH /api/admin/calls/:id/resolve`) is terminal
+  and idempotent. `resolved_at` must be set once `resolved` (DB CHECK
+  constraint, same pattern as `orders.closed_at`). A resolved call
+  frees the seat for a fresh `open` call — the partial unique index
+  only covers `status = 'open'`.
+
 ## Invariants (DB-enforced)
 
 1. **One active order per seat** — partial unique index on
    `orders.seat_id WHERE status IN ('open','payment_requested')`. Handles
    concurrent Workers racing to create the first order.
-2. **One payment per order** — `payments.order_id` UNIQUE. Concurrent
+2. **One open call per seat** — partial unique index on
+   `staff_calls.seat_id WHERE status = 'open'`, same pattern as
+   invariant 1. Concurrent taps of the call-staff button race safely:
+   the loser's INSERT fails the constraint and the API re-reads the
+   winner's row instead of erroring.
+3. **One payment per order** — `payments.order_id` UNIQUE. Concurrent
    double-checkout is caught by the constraint and surfaced as 409.
-3. **Paid or cancelled orders have `closed_at`** — CHECK constraint.
-4. **Positive amounts** — `menu_items.price > 0`,
+4. **Paid or cancelled orders have `closed_at`; resolved calls have
+   `resolved_at`** — CHECK constraints.
+5. **Positive amounts** — `menu_items.price > 0`,
    `order_items.quantity > 0` (also capped at 99 by Zod),
    `payments.total_amount >= 0`.
 

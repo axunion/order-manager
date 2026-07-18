@@ -91,9 +91,10 @@ photos, and customers stop needing to flag down staff.
    [domain-model](specs/domain-model.md)
    Option groups (size, toppings) with price deltas, plus a free-text
    note per item. The biggest schema change in the roadmap.
-3. **Staff call**
-   → [proposal](proposals/staff-call.md)
-   ([customer-ordering](specs/features/customer-ordering.md))
+3. **✅ Shipped — Staff call**
+   → [customer-ordering](specs/features/customer-ordering.md#calling-staff-post-apiorderseattokencall),
+   [order-fulfillment](specs/features/order-fulfillment.md#staff-calls-apiadmincalls),
+   [domain-model](specs/domain-model.md)
    A "call staff" button on the order screen surfacing on the order
    board with the same alert mechanism as new orders.
 4. **Order progress for customers**

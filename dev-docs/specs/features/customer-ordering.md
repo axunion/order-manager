@@ -15,6 +15,9 @@ returned `items` array with `status: 'cancelled'` (for a strikethrough
 display) rather than disappearing; the order `total` already excludes
 them.
 
+Bootstrap also embeds `call: { id, status, created_at } | null` — the
+seat's open call-staff request, if any (see "Calling staff" below).
+
 Each menu item also carries `description`, `image_key` (both nullable),
 and `option_groups` — only the groups attached to that item, each with
 its options embedded (keeps the payload small; see
@@ -64,6 +67,24 @@ field (≤ 200 chars).
   `(unit_price_snapshot + Σ price_delta_snapshot) × quantity`
   (`sumOrderItems`, `@order/core`).
 
+### Calling staff (`POST /api/order/:seatToken/call`)
+
+- Creates an `open` call for the seat. **Idempotent per seat**: if an
+  open call already exists, returns it unchanged with 200 instead of
+  creating a duplicate (201 for a genuinely new call) — this also caps
+  a table to one outstanding call, so repeated taps can't flood the
+  board. A partial unique index on `staff_calls.seat_id WHERE status =
+  'open'` makes concurrent first-taps safe at the DB level, mirroring
+  the one-active-order-per-seat pattern.
+- The Header's "スタッフを呼ぶ" button stays enabled even while a call is
+  open (re-tapping is a safe no-op); a separate status line reads "呼ん
+  でいます" while the call is open. `OrderScreen` polls only the `call`
+  field of the bootstrap response every 5s to pick up a staff resolve —
+  deliberately not the full bootstrap, so in-progress UI (e.g. an open
+  item detail sheet) isn't disturbed by the poll.
+- Resolved by staff from the order board (see
+  [order-fulfillment.md](./order-fulfillment.md#staff-calls-apiadmincalls)).
+
 ### Requesting the bill (`PATCH /api/order/:seatToken/request-payment`)
 
 - Transitions `open → payment_requested`. Idempotent (repeat → 200).
@@ -85,8 +106,6 @@ fresh.
   (`dev-docs/specs/features/order-fulfillment.md`); a "call staff"
   button is the intended UX for customer-initiated corrections.
   (Deliberate v1 decision — revisit with pilot feedback)
-- **No staff call** — customers can only order; "water please" still
-  needs shouting. (Phase 3)
 - **No order-status feedback** — the customer cannot see
   ordered/served progress per item (data exists; UI/API choice).
   (Phase 3)

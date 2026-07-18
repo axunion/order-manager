@@ -45,23 +45,39 @@ orders. Requires the `session_token` cookie (`requireStore`).
 All four endpoints are single-row-scoped with `store_id` filters;
 cross-tenant ids → 404 (not 403).
 
-### New-order alerts (client-side only, no API change)
+### Staff calls (`/api/admin/calls`)
 
-The board diffs each poll against a watermark (the max
-`order_items.created_at` seen so far, items not orders — appended items
-to an existing order alert too). Any item newer than the watermark
-triggers the alert and advances it; the initial load sets the watermark
-silently. The `?since=` param above stays unused for this — full-list
-diffing is simpler at this scale.
+- `GET /` — lists calls, oldest first, joined with seat name. Defaults
+  to `?status=open`; `?status=all` includes resolved calls (history).
+  Polled every 5 seconds, same cadence as the order board, into a
+  banner strip above the order list (seat name, elapsed time, a
+  "対応済み" resolve button).
+- `PATCH /:id/resolve` — idempotent; sets `resolved_at`. `store_id`
+  filtered; cross-tenant/unknown ids → 404.
+- Customers create calls from the order screen — see
+  [customer-ordering.md](./customer-ordering.md#calling-staff-post-apiorderseattokencall).
 
-- **Visual (always on):** the affected order card gets a highlight ring
-  for ~10s (a second alert on the same order restarts the window rather
-  than clearing it early); `document.title` gains a `(N)` count of
-  `ordered`-status items so a backgrounded tab still shows activity.
+### New-order and new-call alerts (client-side only, no API change)
+
+Both the order board and the call banner share the same alert
+mechanism (`apps/admin/src/lib/orderAlerts.ts`), each diffing its own
+poll against its own watermark (orders: the max `order_items.created_at`
+seen so far, items not orders — appended items to an existing order
+alert too; calls: the max `staff_calls.created_at` among open calls).
+Anything newer than the watermark triggers the alert and advances it;
+the initial load of each sets its watermark silently. The `?since=`
+param above stays unused for this — full-list diffing is simpler at
+this scale.
+
+- **Visual (always on):** the affected order card or call banner row
+  gets a highlight ring for ~10s (a second alert on the same id
+  restarts the window rather than clearing it early); `document.title`
+  gains a `(N)` count of `ordered`-status items so a backgrounded tab
+  still shows activity.
 - **Sound (opt-in):** a Web Audio oscillator beep, toggled in the board
   header and persisted to `localStorage` (`order-alert-sound`) — sound
   is blocked by browsers before a user gesture, so the first toggle-on
-  click doubles as the unlock.
+  click doubles as the unlock. New orders and new calls both trigger it.
 
 ## Known limitations (→ roadmap)
 
