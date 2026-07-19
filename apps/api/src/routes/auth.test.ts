@@ -661,7 +661,11 @@ describe("requireStore middleware (session-based)", () => {
       .where(eq(schema.sessions.session_token, token))
       .then((rows) => rows[0]);
     expect(after?.last_used_at).toBeTruthy();
-    expect(after?.expires_at ?? 0).toBeGreaterThan(before?.expires_at ?? 0);
+    // expires_at and last_used_at are set from the same now() call in the
+    // middleware, so this exact relationship is a non-flaky way to prove a
+    // refresh happened (a >-than-before comparison can tie when two now()
+    // calls land in the same millisecond).
+    expect(after?.expires_at).toBe((after?.last_used_at ?? 0) + SESSION_TTL_MS);
   });
 
   it("does not rewrite last_used_at/expires_at when refreshed less than an hour ago", async () => {
@@ -713,7 +717,8 @@ describe("requireStore middleware (session-based)", () => {
       .where(eq(schema.sessions.session_token, token))
       .then((rows) => rows[0]);
     expect(after?.last_used_at).toBeGreaterThan(staleTs);
-    expect(after?.expires_at ?? 0).toBeGreaterThan(originalExpiresAt);
+    // Same non-flaky relationship check as the "fresh session" test above.
+    expect(after?.expires_at).toBe((after?.last_used_at ?? 0) + SESSION_TTL_MS);
   });
 
   it("grants access to an active store with a valid session", async () => {
