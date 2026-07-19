@@ -1,9 +1,10 @@
 # Payments Expansion (Methods, Adjustments, Split, Refund)
 
-**Status:** design sketch — drafted 2026-07-11 (roadmap Phase 4, items 1, 3–5).
-Deliberately lower fidelity: the right design depends on Phase 2 pilot
-data (how checkout is actually operated). Resolve the open decisions and
-promote to "ready" before implementing.
+**Status:** ready — open decisions resolved 2026-07-19 (roadmap Phase 4,
+items 1, 3, 5; item 4 deferred, see below). Implementation order:
+item 1 (cashless methods) → item 3 (adjustments) → item 5 (void/refund),
+ahead of receipts-and-tax.md item 2 so the receipt view can render
+discounts from the start.
 
 ## 1. Cashless payment methods (recording, not processing)
 
@@ -34,10 +35,16 @@ would be a separate proposal.
 - Checkout UI: discount entry behind a deliberate extra tap (misuse
   friction); reason free-text or preset list — decide with the pilot.
 
-**Open decision:** per-item comps vs. whole-check discount. Start
-whole-check; per-item pressure would instead reuse Phase 2 item-void.
+**Resolved:** whole-check discount only, per-item comps deferred —
+per-item pressure would instead reuse Phase 2 item-void.
 
-## 3. Split billing
+## 3. Split billing — deferred
+
+**Resolved: not implemented in this Phase 4 pass.** No pilot restaurant
+has generated an actual demand signal for this yet, and the proposal
+itself scopes it to ship last and "only on real demand." Left as a
+backlog item; revisit if/when a real store asks for it. If built, the
+sketch below is still the recommended starting point.
 
 The heaviest change: today `payments.order_id` is UNIQUE and the paid
 transition is atomic with the single payment.
@@ -51,11 +58,8 @@ transition is atomic with the single payment.
   serialized (D1 has no row locks — consider a
   `payments_settled_total` counter column on orders updated in the same
   batch, with a CHECK against overpayment).
-
-**Open decision:** split by amount only (どんぶり勘定), or by items?
-Amount-only is drastically simpler and matches izakaya reality — start
-there, if at all. This item ships **last** in Phase 4 and only on real
-demand.
+- Split by amount only (どんぶり勘定), not by items — drastically
+  simpler and matches izakaya reality.
 
 ## 4. Payment void / refund
 
@@ -68,9 +72,10 @@ demand.
 
 ## Interactions to respect
 
-- Receipts ([receipts-and-tax.md](./receipts-and-tax.md)) must render
-  discounts and (if implemented) splits — sequence receipts after
-  adjustments, or scope receipt v1 to unadjusted checks.
-- All four items keep the invariant: **the server computes every amount
-  from snapshots; clients only ever send intents** (method, discount,
-  void), never totals.
+- Receipts ([receipts-and-tax.md](./receipts-and-tax.md)) render
+  discounts — adjustments (item 3 above) ships before receipts so the
+  receipt view supports discount rendering from the start. Splits are
+  moot for now since item 4 (split billing) is deferred.
+- All items keep the invariant: **the server computes every amount from
+  snapshots; clients only ever send intents** (method, discount, void),
+  never totals.

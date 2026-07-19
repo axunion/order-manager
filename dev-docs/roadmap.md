@@ -110,21 +110,30 @@ photos, and customers stop needing to flag down staff.
 **Goal:** checkout handles real-world Japanese payment flows, not just
 exact cash.
 
-Design sketches: [payments-expansion](proposals/payments-expansion.md)
-(items 1, 3–5) and [receipts-and-tax](proposals/receipts-and-tax.md)
-(item 2) — resolve their open decisions before implementing.
+Design docs, both promoted to "ready" on 2026-07-19:
+[payments-expansion](proposals/payments-expansion.md) (items 1, 3, 5;
+item 4 deferred) and [receipts-and-tax](proposals/receipts-and-tax.md)
+(item 2, 領収書 out of scope). **Implementation order deviates from the
+priority order below:** item 1 → item 3 → item 2 → item 5, so the
+receipt view (item 2) can render discounts (item 3) from the start
+instead of needing a revisit — see payments-expansion.md's
+"Interactions to respect".
 
 1. **Cashless payments** — extend `payments.method` to `'card' | 'qr'`
    as the schema reserves. Start with recording the method chosen at a
    staff-operated terminal (no processor integration); evaluate Stripe
    or similar for true integration as a follow-up decision.
-2. **Receipts (レシート/領収書)** — digital receipt page for customers;
+2. **Receipts (レシート)** — digital receipt page for customers;
    requires per-item tax-rate metadata (8% reduced / 10% standard) and a
    tax breakdown, which is a menu schema change — coordinate with
-   Phase 3 menu work.
+   Phase 3 menu work. Formal 領収書 (addressee receipt) is out of scope
+   (see receipts-and-tax.md).
 3. **Adjustments** — discounts/comps at checkout, service charge;
-   amounts always recomputed and bounded server-side.
-4. **Split billing** — settle one order across multiple payments.
+   amounts always recomputed and bounded server-side. Whole-check
+   discount only in v1; per-item comps deferred to Phase 2's item-void.
+4. **Split billing — deferred (backlog).** No pilot demand signal yet;
+   the proposal itself scopes this to ship last and "only on real
+   demand." Revisit if/when a real store asks for it.
 5. **Payment void/refund** — reverse a completed payment with an audit
    trail, instead of DB edits.
 

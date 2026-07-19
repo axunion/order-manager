@@ -1,8 +1,10 @@
 # Receipts & Tax Breakdown
 
-**Status:** design sketch — drafted 2026-07-11 (roadmap Phase 4, item 2).
-Interacts with menu schema (Phase 3) and adjustments (Phase 4) — confirm
-those before promoting to "ready".
+**Status:** ready — open decisions resolved 2026-07-19 (roadmap Phase 4,
+item 2). Ships after payments-expansion.md's adjustments (item 3), so
+the receipt view renders discounts from the start — see that doc's
+"Interactions to respect". 領収書 (formal receipt) stays out of scope,
+per its own section below.
 
 ## Tax model
 
@@ -34,16 +36,16 @@ schema shouldn't assume 10% forever:
 
 ## 領収書 (formal receipt with addressee)
 
-**Open decision — likely out of scope.** A formal 領収書 needs the
-store's registered name/address and an addressee line, and often paper.
-Sketch if demanded: printable HTML view with an addressee input,
-generated from the same data. Do not build speculatively.
+**Resolved: out of scope for this pass.** A formal 領収書 needs the
+store's registered name/address and an addressee line, and often paper
+— none of which exists yet. Not building speculatively; sketch (a
+printable HTML view with an addressee input, generated from the same
+data) stays here for if it's ever demanded.
 
 ## Sequencing
 
-1. Tax metadata columns (cheap, additive) can ship any time after
-   Phase 3's menu work settles the item schema.
-2. Receipt view ships after `payments-expansion` decides on
-   discounts/splits (a receipt that can't show a discount is wrong the
-   day adjustments land) — or scope v1 receipts to unadjusted checks
-   explicitly.
+1. Tax metadata columns (cheap, additive) ship first — schema is
+   already settled by Phase 3's menu work.
+2. Digital receipt view ships after payments-expansion.md's
+   adjustments (item 3), so it renders discounts from day one instead
+   of needing a revisit.
