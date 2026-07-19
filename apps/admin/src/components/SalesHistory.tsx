@@ -1,8 +1,9 @@
 import { jstDayRange, todayJst } from "@order/core";
-import { apiFetch } from "@order/core/client";
-import { Button, ErrorAlert } from "@order/ui";
+import { apiFetch, jsonFetch } from "@order/core/client";
+import { Button, ConfirmDialog, ErrorAlert, Field } from "@order/ui";
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import styles from "./SalesHistory.module.css";
+import StatusBadge from "./StatusBadge";
 
 type SalesItem = {
   id: string;
@@ -23,6 +24,8 @@ type Payment = {
   discount_amount: number;
   discount_reason: string | null;
   paid_at: number;
+  voided_at: number | null;
+  void_reason: string | null;
   items: SalesItem[];
 };
 
@@ -61,7 +64,60 @@ export default function SalesHistory() {
   const [payments, setPayments] = createSignal<Payment[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal("");
+  const [actionError, setActionError] = createSignal("");
   const [expanded, setExpanded] = createSignal<Set<string>>(new Set());
+  const [voidReasonOpen, setVoidReasonOpen] = createSignal<Set<string>>(
+    new Set(),
+  );
+  const [voidReasonByPayment, setVoidReasonByPayment] = createSignal<
+    Map<string, string>
+  >(new Map());
+  const [voiding, setVoiding] = createSignal<Set<string>>(new Set());
+
+  const voidReasonFor = (paymentId: string): string =>
+    voidReasonByPayment().get(paymentId) ?? "";
+
+  const setVoidReason = (paymentId: string, reason: string) => {
+    setVoidReasonByPayment((prev) => new Map(prev).set(paymentId, reason));
+  };
+
+  const toggleVoidReasonOpen = (paymentId: string) => {
+    setVoidReasonOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(paymentId)) {
+        next.delete(paymentId);
+        setVoidReason(paymentId, "");
+      } else {
+        next.add(paymentId);
+      }
+      return next;
+    });
+  };
+
+  async function handleVoid(paymentId: string) {
+    setActionError("");
+    setVoiding((prev) => new Set([...prev, paymentId]));
+    try {
+      const result = await jsonFetch(
+        `/api/payments/${paymentId}/void`,
+        "PATCH",
+        {
+          void_reason: voidReasonFor(paymentId).trim(),
+        },
+      );
+      if (!result.ok) {
+        setActionError(result.message ?? "取消処理に失敗しました。");
+        return;
+      }
+      await load();
+    } finally {
+      setVoiding((prev) => {
+        const next = new Set(prev);
+        next.delete(paymentId);
+        return next;
+      });
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -84,16 +140,21 @@ export default function SalesHistory() {
     load();
   });
 
-  const totalRevenue = createMemo(() =>
-    payments().reduce((sum, p) => sum + p.total_amount, 0),
+  // Voided payments stay in the list (for audit/history, struck through)
+  // but never count toward revenue.
+  const settledPayments = createMemo(() =>
+    payments().filter((p) => p.voided_at === null),
   );
-  const checkCount = createMemo(() => payments().length);
+  const totalRevenue = createMemo(() =>
+    settledPayments().reduce((sum, p) => sum + p.total_amount, 0),
+  );
+  const checkCount = createMemo(() => settledPayments().length);
   const averagePerCheck = createMemo(() =>
     checkCount() === 0 ? 0 : Math.round(totalRevenue() / checkCount()),
   );
   const methodTotals = createMemo(() => {
     const totals = new Map<PaymentMethod, number>();
-    for (const p of payments()) {
+    for (const p of settledPayments()) {
       totals.set(p.method, (totals.get(p.method) ?? 0) + p.total_amount);
     }
     return (Object.keys(METHOD_LABELS) as PaymentMethod[]).map((method) => ({
@@ -141,7 +202,10 @@ export default function SalesHistory() {
         </Button>
       </div>
 
-      <Show when={error()}>
+      <Show when={actionError()}>
+        <ErrorAlert>{actionError()}</ErrorAlert>
+      </Show>
+      <Show when={error() && !actionError()}>
         <ErrorAlert>{error()}</ErrorAlert>
       </Show>
 
@@ -189,7 +253,9 @@ export default function SalesHistory() {
           <ul class={styles.checkList} aria-label="会計一覧">
             <For each={payments()}>
               {(payment) => (
-                <li class={styles.checkItem}>
+                <li
+                  class={`${styles.checkItem} ${payment.voided_at !== null ? styles.checkItemVoided : ""}`}
+                >
                   <button
                     type="button"
                     class={styles.checkHeader}
@@ -200,6 +266,9 @@ export default function SalesHistory() {
                       {formatTime(payment.paid_at)}
                     </span>
                     <span class={styles.checkSeat}>{payment.seat_name}</span>
+                    <Show when={payment.voided_at !== null}>
+                      <StatusBadge tone="danger">取消済み</StatusBadge>
+                    </Show>
                     <span class={styles.checkMethod}>
                       {METHOD_LABELS[payment.method]}
                     </span>
@@ -247,6 +316,59 @@ export default function SalesHistory() {
                         </li>
                       </Show>
                     </ul>
+
+                    <Show
+                      when={payment.voided_at !== null}
+                      fallback={
+                        <div class={styles.voidSection}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            aria-expanded={voidReasonOpen().has(payment.id)}
+                            disabled={voiding().has(payment.id)}
+                            onClick={() => toggleVoidReasonOpen(payment.id)}
+                          >
+                            {voidReasonOpen().has(payment.id)
+                              ? "取消を取りやめる"
+                              : "この支払いを取り消す"}
+                          </Button>
+                          <Show when={voidReasonOpen().has(payment.id)}>
+                            <div class={styles.voidFields}>
+                              <Field
+                                id={`void-reason-${payment.id}`}
+                                label="取消理由"
+                                value={voidReasonFor(payment.id)}
+                                disabled={voiding().has(payment.id)}
+                                onInput={(e) =>
+                                  setVoidReason(
+                                    payment.id,
+                                    e.currentTarget.value,
+                                  )
+                                }
+                              />
+                              <ConfirmDialog
+                                triggerLabel="取消を確定"
+                                triggerVariant="danger"
+                                triggerSize="sm"
+                                triggerDisabled={
+                                  voidReasonFor(payment.id).trim() === "" ||
+                                  voiding().has(payment.id)
+                                }
+                                title="支払いを取り消しますか？"
+                                description={`${payment.seat_name}・${formatCurrency(payment.total_amount)}を取り消します。取り消すと会計待ちの状態に戻り、売上から除外されます。`}
+                                confirmLabel="取り消す"
+                                onConfirm={() => handleVoid(payment.id)}
+                              />
+                            </div>
+                          </Show>
+                        </div>
+                      }
+                    >
+                      <p class={styles.voidedNote}>
+                        取消理由：{payment.void_reason}
+                      </p>
+                    </Show>
                   </Show>
                 </li>
               )}

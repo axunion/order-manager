@@ -8,6 +8,7 @@ interface ConfirmDialogProps {
   triggerLabel: string;
   triggerVariant?: Variant;
   triggerSize?: Size;
+  triggerDisabled?: boolean;
   "aria-label"?: string;
   title: string;
   description: string;
@@ -35,6 +36,7 @@ export default function ConfirmDialog(props: ConfirmDialogProps) {
       <Button
         variant={props.triggerVariant ?? "danger"}
         size={props.triggerSize ?? "sm"}
+        disabled={props.triggerDisabled}
         aria-label={props["aria-label"]}
         onClick={() => setIsOpen(true)}
       >

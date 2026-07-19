@@ -1,5 +1,6 @@
 import {
   CreatePaymentInput,
+  CreateVoidInput,
   errorResponse,
   newId,
   now,
@@ -7,7 +8,7 @@ import {
   sumOrderItems,
 } from "@order/core";
 import { createDb, schema } from "@order/db";
-import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt } from "drizzle-orm";
 import { Hono } from "hono";
 import { type AuthEnv, requireStore } from "../middleware";
 import {
@@ -41,6 +42,8 @@ type PaymentHistoryPayload = {
   discount_amount: number;
   discount_reason: string | null;
   paid_at: number;
+  voided_at: number | null;
+  void_reason: string | null;
   items: OrderItemPayload[];
 };
 
@@ -177,6 +180,8 @@ export const paymentsRouter = new Hono<AuthEnv>()
       discount_amount: payment.discount_amount,
       discount_reason: payment.discount_reason,
       paid_at: payment.paid_at,
+      voided_at: payment.voided_at,
+      void_reason: payment.void_reason,
       items: (itemsByOrderId.get(payment.order_id) ?? []).map(mapOrderItem),
     }));
 
@@ -438,4 +443,126 @@ export const paymentsRouter = new Hono<AuthEnv>()
       },
       201,
     );
+  })
+
+  /**
+   * PATCH /api/payments/:id/void
+   * Voids a completed payment — all-or-nothing, no partial refunds.
+   * Reopens the order to 'payment_requested' (same batch) so it can be
+   * corrected and re-settled, or cancelled via the existing order-cancel
+   * flow.
+   *
+   * Idempotent: voiding an already-voided payment returns its existing
+   * void state unchanged, without touching the order again.
+   *
+   * 409 if reopening would violate the one-active-order-per-seat
+   * invariant — e.g. the seat already started a new order since this
+   * one was paid (paying frees the seat, same as cancelling does).
+   *
+   * Response: 200 { data: { id, order_id, voided_at, void_reason } }
+   */
+  .patch("/:id/void", bodyValidator(CreateVoidInput), async (c) => {
+    const { id: storeId } = c.var.store;
+    const paymentId = c.req.param("id");
+    const { void_reason: voidReason } = c.req.valid("json");
+    const db = createDb(c.env.DB);
+
+    const paymentRows = await db
+      .select()
+      .from(schema.payments)
+      .where(
+        and(
+          eq(schema.payments.id, paymentId),
+          eq(schema.payments.store_id, storeId),
+        ),
+      )
+      .limit(1);
+    const payment = paymentRows[0];
+    if (!payment) {
+      return errorResponse("NOT_FOUND", "支払いが見つかりません。", 404);
+    }
+
+    if (payment.voided_at !== null) {
+      return c.json({
+        data: {
+          id: payment.id,
+          order_id: payment.order_id,
+          voided_at: payment.voided_at,
+          void_reason: payment.void_reason,
+        },
+      });
+    }
+
+    const voidedAt = now();
+    try {
+      await db.batch([
+        db
+          .update(schema.payments)
+          .set({ voided_at: voidedAt, void_reason: voidReason })
+          .where(
+            and(
+              eq(schema.payments.id, paymentId),
+              eq(schema.payments.store_id, storeId),
+              isNull(schema.payments.voided_at),
+            ),
+          ),
+        db
+          .update(schema.orders)
+          .set({ status: "payment_requested", closed_at: null })
+          .where(
+            and(
+              eq(schema.orders.id, payment.order_id),
+              eq(schema.orders.store_id, storeId),
+              eq(schema.orders.status, "paid"),
+            ),
+          ),
+      ]);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("UNIQUE constraint failed")) {
+        return errorResponse(
+          "CONFLICT",
+          "この席には既に新しい注文があるため、取消できません。",
+          409,
+        );
+      }
+      return errorResponse(
+        "INTERNAL_ERROR",
+        "取消処理中にエラーが発生しました。再度お試しください。",
+        500,
+      );
+    }
+
+    // Re-read rather than trust the locally-computed values: a concurrent
+    // void of the same payment could have won the race (its UPDATE guarded
+    // by `voided_at IS NULL` applies, this one's affects zero rows) — the
+    // batch itself doesn't error in that case, so this is the only way to
+    // return what was actually persisted instead of a caller-local guess.
+    const voidedRows = await db
+      .select()
+      .from(schema.payments)
+      .where(
+        and(
+          eq(schema.payments.id, paymentId),
+          eq(schema.payments.store_id, storeId),
+        ),
+      )
+      .limit(1);
+    const voided = voidedRows[0];
+    if (!voided) {
+      return errorResponse(
+        "INTERNAL_ERROR",
+        "取消処理中にエラーが発生しました。再度お試しください。",
+        500,
+      );
+    }
+
+    return c.json({
+      data: {
+        id: voided.id,
+        order_id: voided.order_id,
+        voided_at: voided.voided_at,
+        void_reason: voided.void_reason,
+      },
+    });
   });

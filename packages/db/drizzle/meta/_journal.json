@@ -78,6 +78,20 @@
       "when": 1784453065473,
       "tag": "0010_dry_iron_lad",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1784454344362,
+      "tag": "0011_perpetual_sandman",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1784455293828,
+      "tag": "0012_salty_mordo",
+      "breakpoints": true
     }
   ]
 }

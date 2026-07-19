@@ -127,6 +127,25 @@ describe("ConfirmDialog", () => {
     resolve();
   });
 
+  it("disables the trigger and does not open the dialog when triggerDisabled is true", async () => {
+    const user = userEvent.setup();
+    render(() => (
+      <ConfirmDialog
+        triggerLabel="削除"
+        triggerDisabled
+        title="削除の確認"
+        description="削除しますか？"
+        onConfirm={() => {}}
+      />
+    ));
+
+    const trigger = screen.getByRole("button", { name: "削除" });
+    expect((trigger as HTMLButtonElement).disabled).toBe(true);
+
+    await user.click(trigger);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
   it("uses aria-label on trigger button", () => {
     render(() => (
       <ConfirmDialog

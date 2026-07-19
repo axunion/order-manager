@@ -108,6 +108,10 @@
   overflow: hidden;
 }
 
+.checkItemVoided {
+  opacity: 0.6;
+}
+
 .checkHeader {
   display: flex;
   align-items: center;
@@ -147,6 +151,11 @@
   font-size: var(--text-xs);
   font-weight: var(--font-normal);
   color: var(--color-muted-foreground);
+  text-decoration: line-through;
+}
+
+.checkItemVoided .checkTotal,
+.checkItemVoided .checkTotalOriginal {
   text-decoration: line-through;
 }
 
@@ -205,4 +214,31 @@
 .itemCancelled .itemQty,
 .itemCancelled .itemPrice {
   text-decoration: line-through;
+}
+
+.voidSection {
+  padding: var(--space-3) var(--space-5) var(--space-4);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.voidFields {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.voidFields > :first-child {
+  flex: 1;
+  min-width: 12rem;
+}
+
+.voidedNote {
+  margin: 0;
+  padding: var(--space-3) var(--space-5) var(--space-4);
+  color: var(--color-danger-fg);
+  font-size: var(--text-sm);
 }

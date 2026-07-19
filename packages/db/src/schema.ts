@@ -494,9 +494,14 @@ export const payments = sqliteTable(
     store_id: text("store_id")
       .notNull()
       .references(() => stores.id),
+    /**
+     * Not globally unique — a voided payment's row stays for audit history,
+     * so re-settling the same order after a void must be able to insert a
+     * second row for it. Uniqueness only applies among non-voided rows;
+     * see idx_one_settled_payment_per_order below.
+     */
     order_id: text("order_id")
       .notNull()
-      .unique()
       .references(() => orders.id),
     /**
      * Charged amount: (sum of unit_price_snapshot x quantity for all
@@ -510,6 +515,10 @@ export const payments = sqliteTable(
     /** Required when discount_amount > 0; null otherwise. */
     discount_reason: text("discount_reason"), // nullable
     paid_at: integer("paid_at").notNull(), // Unix ms
+    /** Set when the payment is voided; all-or-nothing, no partial refunds. */
+    voided_at: integer("voided_at"), // Unix ms, nullable
+    /** Required when voided_at is set; null otherwise. */
+    void_reason: text("void_reason"), // nullable
   },
   (table) => [
     check("payments_total_amount_nonneg_chk", sql`${table.total_amount} >= 0`),
@@ -525,5 +534,15 @@ export const payments = sqliteTable(
       "payments_discount_has_reason_chk",
       sql`${table.discount_amount} = 0 OR ${table.discount_reason} IS NOT NULL`,
     ),
+    check(
+      "payments_void_has_reason_chk",
+      sql`${table.voided_at} IS NULL OR ${table.void_reason} IS NOT NULL`,
+    ),
+    // Enforces "at most one settled (non-voided) payment per order" —
+    // mirrors idx_one_active_order_per_seat's partial-unique pattern, so a
+    // concurrent double-checkout still races safely at the DB level.
+    uniqueIndex("idx_one_settled_payment_per_order")
+      .on(table.order_id)
+      .where(sql`${table.voided_at} IS NULL`),
   ],
 );

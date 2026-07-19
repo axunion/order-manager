@@ -45,6 +45,8 @@ const mockPayments = [
     method: "cash",
     discount_amount: 0,
     discount_reason: null,
+    voided_at: null,
+    void_reason: null,
     paid_at: 1_700_000_000_000,
     items: [
       {
@@ -74,6 +76,8 @@ const mockPayments = [
     method: "card",
     discount_amount: 0,
     discount_reason: null,
+    voided_at: null,
+    void_reason: null,
     paid_at: 1_700_000_100_000,
     items: [
       {
@@ -227,6 +231,8 @@ describe("SalesHistory", () => {
       method: "cash",
       discount_amount: 300,
       discount_reason: "常連割引",
+      voided_at: null,
+      void_reason: null,
       paid_at: 1_700_000_200_000,
       items: [
         {
@@ -310,5 +316,241 @@ describe("SalesHistory", () => {
     const nextRange = extractRange(fetchMock.mock.calls[1]?.[0] as string);
     expect(nextRange.from).toBe(initialRange.from + 24 * 60 * 60 * 1000);
     expect(nextRange.to).toBe(initialRange.to + 24 * 60 * 60 * 1000);
+  });
+});
+
+describe("SalesHistory void", () => {
+  const voidedPayment = {
+    id: "pay-void-1",
+    order_id: "order-void-1",
+    seat_name: "テーブル9",
+    total_amount: 900,
+    method: "cash",
+    discount_amount: 0,
+    discount_reason: null,
+    voided_at: 1_700_000_300_000,
+    void_reason: "誤会計",
+    paid_at: 1_700_000_290_000,
+    items: [
+      {
+        id: "item-void-1",
+        name_snapshot: "うどん",
+        unit_price_snapshot: 900,
+        quantity: 1,
+        status: "ordered",
+      },
+    ],
+  };
+
+  const settledPayment = {
+    id: "pay-settled-1",
+    order_id: "order-settled-1",
+    seat_name: "テーブル10",
+    total_amount: 500,
+    method: "cash",
+    discount_amount: 0,
+    discount_reason: null,
+    voided_at: null,
+    void_reason: null,
+    paid_at: 1_700_000_310_000,
+    items: [
+      {
+        id: "item-settled-1",
+        name_snapshot: "そば",
+        unit_price_snapshot: 500,
+        quantity: 1,
+        status: "ordered",
+      },
+    ],
+  };
+
+  it("excludes a voided payment from revenue totals but still lists it, badged", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/payments",
+          method: "GET",
+          json: { data: [voidedPayment, settledPayment] },
+        },
+      ]),
+    );
+
+    render(() => <SalesHistory />);
+    const voidedSeat = await screen.findByText("テーブル9");
+    await screen.findByText("取消済み");
+    expect(voidedSeat.closest("li")?.className).toMatch(/checkItemVoided/);
+
+    // 売上合計/平均単価/現金内訳/checkTotal all coincide at ¥500 here,
+    // since the voided ¥900 is excluded from every one of these and only
+    // the settled ¥500 counts (¥900 still renders once, struck through,
+    // in the voided payment's own row — it isn't hidden, just excluded
+    // from the aggregates).
+    const amounts = await screen.findAllByText("¥500");
+    expect(amounts.length).toBe(4);
+    await screen.findByText("1件"); // 会計件数 also excludes the voided one
+  });
+
+  it("shows the void reason instead of a void action for an already-voided payment", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/payments",
+          method: "GET",
+          json: { data: [voidedPayment] },
+        },
+      ]),
+    );
+
+    render(() => <SalesHistory />);
+    const checkHeader = await screen.findByText("テーブル9");
+    await user.click(checkHeader);
+
+    await screen.findByText("取消理由：誤会計");
+    expect(
+      screen.queryByRole("button", { name: "この支払いを取り消す" }),
+    ).toBeNull();
+  });
+
+  it("disables the confirm trigger until a void reason is entered", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/payments",
+          method: "GET",
+          json: { data: [settledPayment] },
+        },
+      ]),
+    );
+
+    render(() => <SalesHistory />);
+    const checkHeader = await screen.findByText("テーブル10");
+    await user.click(checkHeader);
+
+    const toggleBtn = await screen.findByRole("button", {
+      name: "この支払いを取り消す",
+    });
+    await user.click(toggleBtn);
+
+    const confirmTrigger = await screen.findByRole("button", {
+      name: "取消を確定",
+    });
+    expect((confirmTrigger as HTMLButtonElement).disabled).toBe(true);
+
+    const reasonInput = await screen.findByLabelText("取消理由");
+    await user.type(reasonInput, "誤会計");
+    expect((confirmTrigger as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("voids the payment via the confirm dialog and refreshes the list", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch([
+      {
+        url: "/api/payments",
+        method: "GET",
+        json: { data: [settledPayment] },
+      },
+      {
+        url: "/void",
+        method: "PATCH",
+        json: {
+          data: {
+            id: settledPayment.id,
+            order_id: settledPayment.order_id,
+            voided_at: 1_700_000_400_000,
+            void_reason: "誤会計",
+          },
+        },
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(() => <SalesHistory />);
+    const checkHeader = await screen.findByText("テーブル10");
+    await user.click(checkHeader);
+
+    const toggleBtn = await screen.findByRole("button", {
+      name: "この支払いを取り消す",
+    });
+    await user.click(toggleBtn);
+    const reasonInput = await screen.findByLabelText("取消理由");
+    await user.type(reasonInput, "誤会計");
+
+    const confirmTrigger = await screen.findByRole("button", {
+      name: "取消を確定",
+    });
+    await user.click(confirmTrigger);
+    const confirmBtn = await screen.findByRole("button", { name: "取り消す" });
+    await user.click(confirmBtn);
+
+    const voidCall = fetchMock.mock.calls.find((args: unknown[]) => {
+      const url = args[0] as string;
+      const init = args[1] as RequestInit | undefined;
+      return (
+        url.includes("/void") && (init?.method ?? "").toUpperCase() === "PATCH"
+      );
+    });
+    expect(voidCall).toBeDefined();
+    const body = JSON.parse((voidCall?.[1] as RequestInit).body as string);
+    expect(body.void_reason).toBe("誤会計");
+
+    // The list is re-fetched after a successful void, not just PATCHed.
+    const getCallsAfter = fetchMock.mock.calls.filter((args: unknown[]) => {
+      const url = args[0] as string;
+      const init = args[1] as RequestInit | undefined;
+      return (
+        url.includes("/api/payments") &&
+        !url.includes("/void") &&
+        (init?.method ?? "GET").toUpperCase() === "GET"
+      );
+    });
+    expect(getCallsAfter.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("shows an error message when the void PATCH fails", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/payments",
+          method: "GET",
+          json: { data: [settledPayment] },
+        },
+        {
+          url: "/void",
+          method: "PATCH",
+          ok: false,
+          json: {
+            error: { code: "CONFLICT", message: "取消できません。" },
+          },
+        },
+      ]),
+    );
+
+    render(() => <SalesHistory />);
+    const checkHeader = await screen.findByText("テーブル10");
+    await user.click(checkHeader);
+
+    const toggleBtn = await screen.findByRole("button", {
+      name: "この支払いを取り消す",
+    });
+    await user.click(toggleBtn);
+    const reasonInput = await screen.findByLabelText("取消理由");
+    await user.type(reasonInput, "誤会計");
+
+    const confirmTrigger = await screen.findByRole("button", {
+      name: "取消を確定",
+    });
+    await user.click(confirmTrigger);
+    const confirmBtn = await screen.findByRole("button", { name: "取り消す" });
+    await user.click(confirmBtn);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("取消できません。");
   });
 });

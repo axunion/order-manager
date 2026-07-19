@@ -406,7 +406,17 @@ export interface PaymentResponse {
   discount_amount: number;
   discount_reason: string | null;
   paid_at: number;
+  voided_at: number | null;
+  void_reason: string | null;
 }
+
+export const CreateVoidInput = z.object({
+  void_reason: z
+    .string()
+    .transform((s) => s.trim())
+    .pipe(z.string().min(1).max(200)),
+});
+export type CreateVoidInput = z.infer<typeof CreateVoidInput>;
 
 export interface ReceiptTaxBucketResponse {
   /** Whole percent, e.g. 10 for standard rate. */
