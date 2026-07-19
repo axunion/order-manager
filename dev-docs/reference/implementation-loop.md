@@ -35,14 +35,22 @@ One slice = one commit. A slice must leave the repo green and deployable
 on its own (e.g. an API slice ships with its schema already migrated;
 unused-by-UI endpoints are fine).
 
+Scale slice count to item size: when adjacent slices are individually
+small (e.g. a one-column schema change feeding a single endpoint), merge
+them into one slice/commit — every commit pays a full pre-commit test
+run, so don't split further than the item warrants. Keep the dependency
+order either way.
+
 ## Per-slice loop
 
 1. **Tests first.** Take the slice's bullets from the proposal's
    Testing section and write them as failing tests. Run them and
    confirm they fail for the expected reason.
 2. **Implement** the minimum that makes them pass.
-3. **Verify:** `pnpm check` and `pnpm test` (full workspace run), both
-   green.
+3. **Verify:** `pnpm check` green, plus the tests of the workspace(s)
+   the slice touched (`pnpm --filter <workspace> test`). Don't run the
+   full `pnpm test` here — lefthook's pre-commit hook runs it at commit
+   time, which is the item's full-suite gate.
 4. **Review gates** — run every matching reviewer and resolve its
    findings before committing:
    - New or changed tests (i.e. every slice) → `test-quality-reviewer`
@@ -58,7 +66,8 @@ unused-by-UI endpoints are fine).
    - Touched SolidJS components, `packages/ui`, or CSS →
      `ui-reviewer` agent.
    Triggers are per-surface, so a typical slice runs one or two
-   reviewers, not all four.
+   reviewers, not all four. When more than one reviewer matches, launch
+   them in parallel — they are read-only and independent.
 5. **Commit** following the CLAUDE.md commit format. Never bypass
    lefthook (it re-runs Biome and the full test suite). Committing at
    each green slice is part of this loop — no separate approval is
@@ -85,7 +94,10 @@ An item is shipped only when all of these hold:
    - In `roadmap.md`, mark the item ✅ Shipped and repoint its proposal
      link to the spec that absorbed it.
 4. Run the `doc-sync-auditor` agent and resolve any drift it reports.
-5. Commit the doc updates (final commit of the item).
+
+Write the doc updates alongside the final slice and include them in that
+slice's commit — no separate docs-only commit (one less full pre-commit
+test run). Run `doc-sync-auditor` before that commit.
 
 ## Interrupt & resume
 

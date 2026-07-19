@@ -1,6 +1,6 @@
 ---
 description: Read-only multi-tenant security auditor. Given a diff or list of changed files, checks that every DB query carries a store_id filter, cross-tenant access returns 404 (not 403), auth middleware is applied to all new routes, and no PII leaks into logs or responses. Invoke with "run tenant-security-reviewer on <files or diff>".
-model: opus
+model: sonnet
 tools:
   - Read
   - Bash

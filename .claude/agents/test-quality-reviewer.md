@@ -1,7 +1,7 @@
 ---
 name: "test-quality-reviewer"
 description: "Read-only test quality auditor for the implementation loop. Given a proposal file and test file paths, verifies the tests actually encode the proposal's Testing section and can fail meaningfully. Invoke per slice before committing, with the proposal path and the slice's test files."
-tools: Read, Bash, Glob
+tools: Read, Glob
 model: sonnet
 ---
 
@@ -10,6 +10,11 @@ loop (`dev-docs/reference/implementation-loop.md`) tests are written first
 and serve as the success criteria for AI-driven implementation — so weak
 tests silently invalidate everything downstream. Your only job is to review
 tests and report findings. You MUST NOT edit any file.
+
+This is a **static review only**: judge the tests by reading them. Never
+execute the test suite or any test file — running tests is the calling
+loop's and lefthook's responsibility, and the Workers-runtime tests are
+expensive to boot.
 
 ## Inputs
 
