@@ -730,3 +730,255 @@ describe("OrderScreen order progress polling", () => {
     expect(screen.getByText(/会計をお待ちください/)).toBeTruthy();
   });
 });
+
+describe("OrderScreen receipt banner", () => {
+  it("shows a レシートを表示 link once the paid order disappears and the receipt endpoint confirms it", async () => {
+    vi.useFakeTimers();
+    let orderPaid = false;
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      const u = String(url);
+      if (u.includes("/receipt/order1")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ data: { order_id: "order1" } }),
+        });
+      }
+      if (u.includes("/api/order/")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            data: {
+              ...bootstrapWithOrder.data,
+              order: orderPaid
+                ? null
+                : {
+                    ...bootstrapWithOrder.data.order,
+                    status: "payment_requested",
+                  },
+            },
+          }),
+        });
+      }
+      return Promise.resolve({
+        ok: false,
+        json: async () => ({ error: { code: "NOT_FOUND", message: "" } }),
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(() => <OrderScreen seatToken="test-token" />);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByText(/会計をお待ちください/)).toBeTruthy();
+
+    orderPaid = true;
+    await vi.advanceTimersByTimeAsync(10_000); // triggers pollOrder -> order becomes null
+    await vi.advanceTimersByTimeAsync(0); // let the follow-up receipt check resolve
+
+    const link = await screen.findByRole("link", { name: "レシートを表示" });
+    expect(link.getAttribute("href")).toBe("/test-token/receipt/order1");
+  });
+
+  // apiFetch collapses a real 404 (order cancelled, not paid) and a
+  // transient network failure into the same { ok: false } shape, so this
+  // test — and the component's actual behavior — can't distinguish them:
+  // any receipt-check failure suppresses the banner. checkForReceipt has
+  // no retry, so a one-off network blip on a genuinely paid order would
+  // also permanently hide the link for that session; accepted as a low-
+  // probability edge case rather than adding retry logic.
+  it("does not show a receipt link when the receipt check fails, for any reason (cancelled order or a transient failure)", async () => {
+    vi.useFakeTimers();
+    let orderGone = false;
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      const u = String(url);
+      if (u.includes("/receipt/order1")) {
+        return Promise.resolve({
+          ok: false,
+          json: async () => ({ error: { code: "NOT_FOUND", message: "" } }),
+        });
+      }
+      if (u.includes("/api/order/")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            data: {
+              ...bootstrapWithOrder.data,
+              order: orderGone
+                ? null
+                : {
+                    ...bootstrapWithOrder.data.order,
+                    status: "payment_requested",
+                  },
+            },
+          }),
+        });
+      }
+      return Promise.resolve({
+        ok: false,
+        json: async () => ({ error: { code: "NOT_FOUND", message: "" } }),
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(() => <OrderScreen seatToken="test-token" />);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByText(/会計をお待ちください/)).toBeTruthy();
+
+    orderGone = true;
+    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(screen.queryByRole("link", { name: "レシートを表示" })).toBeNull();
+  });
+
+  it("clears the receipt banner once a new order is started", async () => {
+    vi.useFakeTimers();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    let orderPaid = false;
+    let newOrderStarted = false;
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((url: string, init?: RequestInit) => {
+        const u = String(url);
+        const method = (init?.method ?? "GET").toUpperCase();
+        if (u.includes("/receipt/order1")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ data: { order_id: "order1" } }),
+          });
+        }
+        if (u.includes("/items") && method === "POST") {
+          newOrderStarted = true;
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              data: {
+                order: {
+                  id: "order2",
+                  status: "open",
+                  items: [],
+                  total: 0,
+                },
+              },
+            }),
+          });
+        }
+        if (u.includes("/api/order/")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              data: {
+                ...bootstrapWithMenu.data,
+                order: newOrderStarted
+                  ? { id: "order2", status: "open", items: [], total: 0 }
+                  : orderPaid
+                    ? null
+                    : {
+                        id: "order1",
+                        status: "payment_requested",
+                        items: [],
+                        total: 500,
+                      },
+              },
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: false,
+          json: async () => ({ error: { code: "NOT_FOUND", message: "" } }),
+        });
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(() => <OrderScreen seatToken="test-token" />);
+    await vi.advanceTimersByTimeAsync(0);
+    orderPaid = true;
+    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(0);
+    await screen.findByRole("link", { name: "レシートを表示" });
+
+    const orderBtn = screen.getByRole("button", { name: /コーヒーを注文する/ });
+    await user.click(orderBtn);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(screen.queryByRole("link", { name: "レシートを表示" })).toBeNull();
+  });
+
+  it("does not resurrect the banner from a stale receipt check after a newer order has already started", async () => {
+    vi.useFakeTimers();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    let orderPaid = false;
+    let newOrderStarted = false;
+    let releaseReceiptCheck!: () => void;
+    const receiptCheckHeld = new Promise<void>((res) => {
+      releaseReceiptCheck = res;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((url: string, init?: RequestInit) => {
+        const u = String(url);
+        const method = (init?.method ?? "GET").toUpperCase();
+        if (u.includes("/receipt/order1")) {
+          return receiptCheckHeld.then(() => ({
+            ok: true,
+            json: async () => ({ data: { order_id: "order1" } }),
+          }));
+        }
+        if (u.includes("/items") && method === "POST") {
+          newOrderStarted = true;
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              data: {
+                order: { id: "order2", status: "open", items: [], total: 0 },
+              },
+            }),
+          });
+        }
+        if (u.includes("/api/order/")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              data: {
+                ...bootstrapWithMenu.data,
+                order: newOrderStarted
+                  ? { id: "order2", status: "open", items: [], total: 0 }
+                  : orderPaid
+                    ? null
+                    : {
+                        id: "order1",
+                        status: "payment_requested",
+                        items: [],
+                        total: 500,
+                      },
+              },
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: false,
+          json: async () => ({ error: { code: "NOT_FOUND", message: "" } }),
+        });
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(() => <OrderScreen seatToken="test-token" />);
+    await vi.advanceTimersByTimeAsync(0);
+
+    // order1 is paid; pollOrder fires the (held) receipt check.
+    orderPaid = true;
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    // Before the receipt check resolves, the customer starts a fresh order.
+    const orderBtn = screen.getByRole("button", { name: /コーヒーを注文する/ });
+    await user.click(orderBtn);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.queryByRole("link", { name: "レシートを表示" })).toBeNull();
+
+    // Now the stale receipt check for order1 finally resolves ok:true.
+    releaseReceiptCheck();
+    await vi.advanceTimersByTimeAsync(0);
+
+    // It must not resurrect a banner for the old, already-superseded order.
+    expect(screen.queryByRole("link", { name: "レシートを表示" })).toBeNull();
+  });
+});

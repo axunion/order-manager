@@ -1,5 +1,6 @@
 import {
   AddOrderItemsInput,
+  computeTaxBreakdown,
   errorResponse,
   newId,
   now,
@@ -377,6 +378,7 @@ export const orderRouter = new Hono<SeatEnv>()
           name: schema.menuItems.name,
           price: schema.menuItems.price,
           is_available: schema.menuItems.is_available,
+          tax_rate: schema.menuItems.tax_rate,
         })
         .from(schema.menuItems)
         .where(
@@ -443,6 +445,7 @@ export const orderRouter = new Hono<SeatEnv>()
         menu_item_id: string;
         name: string;
         price: number;
+        tax_rate: number;
         quantity: number;
         note: string | null;
         options: ResolvedOption[];
@@ -529,6 +532,7 @@ export const orderRouter = new Hono<SeatEnv>()
           menu_item_id: input.menu_item_id,
           name: menuItem.name,
           price: menuItem.price,
+          tax_rate: menuItem.tax_rate,
           quantity: input.quantity,
           note: input.note,
           options: selections,
@@ -594,6 +598,7 @@ export const orderRouter = new Hono<SeatEnv>()
         menu_item_id: item.menu_item_id,
         name_snapshot: item.name,
         unit_price_snapshot: item.price,
+        tax_rate_snapshot: item.tax_rate,
         quantity: item.quantity,
         status: "ordered" as const,
         note: item.note,
@@ -673,4 +678,94 @@ export const orderRouter = new Hono<SeatEnv>()
       );
 
     return c.json({ data: { id: order.id, status: "payment_requested" } });
+  })
+
+  /**
+   * GET /api/order/:seatToken/receipt/:orderId
+   * Returns the digital receipt for a paid order.
+   *
+   * Seat-scoped: the order must belong to the requesting seat (not just
+   * the store), so the URL isn't guessable beyond what the QR code
+   * already grants. 404 if the order doesn't exist, belongs to another
+   * seat, or hasn't reached 'paid' status yet.
+   */
+  .get("/:seatToken/receipt/:orderId", requireSeat, async (c) => {
+    const { id: seatId, store_id: storeId, name: seatName } = c.var.seat;
+    const orderId = c.req.param("orderId");
+    const db = createDb(c.env.DB);
+
+    const orderRows = await db
+      .select()
+      .from(schema.orders)
+      .where(
+        and(
+          eq(schema.orders.id, orderId),
+          eq(schema.orders.seat_id, seatId),
+          eq(schema.orders.store_id, storeId),
+          eq(schema.orders.status, "paid"),
+        ),
+      )
+      .limit(1);
+    const order = orderRows[0];
+    if (!order) {
+      return errorResponse("NOT_FOUND", "レシートが見つかりません。", 404);
+    }
+
+    const [paymentRows, storeRows, items] = await Promise.all([
+      db
+        .select()
+        .from(schema.payments)
+        .where(
+          and(
+            eq(schema.payments.order_id, orderId),
+            eq(schema.payments.store_id, storeId),
+          ),
+        )
+        .limit(1),
+      db
+        .select({ name: schema.stores.name })
+        .from(schema.stores)
+        .where(eq(schema.stores.id, storeId))
+        .limit(1),
+      db
+        .select()
+        .from(schema.orderItems)
+        .where(
+          and(
+            eq(schema.orderItems.order_id, orderId),
+            eq(schema.orderItems.store_id, storeId),
+          ),
+        )
+        .orderBy(asc(schema.orderItems.created_at)),
+    ]);
+
+    // A paid order always has a payment row (the transition is atomic with
+    // the payment INSERT in POST /api/payments); guard defensively anyway.
+    const payment = paymentRows[0];
+    if (!payment) {
+      return errorResponse("NOT_FOUND", "レシートが見つかりません。", 404);
+    }
+
+    const itemsWithOptions = await attachOrderItemOptions(db, storeId, items);
+    const taxBreakdown = computeTaxBreakdown(itemsWithOptions);
+
+    return c.json({
+      data: {
+        order_id: order.id,
+        store_name: storeRows[0]?.name ?? "",
+        seat_name: seatName,
+        items: itemsWithOptions.map(mapOrderItem),
+        items_total: sumOrderItems(itemsWithOptions),
+        discount_amount: payment.discount_amount,
+        discount_reason: payment.discount_reason,
+        total_amount: payment.total_amount,
+        tax_breakdown: taxBreakdown.map((bucket) => ({
+          rate: bucket.rate,
+          taxable_amount: bucket.taxableAmount,
+          tax_amount: bucket.taxAmount,
+        })),
+        method: payment.method,
+        paid_at: payment.paid_at,
+      },
+    });
   });

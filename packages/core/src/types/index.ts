@@ -305,6 +305,7 @@ export interface OrderItemResponse {
   created_at: number;
   options: OrderItemOptionResponse[];
   note: string | null;
+  tax_rate_snapshot: number;
 }
 
 export interface OrderResponse {
@@ -404,6 +405,30 @@ export interface PaymentResponse {
   method: PaymentMethod;
   discount_amount: number;
   discount_reason: string | null;
+  paid_at: number;
+}
+
+export interface ReceiptTaxBucketResponse {
+  /** Whole percent, e.g. 10 for standard rate. */
+  rate: number;
+  taxable_amount: number;
+  tax_amount: number;
+}
+
+/** Digital receipt for a paid order — see GET /api/order/:seatToken/receipt/:orderId. */
+export interface ReceiptResponse {
+  order_id: string;
+  store_name: string;
+  seat_name: string;
+  items: OrderItemResponse[];
+  /** Pre-discount items total. */
+  items_total: number;
+  discount_amount: number;
+  discount_reason: string | null;
+  /** Charged amount: items_total - discount_amount. */
+  total_amount: number;
+  tax_breakdown: ReceiptTaxBucketResponse[];
+  method: PaymentMethod;
   paid_at: number;
 }
 

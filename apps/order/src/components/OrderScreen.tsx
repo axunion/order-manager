@@ -142,8 +142,35 @@ export default function OrderScreen(props: { seatToken: string }) {
   // pollOrder response can't clobber a mutation's fresher result (e.g.
   // 会計をお願いする) if it happens to resolve after it.
   let orderSeq = 0;
+  const [receiptOrderId, setReceiptOrderId] = createSignal<string | null>(null);
+
   function setOrderIfCurrent(seq: number, value: Order | null) {
-    if (seq === orderSeq) setOrder(value);
+    if (seq !== orderSeq) return;
+    const previous = order();
+    // The active order can disappear either because it was just paid or
+    // because staff cancelled it — the client can't tell which from this
+    // response alone. Ask the receipt endpoint itself: it 404s for a
+    // cancelled order, so the link only ever appears for a real receipt.
+    if (previous?.status === "payment_requested" && value === null) {
+      checkForReceipt(seq, previous.id);
+    }
+    if (value !== null) {
+      setReceiptOrderId(null);
+    }
+    setOrder(value);
+  }
+
+  async function checkForReceipt(seq: number, orderId: string) {
+    const result = await apiFetch(
+      `/api/order/${props.seatToken}/receipt/${orderId}`,
+    );
+    // A newer order-affecting request has since taken over (e.g. the
+    // customer already started a fresh order) — don't resurrect a stale
+    // "just paid" banner for the order this check was about.
+    if (seq !== orderSeq) return;
+    if (result.ok) {
+      setReceiptOrderId(orderId);
+    }
   }
 
   async function loadBootstrap() {
@@ -276,6 +303,20 @@ export default function OrderScreen(props: { seatToken: string }) {
           <p class={styles.error} role="alert">
             {error()}
           </p>
+        </Show>
+
+        <Show when={receiptOrderId()}>
+          {(id) => (
+            <div class={styles.receiptBanner} aria-live="polite">
+              <p>お支払いが完了しました。ありがとうございました。</p>
+              <a
+                href={`/${props.seatToken}/receipt/${id()}`}
+                class={styles.receiptLink}
+              >
+                レシートを表示
+              </a>
+            </div>
+          )}
         </Show>
 
         <Show when={ready()}>

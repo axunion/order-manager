@@ -89,10 +89,17 @@ export const menuItems = sqliteTable(
      * Nullable — items may have no photo. Served via GET /api/menu/images/:key.
      */
     image_key: text("image_key"), // nullable
+    /**
+     * Consumption tax rate, as a whole percent (8 or 10). Not exposed in the
+     * admin UI in v1 — every item is dine-in standard-rate (10) — it exists
+     * so receipts stay correct if takeout or rate changes ever arrive.
+     */
+    tax_rate: integer("tax_rate").notNull().default(10),
   },
   (table) => [
     index("idx_menu_items_store").on(table.store_id),
     check("menu_items_price_positive_chk", sql`${table.price} > 0`),
+    check("menu_items_tax_rate_chk", sql`${table.tax_rate} IN (8, 10)`),
   ],
 );
 
@@ -411,6 +418,8 @@ export const orderItems = sqliteTable(
     name_snapshot: text("name_snapshot").notNull(),
     /** snapshot of menu_items.price at order time */
     unit_price_snapshot: integer("unit_price_snapshot").notNull(),
+    /** snapshot of menu_items.tax_rate at order time; feeds receipt breakdown */
+    tax_rate_snapshot: integer("tax_rate_snapshot").notNull().default(10),
     quantity: integer("quantity").notNull(),
     /**
      * State machine:
@@ -434,6 +443,10 @@ export const orderItems = sqliteTable(
       sql`${table.status} IN ('ordered', 'served', 'cancelled')`,
     ),
     check("order_items_quantity_positive_chk", sql`${table.quantity} > 0`),
+    check(
+      "order_items_tax_rate_snapshot_chk",
+      sql`${table.tax_rate_snapshot} IN (8, 10)`,
+    ),
   ],
 );
 

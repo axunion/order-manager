@@ -17,6 +17,7 @@ export type OrderItemPayload = {
   created_at: number;
   note: string | null;
   options: OrderItemOptionPayload[];
+  tax_rate_snapshot: number;
 };
 
 export function mapOrderItem(item: {
@@ -28,6 +29,7 @@ export function mapOrderItem(item: {
   created_at: number;
   note: string | null;
   options: OrderItemOptionPayload[];
+  tax_rate_snapshot: number;
 }): OrderItemPayload {
   return {
     id: item.id,
@@ -38,6 +40,7 @@ export function mapOrderItem(item: {
     created_at: item.created_at,
     note: item.note,
     options: item.options,
+    tax_rate_snapshot: item.tax_rate_snapshot,
   };
 }
 
