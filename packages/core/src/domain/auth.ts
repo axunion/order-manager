@@ -4,6 +4,14 @@ export const SESSION_TOKEN_COOKIE = "session_token";
 /** Session lifetime: 30 days in milliseconds. */
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
+/**
+ * Minimum interval between sliding-expiry refreshes of a session's
+ * `expires_at`/`last_used_at`. Bounds the extra D1 write to once/hour per
+ * session even under 5s-polling admin/order-board traffic, rather than
+ * writing on every single request.
+ */
+export const SESSION_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
+
 /** Magic Link token lifetime: 15 minutes in milliseconds. */
 export const MAGIC_LINK_TTL_MS = 15 * 60 * 1000;
 

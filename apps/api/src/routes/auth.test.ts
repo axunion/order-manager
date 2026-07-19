@@ -1,6 +1,6 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 import { env } from "cloudflare:workers";
-import { MAGIC_LINK_TTL_MS, now } from "@order/core";
+import { MAGIC_LINK_TTL_MS, now, SESSION_TTL_MS } from "@order/core";
 import { createDb, schema } from "@order/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
@@ -528,6 +528,93 @@ describe("POST /api/auth/logout", () => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/auth/logout-all
+// ---------------------------------------------------------------------------
+
+describe("POST /api/auth/logout-all", () => {
+  it("deletes all of the caller's own sessions and clears the cookie", async () => {
+    const { member_id: memberId, session_token: token1 } = await seedStore(
+      `Logout All Test ${crypto.randomUUID()}`,
+    );
+    const db = createDb(env.DB);
+    const token2 = crypto.randomUUID();
+    await db.insert(schema.sessions).values({
+      id: crypto.randomUUID(),
+      store_id: (
+        await db
+          .select({ store_id: schema.members.store_id })
+          .from(schema.members)
+          .where(eq(schema.members.id, memberId))
+      )[0]?.store_id as string,
+      member_id: memberId,
+      session_token: token2,
+      expires_at: now() + SESSION_TTL_MS,
+    });
+
+    const res = await app.request(
+      "/api/auth/logout-all",
+      { method: "POST", headers: { Cookie: `session_token=${token1}` } },
+      env,
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.get("Location")).toBe("http://admin.localhost/login");
+    const cookie = res.headers.get("Set-Cookie") ?? "";
+    expect(cookie).toContain("Max-Age=0");
+
+    const remaining = await db
+      .select()
+      .from(schema.sessions)
+      .where(eq(schema.sessions.member_id, memberId));
+    expect(remaining).toHaveLength(0);
+  });
+
+  it("does not delete another member's sessions in the same store", async () => {
+    const { id: storeId, session_token: token } = await seedStore(
+      `Logout All Isolation Test ${crypto.randomUUID()}`,
+    );
+    const db = createDb(env.DB);
+    const otherMemberId = crypto.randomUUID();
+    await db.insert(schema.members).values({
+      id: otherMemberId,
+      store_id: storeId,
+      email: `other-${crypto.randomUUID()}@test.internal`,
+      role: "staff",
+      status: "active",
+      activated_at: now(),
+    });
+    const otherSessionToken = crypto.randomUUID();
+    await db.insert(schema.sessions).values({
+      id: crypto.randomUUID(),
+      store_id: storeId,
+      member_id: otherMemberId,
+      session_token: otherSessionToken,
+      expires_at: now() + SESSION_TTL_MS,
+    });
+
+    await app.request(
+      "/api/auth/logout-all",
+      { method: "POST", headers: { Cookie: `session_token=${token}` } },
+      env,
+    );
+
+    const remaining = await db
+      .select()
+      .from(schema.sessions)
+      .where(eq(schema.sessions.member_id, otherMemberId));
+    expect(remaining).toHaveLength(1);
+  });
+
+  it("returns 401 without a session", async () => {
+    const res = await app.request(
+      "/api/auth/logout-all",
+      { method: "POST" },
+      env,
+    );
+    expect(res.status).toBe(401);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // requireStore middleware (session-based auth)
 // ---------------------------------------------------------------------------
 
@@ -546,6 +633,87 @@ describe("requireStore middleware (session-based)", () => {
       env,
     );
     expect(res.status).toBe(401);
+  });
+
+  it("refreshes expires_at/last_used_at when last_used_at is null (fresh session)", async () => {
+    const { session_token: token } = await seedStore(
+      `Sliding Fresh Test ${crypto.randomUUID()}`,
+    );
+    const db = createDb(env.DB);
+    const before = await db
+      .select({
+        expires_at: schema.sessions.expires_at,
+        last_used_at: schema.sessions.last_used_at,
+      })
+      .from(schema.sessions)
+      .where(eq(schema.sessions.session_token, token))
+      .then((rows) => rows[0]);
+    expect(before?.last_used_at).toBeNull();
+
+    await app.request("/api/seats", withAuth(token), env);
+
+    const after = await db
+      .select({
+        expires_at: schema.sessions.expires_at,
+        last_used_at: schema.sessions.last_used_at,
+      })
+      .from(schema.sessions)
+      .where(eq(schema.sessions.session_token, token))
+      .then((rows) => rows[0]);
+    expect(after?.last_used_at).toBeTruthy();
+    expect(after?.expires_at ?? 0).toBeGreaterThan(before?.expires_at ?? 0);
+  });
+
+  it("does not rewrite last_used_at/expires_at when refreshed less than an hour ago", async () => {
+    const { session_token: token } = await seedStore(
+      `Sliding Recent Test ${crypto.randomUUID()}`,
+    );
+    const db = createDb(env.DB);
+    const recentTs = now() - 5 * 60 * 1000; // 5 minutes ago
+    const originalExpiresAt = now() + SESSION_TTL_MS;
+    await db
+      .update(schema.sessions)
+      .set({ last_used_at: recentTs, expires_at: originalExpiresAt })
+      .where(eq(schema.sessions.session_token, token));
+
+    await app.request("/api/seats", withAuth(token), env);
+
+    const after = await db
+      .select({
+        expires_at: schema.sessions.expires_at,
+        last_used_at: schema.sessions.last_used_at,
+      })
+      .from(schema.sessions)
+      .where(eq(schema.sessions.session_token, token))
+      .then((rows) => rows[0]);
+    expect(after?.last_used_at).toBe(recentTs);
+    expect(after?.expires_at).toBe(originalExpiresAt);
+  });
+
+  it("rewrites last_used_at/expires_at when the last refresh was over an hour ago", async () => {
+    const { session_token: token } = await seedStore(
+      `Sliding Stale Test ${crypto.randomUUID()}`,
+    );
+    const db = createDb(env.DB);
+    const staleTs = now() - 2 * 60 * 60 * 1000; // 2 hours ago
+    const originalExpiresAt = now() + SESSION_TTL_MS;
+    await db
+      .update(schema.sessions)
+      .set({ last_used_at: staleTs, expires_at: originalExpiresAt })
+      .where(eq(schema.sessions.session_token, token));
+
+    await app.request("/api/seats", withAuth(token), env);
+
+    const after = await db
+      .select({
+        expires_at: schema.sessions.expires_at,
+        last_used_at: schema.sessions.last_used_at,
+      })
+      .from(schema.sessions)
+      .where(eq(schema.sessions.session_token, token))
+      .then((rows) => rows[0]);
+    expect(after?.last_used_at).toBeGreaterThan(staleTs);
+    expect(after?.expires_at ?? 0).toBeGreaterThan(originalExpiresAt);
   });
 
   it("grants access to an active store with a valid session", async () => {

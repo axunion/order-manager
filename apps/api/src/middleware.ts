@@ -1,6 +1,13 @@
 import type { SeatSession, StoreSession } from "@order/core";
-import { errorResponse, SESSION_TOKEN_COOKIE } from "@order/core";
-import { createDb } from "@order/db";
+import {
+  errorResponse,
+  now,
+  SESSION_REFRESH_INTERVAL_MS,
+  SESSION_TOKEN_COOKIE,
+  SESSION_TTL_MS,
+} from "@order/core";
+import { createDb, schema } from "@order/db";
+import { eq } from "drizzle-orm";
 import { getCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import { deleteSession, getSeatByQrToken, getStoreBySession } from "./auth";
@@ -48,6 +55,20 @@ export const requireStore = createMiddleware<AuthEnv>(async (c, next) => {
 
   if (store.status !== "active" || store.member_status !== "active") {
     return errorResponse("UNAUTHORIZED", "Authentication required", 401);
+  }
+
+  // Sliding expiry: refresh expires_at/last_used_at, throttled to once per
+  // SESSION_REFRESH_INTERVAL_MS so 5s-polling admin/order-board traffic
+  // doesn't write on every single request.
+  if (
+    store.last_used_at === null ||
+    now() - store.last_used_at >= SESSION_REFRESH_INTERVAL_MS
+  ) {
+    const ts = now();
+    await db
+      .update(schema.sessions)
+      .set({ last_used_at: ts, expires_at: ts + SESSION_TTL_MS })
+      .where(eq(schema.sessions.session_token, token));
   }
 
   c.set("store", store);

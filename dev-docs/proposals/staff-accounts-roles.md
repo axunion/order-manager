@@ -106,19 +106,32 @@ All routes `requireStore` + `requireOwner`.
 
 - `POST /api/staff` — body `{ email, role }` (`role` defaults `'staff'`
   if omitted). Creates a `pending` member under the caller's `store_id`,
-  issues `issueMagicLink(db, memberId, "invite")`, sends the invite email
-  (new `purpose: "invite"` branch in `buildEmailContent`,
+  issues `issueMagicLink(db, storeId, memberId, "invite")`, sends the
+  invite email (new `purpose: "invite"` branch in `buildEmailContent`,
   `packages/core/src/domain/email.ts`). 400 if the email already belongs
   to any member (global uniqueness, same posture as store signup) —
   caller is authenticated/owner here, so anti-enumeration doesn't apply
-  (same reasoning as `/me/email-change` today).
+  (same reasoning as `/me/email-change` today). Rate-limited to
+  `MAGIC_LINK_HOURLY_CAP` invites per **store** per rolling hour: each
+  invite creates a brand-new member, so `issueMagicLink`'s own
+  member-scoped cap has no prior history to count and can never trigger
+  on this path — without a separate store-scoped check here, an owner
+  session could mint unlimited invite emails.
 - `GET /api/staff` — list the store's members: `id, email, role, status,
   created_at, activated_at`. Scoped to `store_id` (tenant isolation).
 - `DELETE /api/staff/:id` — revokes access: deletes the member row and
-  cascade-deletes their sessions (in the same `db.batch`). Rejects 400 if
-  `id === caller's own member_id` (use logout, not self-removal) or if it
-  would remove the store's last `role: 'owner'` member (a store must
-  always keep at least one owner).
+  cascade-deletes their sessions and magic_link_tokens (in the same
+  `db.batch`). Rejects 400 if `id === caller's own member_id` (use
+  logout, not self-removal) **and** if the target is the store's last
+  remaining owner (count other `role: 'owner'` members in the store,
+  excluding the target). Both checks are needed: self-removal alone
+  doesn't prevent two distinct owner sessions from concurrently removing
+  each other, which would leave zero owners despite each individual
+  request passing the self-removal check. This is a check-then-act
+  guard, not a transactional one (D1 has no cross-statement locking here)
+  — same accepted tradeoff as the slug/email uniqueness checks
+  elsewhere in this codebase (e.g. `POST /api/stores`'s slug race
+  comment).
 
 ## 5. Logout-everywhere & sliding expiry
 
@@ -170,9 +183,15 @@ traffic doesn't write on every request). A session becomes durably
     `owner`. Board/checkout routes (`admin-orders`, `staff-calls`,
     `payments`) 200 for both roles.
   - `POST /api/staff` rejects an email already used by any member
-    (cross-store included); `DELETE /api/staff/:id` rejects self-removal
-    and rejects removing the last owner; succeeds otherwise and the
-    removed member's sessions no longer authenticate.
+    (cross-store included) and enforces the per-store hourly invite cap;
+    `DELETE /api/staff/:id` rejects self-removal; a co-owner can still be
+    removed, leaving one owner. The last-owner count check exists as
+    concurrent-race protection (two owner sessions removing each other at
+    once) — under sequential execution it's provably unreachable with
+    `target != caller` (the caller always survives as an owner), so no
+    dedicated test claims to reproduce the race; the check is defense in
+    depth, verified by code review, not by a (necessarily flaky)
+    concurrency test.
   - `POST /api/stores/me/email-change` changes the caller's own
     `members.email` (not `stores.email`); a second member's session
     still resolves under their own unchanged email.

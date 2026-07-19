@@ -68,6 +68,25 @@ export interface LoginResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Staff (members)
+// ---------------------------------------------------------------------------
+
+export const StaffInviteInput = z.object({
+  email: z.email(),
+  role: z.enum(["owner", "staff"]).default("staff"),
+});
+export type StaffInviteInput = z.infer<typeof StaffInviteInput>;
+
+export interface StaffMemberResponse {
+  id: string;
+  email: string;
+  role: "owner" | "staff";
+  status: "pending" | "active";
+  created_at: number;
+  activated_at: number | null;
+}
+
+// ---------------------------------------------------------------------------
 // Menu — categories
 // ---------------------------------------------------------------------------
 

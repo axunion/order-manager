@@ -131,7 +131,13 @@ export async function issueMagicLink(
 export async function getStoreBySession(
   db: Database,
   token: string,
-): Promise<(StoreSession & { member_status: "pending" | "active" }) | null> {
+): Promise<
+  | (StoreSession & {
+      member_status: "pending" | "active";
+      last_used_at: number | null;
+    })
+  | null
+> {
   const result = await db
     .select({
       id: schema.stores.id,
@@ -140,6 +146,7 @@ export async function getStoreBySession(
       member_id: schema.members.id,
       role: schema.members.role,
       member_status: schema.members.status,
+      last_used_at: schema.sessions.last_used_at,
     })
     .from(schema.sessions)
     .innerJoin(schema.members, eq(schema.sessions.member_id, schema.members.id))

@@ -265,4 +265,28 @@ export const authRouter = new Hono<{ Bindings: Env }>()
     );
     // Redirect to the admin SPA login page.
     return c.redirect(`${c.env.ADMIN_ORIGIN}/login`, 302);
+  })
+
+  /**
+   * POST /api/auth/logout-all
+   *
+   * Deletes every session belonging to the calling member (all of their
+   * own devices), then clears the cookie same as /logout. Scoped to the
+   * caller's own member_id only — does not affect other members of the
+   * same store.
+   */
+  .post("/logout-all", requireStore, async (c) => {
+    const { member_id: memberId } = c.var.store;
+    const db = createDb(c.env.DB);
+    await db
+      .delete(schema.sessions)
+      .where(eq(schema.sessions.member_id, memberId));
+
+    const secure = isSecureRequest(c.req.url, c.env.ENVIRONMENT);
+    const cookieDomain = c.env.COOKIE_DOMAIN || undefined;
+    c.header(
+      "Set-Cookie",
+      buildClearSessionCookie({ secure, domain: cookieDomain }),
+    );
+    return c.redirect(`${c.env.ADMIN_ORIGIN}/login`, 302);
   });
