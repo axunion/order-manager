@@ -43,6 +43,8 @@ const mockPayments = [
     seat_name: "テーブル1",
     total_amount: 1600,
     method: "cash",
+    discount_amount: 0,
+    discount_reason: null,
     paid_at: 1_700_000_000_000,
     items: [
       {
@@ -70,6 +72,8 @@ const mockPayments = [
     // need cash/card totals to differ from each other and from the grand
     // total, or their assertions would collide with unrelated text.
     method: "card",
+    discount_amount: 0,
+    discount_reason: null,
     paid_at: 1_700_000_100_000,
     items: [
       {
@@ -194,6 +198,70 @@ describe("SalesHistory", () => {
     const cancelledItem = await findByText("ビール");
     expect(activeItem.closest("li")?.className).not.toMatch(/itemCancelled/);
     expect(cancelledItem.closest("li")?.className).toMatch(/itemCancelled/);
+  });
+
+  it("shows no struck-through total or discount line for an undiscounted check", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        { url: "/api/payments", method: "GET", json: { data: mockPayments } },
+      ]),
+    );
+
+    const { findByText, queryByText } = render(() => <SalesHistory />);
+    const checkHeader = await findByText("テーブル1");
+    await user.click(checkHeader);
+    await findByText("唐揚げ");
+
+    expect(queryByText("割引", { exact: false })).toBeNull();
+  });
+
+  it("shows the pre-discount total struck through and the discount reason", async () => {
+    const user = userEvent.setup();
+    const discountedPayment = {
+      id: "pay-3",
+      order_id: "order-3",
+      seat_name: "テーブル3",
+      total_amount: 700,
+      method: "cash",
+      discount_amount: 300,
+      discount_reason: "常連割引",
+      paid_at: 1_700_000_200_000,
+      items: [
+        {
+          id: "item-4",
+          name_snapshot: "定食",
+          unit_price_snapshot: 1000,
+          quantity: 1,
+          status: "ordered",
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/payments",
+          method: "GET",
+          json: { data: [discountedPayment] },
+        },
+      ]),
+    );
+
+    render(() => <SalesHistory />);
+    const originalTotal = await screen.findByText("¥1,000"); // pre-discount
+    expect(originalTotal.className).toMatch(/checkTotalOriginal/);
+
+    const checkList = await screen.findByRole("list", { name: "会計一覧" });
+    const scoped = within(checkList);
+    await scoped.findByText("¥700"); // actual charged total
+
+    const checkHeader = await scoped.findByText("テーブル3");
+    await user.click(checkHeader);
+
+    await scoped.findByText("割引（常連割引）");
+    await scoped.findByText("-¥300");
   });
 
   function extractRange(url: string): { from: number; to: number } {

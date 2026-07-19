@@ -362,14 +362,37 @@ export interface AdminOrderResponse {
 // Payments
 // ---------------------------------------------------------------------------
 
-export const CreatePaymentInput = z.object({
-  order_id: z
-    .string()
-    .transform((s) => s.trim())
-    .pipe(z.string().min(1)),
-  /** Recorded at a staff-operated terminal; no processor integration. */
-  method: z.enum(["cash", "card", "qr"]).default("cash"),
-});
+/** Trimmed discount reason, ≤ 200 chars; empty after trimming normalizes to null. */
+const discountReason = z
+  .string()
+  .max(200)
+  .nullable()
+  .transform((s) => {
+    if (s === null) return null;
+    const trimmed = s.trim();
+    return trimmed.length === 0 ? null : trimmed;
+  });
+
+export const CreatePaymentInput = z
+  .object({
+    order_id: z
+      .string()
+      .transform((s) => s.trim())
+      .pipe(z.string().min(1)),
+    /** Recorded at a staff-operated terminal; no processor integration. */
+    method: z.enum(["cash", "card", "qr"]).default("cash"),
+    /** Whole-check discount; server bounds it to [0, items total]. */
+    discount_amount: z.number().int().min(0).default(0),
+    /** Required when discount_amount > 0. */
+    discount_reason: discountReason.optional().default(null),
+  })
+  .refine(
+    (data) => data.discount_amount === 0 || data.discount_reason !== null,
+    {
+      message: "discount_reason is required when discount_amount > 0",
+      path: ["discount_reason"],
+    },
+  );
 export type CreatePaymentInput = z.infer<typeof CreatePaymentInput>;
 
 export type PaymentMethod = "cash" | "card" | "qr";
@@ -379,6 +402,8 @@ export interface PaymentResponse {
   order_id: string;
   total_amount: number;
   method: PaymentMethod;
+  discount_amount: number;
+  discount_reason: string | null;
   paid_at: number;
 }
 

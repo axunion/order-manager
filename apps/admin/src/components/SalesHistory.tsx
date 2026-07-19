@@ -20,9 +20,16 @@ type Payment = {
   seat_name: string;
   total_amount: number;
   method: PaymentMethod;
+  discount_amount: number;
+  discount_reason: string | null;
   paid_at: number;
   items: SalesItem[];
 };
+
+/** The pre-discount items total: what's actually charged is total_amount. */
+function itemsTotal(payment: Payment): number {
+  return payment.total_amount + payment.discount_amount;
+}
 
 const METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: "現金",
@@ -197,6 +204,11 @@ export default function SalesHistory() {
                       {METHOD_LABELS[payment.method]}
                     </span>
                     <span class={styles.checkTotal}>
+                      <Show when={payment.discount_amount > 0}>
+                        <span class={styles.checkTotalOriginal}>
+                          {formatCurrency(itemsTotal(payment))}
+                        </span>
+                      </Show>
                       {formatCurrency(payment.total_amount)}
                     </span>
                   </button>
@@ -221,6 +233,19 @@ export default function SalesHistory() {
                           </li>
                         )}
                       </For>
+                      <Show when={payment.discount_amount > 0}>
+                        <li class={styles.discountItem}>
+                          <span class={styles.itemName}>
+                            割引
+                            {payment.discount_reason
+                              ? `（${payment.discount_reason}）`
+                              : ""}
+                          </span>
+                          <span class={styles.itemPrice}>
+                            -{formatCurrency(payment.discount_amount)}
+                          </span>
+                        </li>
+                      </Show>
                     </ul>
                   </Show>
                 </li>

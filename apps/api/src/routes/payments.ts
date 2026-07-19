@@ -38,6 +38,8 @@ type PaymentHistoryPayload = {
   seat_name: string;
   total_amount: number;
   method: PaymentMethod;
+  discount_amount: number;
+  discount_reason: string | null;
   paid_at: number;
   items: OrderItemPayload[];
 };
@@ -172,6 +174,8 @@ export const paymentsRouter = new Hono<AuthEnv>()
       seat_name: seatNameByOrderId.get(payment.order_id) ?? "",
       total_amount: payment.total_amount,
       method: payment.method,
+      discount_amount: payment.discount_amount,
+      discount_reason: payment.discount_reason,
       paid_at: payment.paid_at,
       items: (itemsByOrderId.get(payment.order_id) ?? []).map(mapOrderItem),
     }));
@@ -293,11 +297,22 @@ export const paymentsRouter = new Hono<AuthEnv>()
    * blocks concurrent payments for the same order. The error message is checked
    * to distinguish UNIQUE violations (409) from other DB failures (500).
    *
-   * Response: 201 { data: { id, order_id, total_amount, method, paid_at } }
+   * `discount_amount`/`discount_reason` apply a whole-check discount:
+   * the client sends the discount, never the total — total_amount is
+   * always server-computed as (items total − discount_amount), bounded
+   * to [0, items total]. A discount > 0 requires a reason (400 if not).
+   *
+   * Response: 201 { data: { id, order_id, total_amount, method,
+   * discount_amount, discount_reason, paid_at } }
    */
   .post("/", bodyValidator(CreatePaymentInput), async (c) => {
     const { id: storeId } = c.var.store;
-    const { order_id: orderId, method } = c.req.valid("json");
+    const {
+      order_id: orderId,
+      method,
+      discount_amount: discountAmount,
+      discount_reason: discountReason,
+    } = c.req.valid("json");
     const db = createDb(c.env.DB);
 
     // --- Step 1: Fetch the order, verifying store ownership ---
@@ -349,7 +364,20 @@ export const paymentsRouter = new Hono<AuthEnv>()
     }
 
     const itemsWithOptions = await attachOrderItemOptions(db, storeId, items);
-    const totalAmount = sumOrderItems(itemsWithOptions);
+    const itemsTotal = sumOrderItems(itemsWithOptions);
+
+    // --- Step 3.5: Bound the discount to the server-computed items total ---
+    // The client sends only the discount; it can never affect the total
+    // via any other field, and the discount itself is rejected if it
+    // would exceed what's actually on the bill.
+    if (discountAmount > itemsTotal) {
+      return errorResponse(
+        "VALIDATION_ERROR",
+        "割引額が明細合計を超えています。",
+        400,
+      );
+    }
+    const totalAmount = itemsTotal - discountAmount;
     const paidAt = now();
     const paymentId = newId();
 
@@ -370,6 +398,8 @@ export const paymentsRouter = new Hono<AuthEnv>()
           order_id: orderId,
           total_amount: totalAmount,
           method,
+          discount_amount: discountAmount,
+          discount_reason: discountReason,
           paid_at: paidAt,
         }),
         db
@@ -401,6 +431,8 @@ export const paymentsRouter = new Hono<AuthEnv>()
           order_id: orderId,
           total_amount: totalAmount,
           method,
+          discount_amount: discountAmount,
+          discount_reason: discountReason,
           paid_at: paidAt,
         },
       },

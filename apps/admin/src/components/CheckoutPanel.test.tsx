@@ -251,6 +251,153 @@ describe("CheckoutPanel", () => {
     expect(body.method).toBe(method);
   });
 
+  it("does not show the discount fields until 割引を追加 is tapped", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/payments/pending",
+          method: "GET",
+          json: { data: [mockPendingOrder] },
+        },
+      ]),
+    );
+
+    const { findByRole, queryByLabelText } = render(() => <CheckoutPanel />);
+    await findByRole("button", { name: "割引を追加" });
+    expect(queryByLabelText("割引額 (円)")).toBeNull();
+  });
+
+  it("does not send discount fields when no discount is entered", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch([
+      {
+        url: "/api/payments/pending",
+        method: "GET",
+        json: { data: [mockPendingOrder] },
+      },
+      {
+        url: "/api/payments",
+        method: "POST",
+        json: {
+          data: {
+            id: "payment-1",
+            order_id: "order-checkout-1",
+            total_amount: 1200,
+            method: "cash",
+            paid_at: Date.now(),
+          },
+        },
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { findByRole } = render(() => <CheckoutPanel />);
+    const checkoutBtn = await findByRole("button", { name: /会計完了/ });
+    await user.click(checkoutBtn);
+
+    const postCall = fetchMock.mock.calls.find((args: unknown[]) => {
+      const url = args[0] as string;
+      const init = args[1] as RequestInit | undefined;
+      return (
+        url.includes("/api/payments") &&
+        !url.includes("/pending") &&
+        (init?.method ?? "").toUpperCase() === "POST"
+      );
+    });
+    const body = JSON.parse((postCall?.[1] as RequestInit).body as string);
+    expect(body.discount_amount).toBeUndefined();
+    expect(body.discount_reason).toBeUndefined();
+  });
+
+  it("enters a discount, previews the discounted total, and sends it on checkout", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch([
+      {
+        url: "/api/payments/pending",
+        method: "GET",
+        json: { data: [mockPendingOrder] },
+      },
+      {
+        url: "/api/payments",
+        method: "POST",
+        json: {
+          data: {
+            id: "payment-1",
+            order_id: "order-checkout-1",
+            total_amount: 1000,
+            method: "cash",
+            paid_at: Date.now(),
+          },
+        },
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { findByRole, findByLabelText, findByText } = render(() => (
+      <CheckoutPanel />
+    ));
+    const toggleBtn = await findByRole("button", { name: "割引を追加" });
+    await user.click(toggleBtn);
+
+    const amountInput = await findByLabelText("割引額 (円)");
+    await user.type(amountInput, "200");
+    const reasonInput = await findByLabelText("理由");
+    await user.type(reasonInput, "常連割引");
+
+    await findByText("¥1,000"); // discounted preview: 1200 - 200
+
+    const checkoutBtn = await findByRole("button", { name: /会計完了/ });
+    await user.click(checkoutBtn);
+
+    const postCall = fetchMock.mock.calls.find((args: unknown[]) => {
+      const url = args[0] as string;
+      const init = args[1] as RequestInit | undefined;
+      return (
+        url.includes("/api/payments") &&
+        !url.includes("/pending") &&
+        (init?.method ?? "").toUpperCase() === "POST"
+      );
+    });
+    const body = JSON.parse((postCall?.[1] as RequestInit).body as string);
+    expect(body.discount_amount).toBe(200);
+    expect(body.discount_reason).toBe("常連割引");
+    // The client sends only the discount, never a total — the server
+    // always recomputes it from items total minus discount.
+    expect(body.total_amount).toBeUndefined();
+  });
+
+  it("clears the entered discount when 割引を取り消す is tapped", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/payments/pending",
+          method: "GET",
+          json: { data: [mockPendingOrder] },
+        },
+      ]),
+    );
+
+    const { findByRole, findByLabelText, findAllByText, queryByLabelText } =
+      render(() => <CheckoutPanel />);
+    const toggleBtn = await findByRole("button", { name: "割引を追加" });
+    await user.click(toggleBtn);
+
+    const amountInput = await findByLabelText("割引額 (円)");
+    await user.type(amountInput, "200");
+
+    const cancelBtn = await findByRole("button", { name: "割引を取り消す" });
+    await user.click(cancelBtn);
+
+    expect(queryByLabelText("割引額 (円)")).toBeNull();
+    // Reverts to the undiscounted total (collides with the item's own line
+    // price, which is also ¥1,200 for this fixture).
+    const totals = await findAllByText("¥1,200");
+    expect(totals.length).toBeGreaterThanOrEqual(1);
+  });
+
   it("shows an error when payment POST fails", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch([

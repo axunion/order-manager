@@ -1,5 +1,5 @@
 import { apiFetch, jsonFetch } from "@order/core/client";
-import { Button, ErrorAlert } from "@order/ui";
+import { Button, ErrorAlert, Field } from "@order/ui";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import styles from "./CheckoutPanel.module.css";
 import StatusBadge from "./StatusBadge";
@@ -62,6 +62,9 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
   { value: "qr", label: "QR決済" },
 ];
 
+type Discount = { amount: number; reason: string };
+const NO_DISCOUNT: Discount = { amount: 0, reason: "" };
+
 export default function CheckoutPanel() {
   const [orders, setOrders] = createSignal<PendingOrder[]>([]);
   const [pollError, setPollError] = createSignal("");
@@ -78,18 +81,64 @@ export default function CheckoutPanel() {
     setMethodByOrder((prev) => new Map(prev).set(orderId, method));
   };
 
+  // Discount entry is opt-in per order (deliberate extra tap, not part of
+  // the default flow) and hidden by default to discourage casual misuse.
+  const [discountOpen, setDiscountOpen] = createSignal<Set<string>>(new Set());
+  const [discountByOrder, setDiscountByOrder] = createSignal<
+    Map<string, Discount>
+  >(new Map());
+
+  const discountFor = (orderId: string): Discount =>
+    discountByOrder().get(orderId) ?? NO_DISCOUNT;
+
+  const discountReasonMissing = (orderId: string): boolean => {
+    const discount = discountFor(orderId);
+    return discount.amount > 0 && discount.reason.trim() === "";
+  };
+
+  const setDiscount = (orderId: string, discount: Partial<Discount>) => {
+    setDiscountByOrder((prev) =>
+      new Map(prev).set(orderId, { ...discountFor(orderId), ...discount }),
+    );
+  };
+
+  const toggleDiscountOpen = (orderId: string) => {
+    setDiscountOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+        setDiscount(orderId, NO_DISCOUNT);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  };
+
   async function loadPending() {
     const result = await apiFetch<PendingOrder[]>("/api/payments/pending");
     if (result.ok && result.data) {
       setOrders(result.data);
       setPollError("");
-      // Prune method selections for orders that left the pending list
-      // (checked out or reopened), so the map doesn't grow unbounded
+      // Prune method/discount selections for orders that left the pending
+      // list (checked out or reopened), so these maps don't grow unbounded
       // across a long shift with many turnovers.
       const stillPendingIds = new Set(result.data.map((o) => o.id));
       setMethodByOrder((prev) => {
         const next = new Map(
           [...prev].filter(([orderId]) => stillPendingIds.has(orderId)),
+        );
+        return next;
+      });
+      setDiscountByOrder((prev) => {
+        const next = new Map(
+          [...prev].filter(([orderId]) => stillPendingIds.has(orderId)),
+        );
+        return next;
+      });
+      setDiscountOpen((prev) => {
+        const next = new Set(
+          [...prev].filter((orderId) => stillPendingIds.has(orderId)),
         );
         return next;
       });
@@ -109,9 +158,16 @@ export default function CheckoutPanel() {
     setActionError("");
     setProcessing((prev) => new Set([...prev, orderId]));
     try {
+      const discount = discountFor(orderId);
       const result = await jsonFetch<PaymentResult>("/api/payments", "POST", {
         order_id: orderId,
         method: methodFor(orderId),
+        ...(discount.amount > 0
+          ? {
+              discount_amount: discount.amount,
+              discount_reason: discount.reason,
+            }
+          : {}),
       });
       if (!result.ok) {
         setActionError(result.message ?? "会計処理に失敗しました。");
@@ -174,7 +230,15 @@ export default function CheckoutPanel() {
                 <span class={styles.checkoutSeatName}>{order.seat_name}</span>
                 <StatusBadge tone="warning">会計要求中</StatusBadge>
                 <span class={styles.checkoutTotal}>
-                  {formatCurrency(order.total)}
+                  <Show
+                    when={discountFor(order.id).amount > 0}
+                    fallback={formatCurrency(order.total)}
+                  >
+                    <span class={styles.checkoutTotalOriginal}>
+                      {formatCurrency(order.total)}
+                    </span>
+                    {formatCurrency(order.total - discountFor(order.id).amount)}
+                  </Show>
                 </span>
               </div>
 
@@ -242,6 +306,59 @@ export default function CheckoutPanel() {
                 </For>
               </div>
 
+              <div class={styles.checkoutDiscount}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-expanded={discountOpen().has(order.id)}
+                  disabled={processing().has(order.id)}
+                  onClick={() => toggleDiscountOpen(order.id)}
+                >
+                  {discountOpen().has(order.id)
+                    ? "割引を取り消す"
+                    : "割引を追加"}
+                </Button>
+                <Show when={discountOpen().has(order.id)}>
+                  <div class={styles.checkoutDiscountFields}>
+                    <Field
+                      id={`discount-amount-${order.id}`}
+                      label="割引額 (円)"
+                      type="number"
+                      min="0"
+                      max={order.total}
+                      inputMode="numeric"
+                      value={discountFor(order.id).amount || ""}
+                      disabled={processing().has(order.id)}
+                      onInput={(e) =>
+                        setDiscount(order.id, {
+                          amount: Math.min(
+                            order.total,
+                            Math.max(0, Number(e.currentTarget.value) || 0),
+                          ),
+                        })
+                      }
+                    />
+                    <Field
+                      id={`discount-reason-${order.id}`}
+                      label="理由"
+                      value={discountFor(order.id).reason}
+                      disabled={processing().has(order.id)}
+                      error={
+                        discountReasonMissing(order.id)
+                          ? "理由を入力してください"
+                          : undefined
+                      }
+                      onInput={(e) =>
+                        setDiscount(order.id, {
+                          reason: e.currentTarget.value,
+                        })
+                      }
+                    />
+                  </div>
+                </Show>
+              </div>
+
               <div class={styles.checkoutCardFooter}>
                 <Button
                   variant="secondary"
@@ -252,7 +369,10 @@ export default function CheckoutPanel() {
                 </Button>
                 <Button
                   variant="primary"
-                  disabled={processing().has(order.id)}
+                  disabled={
+                    processing().has(order.id) ||
+                    discountReasonMissing(order.id)
+                  }
                   onClick={() => handleCheckout(order.id)}
                 >
                   {processing().has(order.id) ? "処理中..." : "会計完了"}

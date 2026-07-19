@@ -485,10 +485,17 @@ export const payments = sqliteTable(
       .notNull()
       .unique()
       .references(() => orders.id),
-    /** sum of unit_price_snapshot x quantity for all order_items at checkout */
+    /**
+     * Charged amount: (sum of unit_price_snapshot x quantity for all
+     * order_items at checkout) − discount_amount.
+     */
     total_amount: integer("total_amount").notNull(),
     /** Recorded at a staff-operated terminal; no processor integration. */
     method: text("method", { enum: ["cash", "card", "qr"] }).notNull(),
+    /** Whole-check discount, bounded server-side to [0, items total]. */
+    discount_amount: integer("discount_amount").notNull().default(0),
+    /** Required when discount_amount > 0; null otherwise. */
+    discount_reason: text("discount_reason"), // nullable
     paid_at: integer("paid_at").notNull(), // Unix ms
   },
   (table) => [
@@ -496,6 +503,14 @@ export const payments = sqliteTable(
     check(
       "payments_method_chk",
       sql`${table.method} IN ('cash', 'card', 'qr')`,
+    ),
+    check(
+      "payments_discount_amount_nonneg_chk",
+      sql`${table.discount_amount} >= 0`,
+    ),
+    check(
+      "payments_discount_has_reason_chk",
+      sql`${table.discount_amount} = 0 OR ${table.discount_reason} IS NOT NULL`,
     ),
   ],
 );

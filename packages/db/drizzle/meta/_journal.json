@@ -64,6 +64,13 @@
       "when": 1784451391113,
       "tag": "0008_clumsy_glorian",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1784452078501,
+      "tag": "0009_whole_glorian",
+      "breakpoints": true
     }
   ]
 }

@@ -134,10 +134,20 @@
 }
 
 .checkTotal {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
   font-weight: var(--font-semibold);
   color: var(--color-foreground);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.checkTotalOriginal {
+  font-size: var(--text-xs);
+  font-weight: var(--font-normal);
+  color: var(--color-muted-foreground);
+  text-decoration: line-through;
 }
 
 .itemList {
@@ -170,6 +180,21 @@
 .itemPrice {
   color: var(--color-foreground);
   white-space: nowrap;
+}
+
+.discountItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  padding: var(--space-1) 0;
+  color: var(--color-muted-foreground);
+  font-style: italic;
+}
+
+.discountItem .itemPrice {
+  margin-left: auto;
+  color: var(--color-muted-foreground);
 }
 
 .itemCancelled {
