@@ -109,12 +109,34 @@ field (≤ 200 chars).
 - After this, the customer's screen shows the locked bill; staff sees the
   order appear on the checkout screen.
 
+### Digital receipt (`GET /api/order/:seatToken/receipt/:orderId`)
+
+- Seat-scoped: the order must belong to the requesting seat *and* be
+  `paid` — wrong seat, wrong/nonexistent order id, and not-yet-paid all
+  collapse to the same generic 404, so the URL leaks no more than the
+  QR code already grants. Returns store name, seat name, line items
+  (with options and per-item tax rate), the pre-discount items total,
+  any discount, the charged total, a tax breakdown (see
+  [checkout.md](./checkout.md#completing-payment-post-apipayments)),
+  payment method, and `paid_at`.
+- `OrderScreen` detects "just paid" itself: when the active order
+  disappears (bootstrap or the 10s poll returns `order: null`) right
+  after it was `payment_requested`, the screen calls this same receipt
+  endpoint to check whether that's because it was paid or because staff
+  cancelled it — both clear the active order client-side, and a 404 vs.
+  200 is the only way to tell them apart. Only on 200 does a "レシート
+  を表示" banner appear, linking to `/:seatToken/receipt/:orderId`. That
+  check is itself guarded by the same monotonic sequence number as
+  `order`, so a slow/stale check can't resurrect the banner after the
+  customer has already started a new order.
+
 ### Session model
 
 "One table visit = one order" — the order stays active across page
 reloads and multiple diners at the same table (everyone scans the same
 QR). The check clears when staff completes payment; the next scan starts
-fresh.
+fresh. The seat's `qr_token` stays valid afterward, so the digital
+receipt above remains reachable.
 
 ## Known limitations (→ roadmap)
 
@@ -124,5 +146,7 @@ fresh.
   button is the intended UX for customer-initiated corrections.
   (Deliberate v1 decision — revisit with pilot feedback)
 - **Japanese only.** (Backlog)
-- **No paid-receipt view** — after checkout the customer has no record.
-  (Phase 4, receipts)
+- **No formal 領収書 (addressee receipt)** — the digital receipt above
+  covers レシート only; a 領収書 needs the store's registered
+  name/address and an addressee line. Not built speculatively;
+  revisit only if demanded. (Backlog)
