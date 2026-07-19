@@ -9,12 +9,18 @@ import {
   useContext,
 } from "solid-js";
 
-export type StoreInfo = { id: string; name: string; email: string };
+export type StoreInfo = {
+  id: string;
+  name: string;
+  email: string;
+  role: "owner" | "staff";
+};
 
 export const StoreContext = createContext<StoreInfo>({
   id: "",
   name: "",
   email: "",
+  role: "staff",
 });
 
 export const useStoreInfo = () => useContext(StoreContext);

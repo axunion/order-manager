@@ -38,10 +38,16 @@ function mockFetch(routes: MockRoute[]) {
 }
 
 function renderWithStore(
-  store = {
+  store: {
+    id: string;
+    name: string;
+    email: string;
+    role: "owner" | "staff";
+  } = {
     id: "store-1",
     name: "テスト食堂",
     email: "owner@test.internal",
+    role: "owner",
   },
 ) {
   return render(() => (
@@ -203,5 +209,30 @@ describe("StoreSettings — email change", () => {
     await screen.findByText("このメールアドレスはすでに使用されています。");
     // The form stays visible so the owner can correct and retry.
     expect(screen.queryByLabelText("新しいメールアドレス")).not.toBeNull();
+  });
+});
+
+describe("StoreSettings — log out everywhere", () => {
+  it("calls POST /api/auth/logout-all when clicked", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch([
+      {
+        url: "/api/auth/logout-all",
+        method: "POST",
+        json: { data: { sent: true } },
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithStore();
+    const btn = await screen.findByRole("button", {
+      name: "ログアウト（全端末）",
+    });
+    await user.click(btn);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/logout-all",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 });

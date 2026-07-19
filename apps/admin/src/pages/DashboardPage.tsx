@@ -1,8 +1,12 @@
 import { A } from "@solidjs/router";
+import { Show } from "solid-js";
+import { useStoreInfo } from "../layouts/AdminGuard";
 import AdminLayout from "../layouts/AdminLayout";
 import styles from "./DashboardPage.module.css";
 
 export default function DashboardPage() {
+  const store = useStoreInfo();
+
   return (
     <AdminLayout title="管理画面">
       <div class={styles.menu}>
@@ -21,6 +25,11 @@ export default function DashboardPage() {
         <A href="/sales" class={styles.menuLink}>
           売上履歴
         </A>
+        <Show when={store.role === "owner"}>
+          <A href="/staff" class={styles.menuLink}>
+            スタッフ管理
+          </A>
+        </Show>
         <A href="/settings" class={styles.menuLink}>
           店舗設定
         </A>

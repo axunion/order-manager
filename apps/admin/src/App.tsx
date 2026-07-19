@@ -8,6 +8,7 @@ import OrdersPage from "./pages/OrdersPage";
 import SalesPage from "./pages/SalesPage";
 import SeatsPage from "./pages/SeatsPage";
 import SettingsPage from "./pages/SettingsPage";
+import StaffPage from "./pages/StaffPage";
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/checkout" component={CheckoutPage} />
         <Route path="/sales" component={SalesPage} />
         <Route path="/settings" component={SettingsPage} />
+        <Route path="/staff" component={StaffPage} />
       </Route>
     </Router>
   );

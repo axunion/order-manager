@@ -1,5 +1,5 @@
 import type { EmailChangeResponse, StoreResponse } from "@order/core";
-import { jsonFetch } from "@order/core/client";
+import { apiFetch, jsonFetch } from "@order/core/client";
 import { Button, Field } from "@order/ui";
 import { createSignal, Show } from "solid-js";
 import { useStoreInfo } from "../layouts/AdminGuard";
@@ -30,6 +30,23 @@ export default function StoreSettings() {
       setNameSaved(true);
     } finally {
       setNameSaving(false);
+    }
+  };
+
+  const [loggingOutAll, setLoggingOutAll] = createSignal(false);
+
+  const handleLogoutAll = async () => {
+    setLoggingOutAll(true);
+    try {
+      await apiFetch("/api/auth/logout-all", { method: "POST" }).catch(
+        () => {},
+      );
+      // Full reload (not solid-router navigate): the server just cleared
+      // every session cookie for this member, so the app must re-bootstrap
+      // from scratch rather than continue with stale in-memory state.
+      window.location.href = "/login";
+    } finally {
+      setLoggingOutAll(false);
     }
   };
 
@@ -88,9 +105,9 @@ export default function StoreSettings() {
       </section>
 
       <section class={styles.section}>
-        <h2 class={styles.heading}>メールアドレス</h2>
+        <h2 class={styles.heading}>自分のメールアドレス</h2>
         <p class={styles.currentEmail}>
-          現在のメールアドレス: <strong>{store.email}</strong>
+          現在のログイン用メールアドレス: <strong>{store.email}</strong>
         </p>
 
         <Show
@@ -130,6 +147,20 @@ export default function StoreSettings() {
             </Button>
           </form>
         </Show>
+      </section>
+
+      <section class={styles.section}>
+        <h2 class={styles.heading}>セッション</h2>
+        <p class={styles.currentEmail}>
+          自分の全端末のログインセッションを終了します。
+        </p>
+        <Button
+          variant="secondary"
+          disabled={loggingOutAll()}
+          onClick={handleLogoutAll}
+        >
+          {loggingOutAll() ? "処理中..." : "ログアウト（全端末）"}
+        </Button>
       </section>
     </div>
   );
