@@ -327,6 +327,22 @@ their visual state must communicate urgency instantly.
 
 - Seat name: 18px / 700 / `#0F172A` — immediately identifiable even under glare
 - Status badge: see §4 Status Badges
+- Age badge: elapsed time since the oldest still-`ordered` item was
+  created (e.g. "12分"); an order whose items are all `served`/
+  `cancelled` shows none. 14px / 500 / `var(--color-muted-foreground)`
+  below 10 minutes; ≥ 10 minutes escalates to `var(--color-warning-fg)`
+  / 600 weight; ≥ 20 minutes to `var(--color-danger-fg)` / 700 weight.
+  Recomputed on every card re-render, so it advances with the existing
+  5s poll — no dedicated timer.
+  **Deliberate exception to the color-role rule in §2:** the warning/
+  danger tokens here signal wait-time severity, a second escalation
+  axis independent of the card's own status color (open vs.
+  payment_requested). A `payment_requested` card can therefore show a
+  warning-amber background *and* a warning-amber age badge at once —
+  accepted because the badge's small size, distinct position (header,
+  next to the total), and text content ("N分") keep it legible as a
+  separate signal rather than a restyled status badge. Revisit if pilot
+  feedback shows this reads as confusing in practice.
 - Order total: `margin-left: auto` / 18px / 700 / `#0F172A` / `tabular-nums`
 - "注文をキャンセル" — `ConfirmDialog` (`danger` variant / `sm` size), placed
   last in the header. Cascades to cancel every non-cancelled item.

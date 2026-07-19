@@ -61,6 +61,34 @@ type AdminOrder = {
   created_at: number;
 };
 
+const AGE_WARNING_MS = 10 * 60 * 1000;
+const AGE_ALERT_MS = 20 * 60 * 1000;
+
+/**
+ * The oldest still-`ordered` item's created_at, or null if every item is
+ * `served`/`cancelled` — an order with nothing left waiting is "done
+ * waiting" regardless of how long ago it opened.
+ */
+function oldestUnservedCreatedAt(order: AdminOrder): number | null {
+  const createdTimes = order.items
+    .filter((item) => item.status === "ordered")
+    .map((item) => item.created_at);
+  return createdTimes.length > 0 ? Math.min(...createdTimes) : null;
+}
+
+type AgeTier = "normal" | "warning" | "alert";
+
+function ageTier(ageMs: number): AgeTier {
+  if (ageMs >= AGE_ALERT_MS) return "alert";
+  if (ageMs >= AGE_WARNING_MS) return "warning";
+  return "normal";
+}
+
+/** Formats an age in milliseconds as whole minutes, e.g. "12分". */
+function formatAge(ageMs: number): string {
+  return `${Math.floor(ageMs / 60_000)}分`;
+}
+
 type AdminCall = {
   id: string;
   seat_name: string;
@@ -318,121 +346,146 @@ export default function OrderBoard() {
       </Show>
 
       <div class={styles.orderList}>
+        {/* Age reads Date.now() fresh per card render rather than ticking
+            on its own timer — it advances only because loadOrders() always
+            calls setOrders() with freshly-parsed JSON (new object
+            references) every 5s poll, which makes <For>'s reference-based
+            reconciliation rebuild every card each tick. If a future change
+            ever preserves object identity for unchanged orders (e.g. an
+            incremental-render optimization), this age would silently
+            freeze — re-introduce a dedicated tick if that happens. */}
         <For each={orders()}>
-          {(order) => (
-            <article
-              class={`${styles.orderCard ?? ""} ${order.status === "payment_requested" ? (styles.orderCardWarning ?? "") : (styles.orderCardAlert ?? "")} ${highlightedIds().has(order.id) ? (styles.orderCardNewAlert ?? "") : ""}`}
-            >
-              <div class={styles.orderCardHeader}>
-                <Show when={order.status === "open"}>
-                  <span class={styles.pulseDot} aria-hidden="true" />
-                </Show>
-                <span class={styles.orderSeatName}>{order.seat_name}</span>
-                <Show when={order.status === "open"}>
-                  <StatusBadge tone="alert">新規注文</StatusBadge>
-                </Show>
-                <Show when={order.status === "payment_requested"}>
-                  <StatusBadge tone="warning">会計要求中</StatusBadge>
-                </Show>
-                <span class={styles.orderTotal}>
-                  {formatCurrency(order.total)}
-                </span>
-                <ConfirmDialog
-                  triggerLabel="注文をキャンセル"
-                  triggerVariant="danger"
-                  triggerSize="sm"
-                  aria-label={`注文をキャンセル ${order.seat_name}`}
-                  title="注文のキャンセル"
-                  description={`「${order.seat_name}」の注文をキャンセルしますか？明細もすべて取り消されます。この操作は元に戻せません。`}
-                  confirmLabel="キャンセルする"
-                  onConfirm={() => handleCancelOrder(order.id)}
-                />
-              </div>
-
-              <ul class={styles.orderItems}>
-                <For each={order.items}>
-                  {(item) => (
-                    <li
-                      class={`${styles.orderItem ?? ""} ${item.status === "served" ? (styles.orderItemServed ?? "") : ""} ${item.status === "cancelled" ? (styles.orderItemCancelled ?? "") : ""}`}
+          {(order) => {
+            const oldestUnserved = oldestUnservedCreatedAt(order);
+            const ageMs =
+              oldestUnserved !== null
+                ? Math.max(0, Date.now() - oldestUnserved)
+                : null;
+            const tier = ageMs !== null ? ageTier(ageMs) : null;
+            return (
+              <article
+                class={`${styles.orderCard ?? ""} ${order.status === "payment_requested" ? (styles.orderCardWarning ?? "") : (styles.orderCardAlert ?? "")} ${highlightedIds().has(order.id) ? (styles.orderCardNewAlert ?? "") : ""}`}
+              >
+                <div class={styles.orderCardHeader}>
+                  <Show when={order.status === "open"}>
+                    <span class={styles.pulseDot} aria-hidden="true" />
+                  </Show>
+                  <span class={styles.orderSeatName}>{order.seat_name}</span>
+                  <Show when={order.status === "open"}>
+                    <StatusBadge tone="alert">新規注文</StatusBadge>
+                  </Show>
+                  <Show when={order.status === "payment_requested"}>
+                    <StatusBadge tone="warning">会計要求中</StatusBadge>
+                  </Show>
+                  <Show when={ageMs !== null}>
+                    <span
+                      class={`${styles.orderAge ?? ""} ${tier === "warning" ? (styles.orderAgeWarning ?? "") : ""} ${tier === "alert" ? (styles.orderAgeAlert ?? "") : ""}`}
                     >
-                      <div class={styles.orderItemRow}>
-                        <span class={styles.orderItemName}>
-                          {item.name_snapshot}
-                        </span>
-                        <span class={styles.orderItemQty}>
-                          × {item.quantity}
-                        </span>
-                        <span class={styles.orderItemPrice}>
-                          {formatCurrency(lineTotal(item))}
-                        </span>
-                        <Show
-                          when={item.status !== "cancelled"}
-                          fallback={
-                            <StatusBadge tone="danger">取消済み</StatusBadge>
-                          }
-                        >
+                      {formatAge(ageMs ?? 0)}
+                    </span>
+                  </Show>
+                  <span class={styles.orderTotal}>
+                    {formatCurrency(order.total)}
+                  </span>
+                  <ConfirmDialog
+                    triggerLabel="注文をキャンセル"
+                    triggerVariant="danger"
+                    triggerSize="sm"
+                    aria-label={`注文をキャンセル ${order.seat_name}`}
+                    title="注文のキャンセル"
+                    description={`「${order.seat_name}」の注文をキャンセルしますか？明細もすべて取り消されます。この操作は元に戻せません。`}
+                    confirmLabel="キャンセルする"
+                    onConfirm={() => handleCancelOrder(order.id)}
+                  />
+                </div>
+
+                <ul class={styles.orderItems}>
+                  <For each={order.items}>
+                    {(item) => (
+                      <li
+                        class={`${styles.orderItem ?? ""} ${item.status === "served" ? (styles.orderItemServed ?? "") : ""} ${item.status === "cancelled" ? (styles.orderItemCancelled ?? "") : ""}`}
+                      >
+                        <div class={styles.orderItemRow}>
+                          <span class={styles.orderItemName}>
+                            {item.name_snapshot}
+                          </span>
+                          <span class={styles.orderItemQty}>
+                            × {item.quantity}
+                          </span>
+                          <span class={styles.orderItemPrice}>
+                            {formatCurrency(lineTotal(item))}
+                          </span>
                           <Show
-                            when={item.status === "served"}
+                            when={item.status !== "cancelled"}
                             fallback={
+                              <StatusBadge tone="danger">取消済み</StatusBadge>
+                            }
+                          >
+                            <Show
+                              when={item.status === "served"}
+                              fallback={
+                                <Button
+                                  variant="success"
+                                  size="sm"
+                                  disabled={pendingActions().has(item.id)}
+                                  onClick={() => handleServe(item.id)}
+                                >
+                                  {pendingActions().has(item.id)
+                                    ? "処理中..."
+                                    : "提供済み"}
+                                </Button>
+                              }
+                            >
                               <Button
-                                variant="success"
+                                variant="secondary"
                                 size="sm"
                                 disabled={pendingActions().has(item.id)}
-                                onClick={() => handleServe(item.id)}
+                                onClick={() => handleUnserve(item.id)}
                               >
                                 {pendingActions().has(item.id)
                                   ? "処理中..."
-                                  : "提供済み"}
+                                  : "提供取消"}
                               </Button>
-                            }
-                          >
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              disabled={pendingActions().has(item.id)}
-                              onClick={() => handleUnserve(item.id)}
-                            >
-                              {pendingActions().has(item.id)
-                                ? "処理中..."
-                                : "提供取消"}
-                            </Button>
+                            </Show>
+                            <ConfirmDialog
+                              triggerLabel="取消"
+                              triggerVariant="danger"
+                              triggerSize="sm"
+                              aria-label={`明細を取消 ${item.name_snapshot} (${item.id})`}
+                              title="明細の取消"
+                              description={`「${item.name_snapshot}」を取消しますか？この操作は元に戻せません。`}
+                              confirmLabel="取消する"
+                              onConfirm={() => handleVoidItem(item.id)}
+                            />
                           </Show>
-                          <ConfirmDialog
-                            triggerLabel="取消"
-                            triggerVariant="danger"
-                            triggerSize="sm"
-                            aria-label={`明細を取消 ${item.name_snapshot} (${item.id})`}
-                            title="明細の取消"
-                            description={`「${item.name_snapshot}」を取消しますか？この操作は元に戻せません。`}
-                            confirmLabel="取消する"
-                            onConfirm={() => handleVoidItem(item.id)}
-                          />
+                        </div>
+                        <Show when={item.options.length > 0}>
+                          <ul class={styles.orderItemOptions}>
+                            <For each={item.options}>
+                              {(option) => (
+                                <li class={styles.orderItemOption}>
+                                  {option.name_snapshot}
+                                  <Show
+                                    when={option.price_delta_snapshot !== 0}
+                                  >
+                                    {" "}
+                                    ({formatDelta(option.price_delta_snapshot)})
+                                  </Show>
+                                </li>
+                              )}
+                            </For>
+                          </ul>
                         </Show>
-                      </div>
-                      <Show when={item.options.length > 0}>
-                        <ul class={styles.orderItemOptions}>
-                          <For each={item.options}>
-                            {(option) => (
-                              <li class={styles.orderItemOption}>
-                                {option.name_snapshot}
-                                <Show when={option.price_delta_snapshot !== 0}>
-                                  {" "}
-                                  ({formatDelta(option.price_delta_snapshot)})
-                                </Show>
-                              </li>
-                            )}
-                          </For>
-                        </ul>
-                      </Show>
-                      <Show when={item.note}>
-                        <p class={styles.orderItemNote}>{item.note}</p>
-                      </Show>
-                    </li>
-                  )}
-                </For>
-              </ul>
-            </article>
-          )}
+                        <Show when={item.note}>
+                          <p class={styles.orderItemNote}>{item.note}</p>
+                        </Show>
+                      </li>
+                    )}
+                  </For>
+                </ul>
+              </article>
+            );
+          }}
         </For>
       </div>
     </div>

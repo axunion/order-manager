@@ -150,6 +150,24 @@
   overflow-wrap: break-word;
 }
 
+.orderAge {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-muted-foreground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.orderAgeWarning {
+  color: var(--color-warning-fg);
+  font-weight: var(--font-semibold);
+}
+
+.orderAgeAlert {
+  color: var(--color-danger-fg);
+  font-weight: var(--font-bold);
+}
+
 .orderTotal {
   margin-left: auto;
   font-weight: var(--font-bold);

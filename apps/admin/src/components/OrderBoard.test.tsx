@@ -51,6 +51,7 @@ const mockOrder = {
       options: [],
       note: null,
       status: "ordered",
+      created_at: 1_000_000,
     },
   ],
   total: 1600,
@@ -505,6 +506,286 @@ describe("OrderBoard", () => {
     const optionLine = await findByText("普通");
     expect(optionLine.textContent).toBe("普通");
     expect(container.querySelector('[class*="orderItemOption"]')).toBeTruthy();
+  });
+});
+
+describe("OrderBoard aging indicators", () => {
+  const NOW = 1_700_000_000_000;
+
+  function orderWithItems(
+    items: { id: string; status: string; created_at: number }[],
+  ) {
+    return {
+      id: "order-1",
+      seat_name: "テーブル1",
+      status: "open",
+      items: items.map((item) => ({
+        id: item.id,
+        name_snapshot: "ラーメン",
+        unit_price_snapshot: 800,
+        quantity: 1,
+        options: [],
+        note: null,
+        status: item.status,
+        created_at: item.created_at,
+      })),
+      total: 800,
+      created_at: NOW,
+    };
+  }
+
+  it("shows no age badge when every item is served or cancelled", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/admin/orders",
+          method: "GET",
+          json: {
+            data: [
+              orderWithItems([
+                { id: "i1", status: "served", created_at: NOW - 30 * 60_000 },
+                {
+                  id: "i2",
+                  status: "cancelled",
+                  created_at: NOW - 30 * 60_000,
+                },
+              ]),
+            ],
+          },
+        },
+      ]),
+    );
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(document.querySelector('[class*="orderAge"]')).toBeNull();
+  });
+
+  it("computes age from the oldest unserved item, ignoring a served item even if it's older", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/admin/orders",
+          method: "GET",
+          json: {
+            data: [
+              orderWithItems([
+                // Served long ago — must be ignored.
+                { id: "i1", status: "served", created_at: NOW - 60 * 60_000 },
+                // Still ordered, only 5 minutes old — this is the one that counts.
+                { id: "i2", status: "ordered", created_at: NOW - 5 * 60_000 },
+              ]),
+            ],
+          },
+        },
+      ]),
+    );
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(screen.getByText("5分")).toBeTruthy();
+  });
+
+  it("applies no warning styling just under the 10-minute threshold", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/admin/orders",
+          method: "GET",
+          json: {
+            data: [
+              orderWithItems([
+                {
+                  id: "i1",
+                  status: "ordered",
+                  created_at: NOW - (10 * 60_000 - 1),
+                },
+              ]),
+            ],
+          },
+        },
+      ]),
+    );
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const badge = document.querySelector('[class*="orderAge"]');
+    expect(badge?.className).not.toMatch(/orderAgeWarning/);
+    expect(badge?.className).not.toMatch(/orderAgeAlert/);
+  });
+
+  it("applies warning styling at exactly the 10-minute threshold", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/admin/orders",
+          method: "GET",
+          json: {
+            data: [
+              orderWithItems([
+                { id: "i1", status: "ordered", created_at: NOW - 10 * 60_000 },
+              ]),
+            ],
+          },
+        },
+      ]),
+    );
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const badge = document.querySelector('[class*="orderAge"]');
+    expect(badge?.className).toMatch(/orderAgeWarning/);
+    expect(badge?.className).not.toMatch(/orderAgeAlert/);
+  });
+
+  it("applies alert styling at exactly the 20-minute threshold", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/admin/orders",
+          method: "GET",
+          json: {
+            data: [
+              orderWithItems([
+                { id: "i1", status: "ordered", created_at: NOW - 20 * 60_000 },
+              ]),
+            ],
+          },
+        },
+      ]),
+    );
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const badge = document.querySelector('[class*="orderAge"]');
+    expect(badge?.className).toMatch(/orderAgeAlert/);
+  });
+
+  it("stays warning, not alert, just under the 20-minute threshold", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/admin/orders",
+          method: "GET",
+          json: {
+            data: [
+              orderWithItems([
+                {
+                  id: "i1",
+                  status: "ordered",
+                  created_at: NOW - (20 * 60_000 - 1),
+                },
+              ]),
+            ],
+          },
+        },
+      ]),
+    );
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const badge = document.querySelector('[class*="orderAge"]');
+    expect(badge?.className).toMatch(/orderAgeWarning/);
+    expect(badge?.className).not.toMatch(/orderAgeAlert/);
+  });
+
+  it("floors a non-round age to whole minutes rather than rounding", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/admin/orders",
+          method: "GET",
+          json: {
+            data: [
+              orderWithItems([
+                {
+                  id: "i1",
+                  status: "ordered",
+                  // 5 minutes 40 seconds — floors to "5分", not "6分".
+                  created_at: NOW - (5 * 60_000 + 40_000),
+                },
+              ]),
+            ],
+          },
+        },
+      ]),
+    );
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(screen.getByText("5分")).toBeTruthy();
+    expect(screen.queryByText("6分")).toBeNull();
+  });
+
+  it("advances the age badge across a poll tick with unchanged order data", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    // 4 minutes 55 seconds old: floors to "4分" now, and crosses into
+    // "5分" after exactly one 5s poll tick — chosen so a single poll
+    // interval is enough to observe the badge advance.
+    const createdAt = NOW - (4 * 60_000 + 55_000);
+    // A real fetch().json() always parses a fresh object per call, even
+    // for byte-identical responses — unlike the shared mockFetch helper,
+    // which returns the same captured object reference every time and
+    // would let Solid's signal equality check skip the re-render this
+    // test needs to exercise. Return a freshly-built object each call to
+    // match real fetch semantics.
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () => ({
+          data: [
+            orderWithItems([
+              { id: "i1", status: "ordered", created_at: createdAt },
+            ]),
+          ],
+        }),
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(() => <OrderBoard />);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByText("4分")).toBeTruthy();
+
+    // Advance one 5s poll tick; loadOrders re-fetches the exact same
+    // (unchanged) order data — the badge must still advance, proving age
+    // is recomputed live from Date.now() rather than cached at first
+    // render. vi.setSystemTime moves the mocked "now" that Date.now()
+    // reads; the fake-timer clock used to schedule the interval callback
+    // is advanced separately via advanceTimersByTimeAsync.
+    vi.setSystemTime(NOW + 5000);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(screen.getByText("5分")).toBeTruthy();
+    expect(screen.queryByText("4分")).toBeNull();
   });
 });
 
