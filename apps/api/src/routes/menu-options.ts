@@ -9,7 +9,7 @@ import {
 import { createDb, type Database, schema } from "@order/db";
 import { and, asc, eq } from "drizzle-orm";
 import { Hono } from "hono";
-import { type AuthEnv, requireStore } from "../middleware";
+import { type AuthEnv, requireOwner, requireStore } from "../middleware";
 import { bodyValidator } from "../validator";
 
 // ---------------------------------------------------------------------------
@@ -40,6 +40,7 @@ async function optionGroupExists(
 
 export const menuOptionsRouter = new Hono<AuthEnv>()
   .use(requireStore)
+  .use(requireOwner)
 
   // ──────────────────── Option groups ────────────────────
 

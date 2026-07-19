@@ -7,7 +7,7 @@ import {
 import { createDb, schema } from "@order/db";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
-import { type AuthEnv, requireStore } from "../middleware";
+import { type AuthEnv, requireOwner, requireStore } from "../middleware";
 import { bodyValidator } from "../validator";
 
 // ---------------------------------------------------------------------------
@@ -40,6 +40,7 @@ async function hasActiveOrder(
 
 export const seatsRouter = new Hono<AuthEnv>()
   .use(requireStore)
+  .use(requireOwner)
 
   /**
    * GET /api/seats

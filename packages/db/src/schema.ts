@@ -197,7 +197,46 @@ export const menuItemOptionGroups = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
-// sessions — admin login sessions (one store can have many active sessions)
+// members — login identity for a store; one row per person who can log in.
+// Replaces stores.email as the login identity (stores.email stays fixed,
+// display-only, post-signup — see domain-model.md).
+// ---------------------------------------------------------------------------
+export const members = sqliteTable(
+  "members",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    /** Login identity; UNIQUE globally (one email = one member, like stores.email). */
+    email: text("email").notNull().unique(),
+    role: text("role", { enum: ["owner", "staff"] })
+      .notNull()
+      .default("staff"),
+    /**
+     * pending — invited/signed up, email not yet verified
+     * active   — email verified; can log in
+     */
+    status: text("status", { enum: ["pending", "active"] })
+      .notNull()
+      .default("pending"),
+    /** Set when status transitions to 'active' (Unix ms) */
+    activated_at: integer("activated_at"), // nullable
+    created_at: integer("created_at")
+      .notNull()
+      .$defaultFn(() => Date.now()), // Unix ms
+  },
+  (table) => [
+    index("idx_members_store").on(table.store_id),
+    check("members_role_chk", sql`${table.role} IN ('owner', 'staff')`),
+    check("members_status_chk", sql`${table.status} IN ('pending', 'active')`),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// sessions — admin login sessions (one member can have many active sessions)
 // ---------------------------------------------------------------------------
 export const sessions = sqliteTable(
   "sessions",
@@ -208,17 +247,24 @@ export const sessions = sqliteTable(
     store_id: text("store_id")
       .notNull()
       .references(() => stores.id),
+    /** Denormalized from members.store_id — avoids a join on every request. */
+    member_id: text("member_id")
+      .notNull()
+      .references(() => members.id),
     /** UUID v4 stored in HttpOnly session_token cookie */
     session_token: text("session_token").notNull().unique(),
     /** Unix ms; session is invalid after this timestamp */
     expires_at: integer("expires_at").notNull(),
-    /** Reserved for future sliding-window expiry (nullable) */
+    /** Sliding expiry watermark; refreshed at most once/hour by requireStore */
     last_used_at: integer("last_used_at"),
     created_at: integer("created_at")
       .notNull()
       .$defaultFn(() => Date.now()), // Unix ms
   },
-  (table) => [index("idx_sessions_store").on(table.store_id)],
+  (table) => [
+    index("idx_sessions_store").on(table.store_id),
+    index("idx_sessions_member").on(table.member_id),
+  ],
 );
 
 // ---------------------------------------------------------------------------
@@ -233,14 +279,19 @@ export const magicLinkTokens = sqliteTable(
     store_id: text("store_id")
       .notNull()
       .references(() => stores.id),
+    /** Denormalized from members.store_id — avoids a join on every request. */
+    member_id: text("member_id")
+      .notNull()
+      .references(() => members.id),
     /** UUID v4 embedded in the Magic Link URL */
     token: text("token").notNull().unique(),
     /**
-     * 'signup' for first-time onboarding; 'login' for returning owners;
-     * 'email_change' for re-verifying a new owner email (see new_email).
+     * 'signup' for first-time onboarding; 'login' for returning members;
+     * 'email_change' for re-verifying a new member email (see new_email);
+     * 'invite' for a staff invite (owner-issued, targets a new member).
      */
     purpose: text("purpose", {
-      enum: ["signup", "login", "email_change"],
+      enum: ["signup", "login", "email_change", "invite"],
     }).notNull(),
     /** Target address for 'email_change' tokens only; null otherwise */
     new_email: text("new_email"), // nullable
@@ -254,9 +305,10 @@ export const magicLinkTokens = sqliteTable(
   },
   (table) => [
     index("idx_magic_link_tokens_store").on(table.store_id),
+    index("idx_magic_link_tokens_member").on(table.member_id),
     check(
       "magic_link_tokens_purpose_chk",
-      sql`${table.purpose} IN ('signup', 'login', 'email_change')`,
+      sql`${table.purpose} IN ('signup', 'login', 'email_change', 'invite')`,
     ),
   ],
 );

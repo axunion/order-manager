@@ -5,7 +5,12 @@ import { createDb, schema } from "@order/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { app } from "../app";
-import { extractSessionToken, jsonInit, withAuth } from "../test-helpers";
+import {
+  extractSessionToken,
+  jsonInit,
+  seedStore,
+  withAuth,
+} from "../test-helpers";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -17,7 +22,7 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 async function registerStore(
   name: string,
   email: string,
-): Promise<{ storeId: string; signupToken: string }> {
+): Promise<{ storeId: string; memberId: string; signupToken: string }> {
   const res = await app.request(
     "/api/stores",
     {
@@ -45,13 +50,68 @@ async function registerStore(
     .then((rows) => rows[0]);
 
   if (!tokenRow) throw new Error("signup magic_link_token not found");
-  return { storeId, signupToken: tokenRow.token };
+  return { storeId, memberId: tokenRow.member_id, signupToken: tokenRow.token };
 }
 
 /** Verifies a token via the API (follows the 302 redirect internally). */
 async function verifyToken(token: string): Promise<Response> {
   return app.request(`/api/auth/verify?token=${token}`, {}, env);
 }
+
+// ---------------------------------------------------------------------------
+// GET /api/auth/me
+// ---------------------------------------------------------------------------
+
+describe("GET /api/auth/me", () => {
+  it("returns the calling member's own email and role, not stores.email", async () => {
+    const {
+      id,
+      member_id,
+      session_token: token,
+    } = await seedStore(`Me Test ${crypto.randomUUID()}`, "owner");
+    const db = createDb(env.DB);
+    const storeRows = await db
+      .select({ email: schema.stores.email })
+      .from(schema.stores)
+      .where(eq(schema.stores.id, id));
+    const memberRows = await db
+      .select({ email: schema.members.email })
+      .from(schema.members)
+      .where(eq(schema.members.id, member_id));
+    const storeEmail = storeRows[0]?.email;
+    const memberEmail = memberRows[0]?.email;
+    if (!storeEmail || !memberEmail) {
+      throw new Error("seedStore did not set store/member emails");
+    }
+    // seedStore gives the store and its member distinct emails, so this
+    // proves /me reads members.email, not stores.email.
+    expect(memberEmail).not.toBe(storeEmail);
+
+    const res = await app.request("/api/auth/me", withAuth(token), env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      data: { id: string; name: string; email: string; role: string };
+    };
+    expect(body.data.email).toBe(memberEmail);
+    expect(body.data.role).toBe("owner");
+  });
+
+  it("returns role=staff for a staff-role session", async () => {
+    const { session_token: token } = await seedStore(
+      `Me Staff Test ${crypto.randomUUID()}`,
+      "staff",
+    );
+    const res = await app.request("/api/auth/me", withAuth(token), env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { role: string } };
+    expect(body.data.role).toBe("staff");
+  });
+
+  it("returns 401 without a session", async () => {
+    const res = await app.request("/api/auth/me", {}, env);
+    expect(res.status).toBe(401);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // GET /api/auth/verify
@@ -82,13 +142,24 @@ describe("GET /api/auth/verify", () => {
     expect(storeRow?.status).toBe("active");
     expect(storeRow?.activated_at).toBeTruthy();
 
-    // Session should exist
+    // The owner member should also be active
+    const memberRow = await db
+      .select()
+      .from(schema.members)
+      .where(eq(schema.members.store_id, storeId))
+      .then((rows) => rows[0]);
+    expect(memberRow?.status).toBe("active");
+    expect(memberRow?.activated_at).toBeTruthy();
+    expect(memberRow?.role).toBe("owner");
+
+    // Session should exist and reference the member
     const sessionRows = await db
       .select()
       .from(schema.sessions)
       .where(eq(schema.sessions.store_id, storeId));
     expect(sessionRows).toHaveLength(1);
     expect(sessionRows[0]?.expires_at).toBeGreaterThan(now());
+    expect(sessionRows[0]?.member_id).toBe(memberRow?.id);
 
     // session_token cookie should be set with SameSite=None
     const cookie = res.headers.get("Set-Cookie") ?? "";
@@ -127,13 +198,14 @@ describe("GET /api/auth/verify", () => {
 
   it("returns INVALID_TOKEN for an expired token", async () => {
     const email = `verify-expired-${crypto.randomUUID()}@example.com`;
-    const { storeId } = await registerStore("Expired Cafe", email);
+    const { storeId, memberId } = await registerStore("Expired Cafe", email);
 
     const db = createDb(env.DB);
     const expiredToken = crypto.randomUUID();
     await db.insert(schema.magicLinkTokens).values({
       id: crypto.randomUUID(),
       store_id: storeId,
+      member_id: memberId,
       token: expiredToken,
       purpose: "login",
       expires_at: now() - 1,
@@ -161,7 +233,7 @@ describe("GET /api/auth/verify", () => {
 
   it("creates a session on valid login token (store already active)", async () => {
     const email = `verify-login-${crypto.randomUUID()}@example.com`;
-    const { storeId, signupToken } = await registerStore(
+    const { storeId, memberId, signupToken } = await registerStore(
       "Login Verify Cafe",
       email,
     );
@@ -173,6 +245,7 @@ describe("GET /api/auth/verify", () => {
     await db.insert(schema.magicLinkTokens).values({
       id: crypto.randomUUID(),
       store_id: storeId,
+      member_id: memberId,
       token: loginToken,
       purpose: "login",
       expires_at: now() + MAGIC_LINK_TTL_MS,
@@ -300,6 +373,44 @@ describe("POST /api/auth/login", () => {
     expect(tokens).toHaveLength(1);
   });
 
+  it("issues an invite token (not signup) for a pending staff member", async () => {
+    const { id: storeId } = await seedStore(
+      `Pending Staff Login Test ${crypto.randomUUID()}`,
+    );
+    const db = createDb(env.DB);
+
+    // Directly seed a pending staff member — the invite endpoint that
+    // creates these ships in a later slice.
+    const staffMemberId = crypto.randomUUID();
+    const staffEmail = `staff-pending-${crypto.randomUUID()}@test.internal`;
+    await db.insert(schema.members).values({
+      id: staffMemberId,
+      store_id: storeId,
+      email: staffEmail,
+      role: "staff",
+      status: "pending",
+    });
+
+    const res = await app.request(
+      "/api/auth/login",
+      jsonInit("POST", { email: staffEmail }),
+      env,
+    );
+    expect(res.status).toBe(200);
+
+    const tokens = await db
+      .select({ purpose: schema.magicLinkTokens.purpose })
+      .from(schema.magicLinkTokens)
+      .where(
+        and(
+          eq(schema.magicLinkTokens.member_id, staffMemberId),
+          isNull(schema.magicLinkTokens.used_at),
+        ),
+      );
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0]?.purpose).toBe("invite");
+  });
+
   it("invalidates the old token when reissuing for the same purpose", async () => {
     const email = `login-reissue-${crypto.randomUUID()}@example.com`;
     const { storeId, signupToken: firstToken } = await registerStore(
@@ -382,7 +493,7 @@ describe("POST /api/auth/logout", () => {
 
   it("only deletes the session matching the cookie (other sessions remain)", async () => {
     const email = `logout-multi-${crypto.randomUUID()}@example.com`;
-    const { storeId, signupToken } = await registerStore(
+    const { storeId, memberId, signupToken } = await registerStore(
       "Multi Session Cafe",
       email,
     );
@@ -395,6 +506,7 @@ describe("POST /api/auth/logout", () => {
     await db.insert(schema.magicLinkTokens).values({
       id: crypto.randomUUID(),
       store_id: storeId,
+      member_id: memberId,
       token: loginToken,
       purpose: "login",
       expires_at: now() + MAGIC_LINK_TTL_MS,

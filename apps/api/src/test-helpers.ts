@@ -14,20 +14,30 @@ import { createDb, schema } from "@order/db";
 // Store + session seed helper
 // ---------------------------------------------------------------------------
 
-export type SeedStore = { id: string; session_token: string };
+export type SeedStore = {
+  id: string;
+  member_id: string;
+  session_token: string;
+};
 
 /**
- * Inserts an active store and a valid session directly into D1.
- * Returns the store id and a session_token that can be used with withAuth().
+ * Inserts an active store, an active member (default role: owner), and a
+ * valid session directly into D1. Returns the store id, member id, and a
+ * session_token that can be used with withAuth().
  *
  * Each call generates a unique email to prevent UNIQUE constraint conflicts
  * between tests in the same worker pool run.
  */
-export async function seedStore(name: string): Promise<SeedStore> {
+export async function seedStore(
+  name: string,
+  role: "owner" | "staff" = "owner",
+): Promise<SeedStore> {
   const db = createDb(env.DB);
   const id = newId();
+  const member_id = newId();
   const session_token = newId();
   const email = `${id}@test.internal`;
+  const ts = now();
 
   await db.insert(schema.stores).values({
     id,
@@ -35,17 +45,27 @@ export async function seedStore(name: string): Promise<SeedStore> {
     slug: newId(),
     email,
     status: "active",
-    activated_at: now(),
+    activated_at: ts,
+  });
+
+  await db.insert(schema.members).values({
+    id: member_id,
+    store_id: id,
+    email: `${member_id}@test.internal`,
+    role,
+    status: "active",
+    activated_at: ts,
   });
 
   await db.insert(schema.sessions).values({
     id: newId(),
     store_id: id,
+    member_id,
     session_token,
     expires_at: now() + SESSION_TTL_MS,
   });
 
-  return { id, session_token };
+  return { id, member_id, session_token };
 }
 
 // ---------------------------------------------------------------------------

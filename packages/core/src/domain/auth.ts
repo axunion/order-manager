@@ -8,10 +8,11 @@ export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const MAGIC_LINK_TTL_MS = 15 * 60 * 1000;
 
 /**
- * Max Magic Link tokens issued per store per rolling hour (login,
- * signup-resend, and email-change combined). Protects the Resend quota
- * and a victim's inbox from abuse. Issuance beyond the cap is silently
- * skipped — the anti-enumeration response contract must not change.
+ * Max Magic Link tokens issued per member per rolling hour (login,
+ * signup-resend, email-change, and invite combined). Protects the Resend
+ * quota and a victim's inbox from abuse. Issuance beyond the cap is
+ * silently skipped — the anti-enumeration response contract must not
+ * change.
  */
 export const MAGIC_LINK_HOURLY_CAP = 5;
 
@@ -19,13 +20,17 @@ export const MAGIC_LINK_HOURLY_CAP = 5;
 export const MAGIC_LINK_VERIFY_PATH = "/api/auth/verify";
 
 /**
- * Minimum store fields needed for authentication.
+ * Minimum store + member fields needed for authentication.
  * Includes status so that API middleware can enforce the active-only invariant.
+ * member_id/role identify the logged-in member for requireOwner and
+ * member-scoped operations (email change, logout-all, session ownership).
  */
 export type StoreSession = {
   id: string;
   name: string;
   status: "pending" | "active" | "suspended";
+  member_id: string;
+  role: "owner" | "staff";
 };
 
 /**

@@ -9,7 +9,7 @@ import {
 import { createDb, type Database, schema } from "@order/db";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
-import { type AuthEnv, requireStore } from "../middleware";
+import { type AuthEnv, requireOwner, requireStore } from "../middleware";
 import { bodyValidator } from "../validator";
 
 // ---------------------------------------------------------------------------
@@ -161,6 +161,7 @@ async function setItemOptionGroups(
 
 export const menuRouter = new Hono<AuthEnv>()
   .use(requireStore)
+  .use(requireOwner)
 
   // ──────────────────── Categories ────────────────────
 

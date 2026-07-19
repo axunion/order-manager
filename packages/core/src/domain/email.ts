@@ -12,7 +12,7 @@ const DEFAULT_FROM = "noreply@order-manager.example.com";
 interface SendMagicLinkOptions {
   to: string;
   magicLinkUrl: string;
-  purpose: "signup" | "login" | "email_change";
+  purpose: "signup" | "login" | "email_change" | "invite";
 }
 
 interface EmailConfig {
@@ -64,9 +64,21 @@ export async function sendMagicLinkEmail(
 }
 
 export function buildEmailContent(
-  purpose: "signup" | "login" | "email_change",
+  purpose: "signup" | "login" | "email_change" | "invite",
   magicLinkUrl: string,
 ): { subject: string; html: string } {
+  if (purpose === "invite") {
+    return {
+      subject: "スタッフ招待のご案内",
+      html: `
+        <p>オーダーマネージャーの店舗スタッフとして招待されました。</p>
+        <p>以下のリンクをクリックしてメールアドレスを確認し、管理画面へ進んでください。<br>
+        このリンクは15分間有効です。</p>
+        <p><a href="${magicLinkUrl}">${magicLinkUrl}</a></p>
+        <p>このメールに心当たりがない場合は無視してください。</p>
+      `,
+    };
+  }
   if (purpose === "signup") {
     return {
       subject: "メールアドレスを確認してください",

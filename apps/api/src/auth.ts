@@ -35,22 +35,27 @@ export function isSecureRequest(
 }
 
 /**
- * Issues a Magic Link token for the given store and purpose, or returns
- * null if the store has hit MAGIC_LINK_HOURLY_CAP issuances in the last
- * rolling hour (login, signup-resend, and email-change combined) — callers
- * must treat null as "silently skip sending" and keep their response
- * identical to the success case (anti-enumeration; a visible 429 would
- * leak that the email/store exists).
+ * Issues a Magic Link token for the given member and purpose, or returns
+ * null if the member has hit MAGIC_LINK_HOURLY_CAP issuances in the last
+ * rolling hour (login, signup-resend, email-change, and invite combined) —
+ * callers must treat null as "silently skip sending" and keep their
+ * response identical to the success case (anti-enumeration; a visible 429
+ * would leak that the email/member exists).
+ *
+ * Scoped per member_id (not store_id): a store can have multiple members
+ * now, and two members of the same store issuing unrelated tokens (e.g.
+ * concurrent logins, or two simultaneous staff invites) must not
+ * invalidate each other's link.
  *
  * Supersedes (not deletes) any previous unused token for the same
- * store+purpose so only one link is valid at a time: consumed tokens are
+ * member+purpose so only one link is valid at a time: consumed tokens are
  * already kept for audit, and `verify` already rejects any token with
  * `used_at` set, so marking a superseded token used is equally safe —
  * but unlike DELETE, the row (and its created_at) survives for the cap
  * count above to see.
  *
  * `newEmail` is required for purpose 'email_change' — it is the pending
- * target address, applied to stores.email only once the token is verified.
+ * target address, applied to members.email only once the token is verified.
  *
  * Insert-first ordering: the new token is written before old ones are
  * superseded so an UPDATE failure leaves two temporarily valid tokens
@@ -60,7 +65,8 @@ export function isSecureRequest(
 export async function issueMagicLink(
   db: Database,
   storeId: string,
-  purpose: "signup" | "login" | "email_change",
+  memberId: string,
+  purpose: "signup" | "login" | "email_change" | "invite",
   newEmail?: string,
 ): Promise<string | null> {
   const ts = now();
@@ -70,13 +76,13 @@ export async function issueMagicLink(
     .from(schema.magicLinkTokens)
     .where(
       and(
-        eq(schema.magicLinkTokens.store_id, storeId),
+        eq(schema.magicLinkTokens.member_id, memberId),
         gt(schema.magicLinkTokens.created_at, ts - HOUR_MS),
       ),
     )
     .limit(MAGIC_LINK_HOURLY_CAP);
   if (recent.length >= MAGIC_LINK_HOURLY_CAP) {
-    console.log(`[auth] rate-limited magic link for store ${storeId}`);
+    console.log(`[auth] rate-limited magic link for member ${memberId}`);
     return null;
   }
 
@@ -86,6 +92,7 @@ export async function issueMagicLink(
   await db.insert(schema.magicLinkTokens).values({
     id: newId(),
     store_id: storeId,
+    member_id: memberId,
     token,
     purpose,
     new_email: newEmail ?? null,
@@ -97,7 +104,7 @@ export async function issueMagicLink(
     .set({ used_at: ts })
     .where(
       and(
-        eq(schema.magicLinkTokens.store_id, storeId),
+        eq(schema.magicLinkTokens.member_id, memberId),
         eq(schema.magicLinkTokens.purpose, purpose),
         isNull(schema.magicLinkTokens.used_at),
         ne(schema.magicLinkTokens.token, token),
@@ -108,26 +115,34 @@ export async function issueMagicLink(
 }
 
 /**
- * Looks up the store matching the given session token.
+ * Looks up the store + member matching the given session token.
  *
- * Returns a StoreSession or null when:
+ * Returns a StoreSession (plus the member's own status) or null when:
  *   - the token does not exist in the sessions table
  *   - the session has expired (expires_at <= now)
  *
- * Callers are responsible for enforcing stores.status === "active".
+ * Callers are responsible for enforcing stores.status === "active" and
+ * member_status === "active". No code path today can mint a session for a
+ * non-active member (GET /verify only creates one right after activating
+ * it), but member_status is returned so requireStore can assert it
+ * explicitly rather than relying on that invariant implicitly.
  * Expired sessions are NOT deleted here; callers should call deleteSession.
  */
 export async function getStoreBySession(
   db: Database,
   token: string,
-): Promise<StoreSession | null> {
+): Promise<(StoreSession & { member_status: "pending" | "active" }) | null> {
   const result = await db
     .select({
       id: schema.stores.id,
       name: schema.stores.name,
       status: schema.stores.status,
+      member_id: schema.members.id,
+      role: schema.members.role,
+      member_status: schema.members.status,
     })
     .from(schema.sessions)
+    .innerJoin(schema.members, eq(schema.sessions.member_id, schema.members.id))
     .innerJoin(schema.stores, eq(schema.sessions.store_id, schema.stores.id))
     .where(
       and(
@@ -136,7 +151,7 @@ export async function getStoreBySession(
       ),
     )
     .limit(1);
-  return (result[0] as StoreSession | undefined) ?? null;
+  return result[0] ?? null;
 }
 
 /**

@@ -46,11 +46,26 @@ export const requireStore = createMiddleware<AuthEnv>(async (c, next) => {
     return errorResponse("UNAUTHORIZED", "Authentication required", 401);
   }
 
-  if (store.status !== "active") {
+  if (store.status !== "active" || store.member_status !== "active") {
     return errorResponse("UNAUTHORIZED", "Authentication required", 401);
   }
 
   c.set("store", store);
+  await next();
+});
+
+/**
+ * Hono middleware that restricts a route to owner-role members.
+ * Must run after requireStore (reads c.var.store.role). Returns 403 for
+ * a staff-role session.
+ *
+ * Usage: router.use(requireStore, requireOwner) or inline per-route after
+ * requireStore, e.g. on storesRouter's PATCH /me (rename).
+ */
+export const requireOwner = createMiddleware<AuthEnv>(async (c, next) => {
+  if (c.var.store.role !== "owner") {
+    return errorResponse("FORBIDDEN", "Owner access required", 403);
+  }
   await next();
 });
 

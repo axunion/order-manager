@@ -34,14 +34,23 @@ describe("buildEmailContent", () => {
     expect(html).toContain("https://api.example.com/verify?token=ghi");
   });
 
+  it("returns invite subject/body with the magic link embedded", () => {
+    const { subject, html } = buildEmailContent(
+      "invite",
+      "https://api.example.com/verify?token=jkl",
+    );
+    expect(subject).toContain("招待");
+    expect(html).toContain("https://api.example.com/verify?token=jkl");
+  });
+
   it("produces distinct content per purpose", () => {
     const url = "https://api.example.com/verify?token=x";
     const signup = buildEmailContent("signup", url);
     const login = buildEmailContent("login", url);
     const emailChange = buildEmailContent("email_change", url);
-    expect(signup.subject).not.toBe(login.subject);
-    expect(signup.subject).not.toBe(emailChange.subject);
-    expect(login.subject).not.toBe(emailChange.subject);
+    const invite = buildEmailContent("invite", url);
+    const subjects = [signup, login, emailChange, invite].map((c) => c.subject);
+    expect(new Set(subjects).size).toBe(subjects.length);
   });
 });
 

@@ -21,20 +21,21 @@ import { bodyValidator } from "../validator";
 export const authRouter = new Hono<{ Bindings: Env }>()
   /**
    * GET /api/auth/me
-   * Returns the authenticated store's id, name, and email.
+   * Returns the authenticated store's id, name, the calling member's own
+   * email, and their role.
    * Used by the admin SPA on initial load to resolve the session (and by
    * SettingsPage to show the current email without a second endpoint).
    * Returns 401 if not authenticated or session has expired.
    */
   .get("/me", requireStore, async (c) => {
-    const { id, name } = c.var.store;
+    const { id, name, member_id, role } = c.var.store;
     const db = createDb(c.env.DB);
     const rows = await db
-      .select({ email: schema.stores.email })
-      .from(schema.stores)
-      .where(eq(schema.stores.id, id))
+      .select({ email: schema.members.email })
+      .from(schema.members)
+      .where(eq(schema.members.id, member_id))
       .limit(1);
-    return c.json({ data: { id, name, email: rows[0]?.email ?? "" } });
+    return c.json({ data: { id, name, email: rows[0]?.email ?? "", role } });
   })
 
   /**
@@ -62,6 +63,7 @@ export const authRouter = new Hono<{ Bindings: Env }>()
       .select({
         id: schema.magicLinkTokens.id,
         store_id: schema.magicLinkTokens.store_id,
+        member_id: schema.magicLinkTokens.member_id,
         purpose: schema.magicLinkTokens.purpose,
         new_email: schema.magicLinkTokens.new_email,
       })
@@ -87,27 +89,42 @@ export const authRouter = new Hono<{ Bindings: Env }>()
       .set({ used_at: ts })
       .where(eq(schema.magicLinkTokens.id, linkToken.id));
 
-    // For signup tokens, transition the store to active.
+    // For signup tokens, transition both the store and the (owner) member
+    // to active.
     if (linkToken.purpose === "signup") {
       await db
         .update(schema.stores)
         .set({ status: "active", activated_at: ts })
         .where(eq(schema.stores.id, linkToken.store_id));
+      await db
+        .update(schema.members)
+        .set({ status: "active", activated_at: ts })
+        .where(eq(schema.members.id, linkToken.member_id));
     }
 
-    // For email_change tokens, apply the pending address now that the owner
-    // has proven control of it. A UNIQUE race (the address was claimed by
-    // another store after this token was issued) fails generically — the
-    // token is already consumed, so the owner must re-request the change.
+    // For invite tokens, the store is already active — only the new staff
+    // member transitions to active.
+    if (linkToken.purpose === "invite") {
+      await db
+        .update(schema.members)
+        .set({ status: "active", activated_at: ts })
+        .where(eq(schema.members.id, linkToken.member_id));
+    }
+
+    // For email_change tokens, apply the pending address now that the
+    // member has proven control of it. A UNIQUE race (the address was
+    // claimed by another member after this token was issued) fails
+    // generically — the token is already consumed, so the member must
+    // re-request the change.
     if (linkToken.purpose === "email_change") {
       if (!linkToken.new_email) {
         return errorResponse("INVALID_TOKEN", "Invalid or expired link", 400);
       }
       try {
         await db
-          .update(schema.stores)
+          .update(schema.members)
           .set({ email: linkToken.new_email })
-          .where(eq(schema.stores.id, linkToken.store_id));
+          .where(eq(schema.members.id, linkToken.member_id));
       } catch {
         return errorResponse("INVALID_TOKEN", "Invalid or expired link", 400);
       }
@@ -118,6 +135,7 @@ export const authRouter = new Hono<{ Bindings: Env }>()
     await db.insert(schema.sessions).values({
       id: newId(),
       store_id: linkToken.store_id,
+      member_id: linkToken.member_id,
       session_token: sessionToken,
       expires_at: ts + SESSION_TTL_MS,
     });
@@ -139,28 +157,46 @@ export const authRouter = new Hono<{ Bindings: Env }>()
    * Always returns 200 with the same message regardless of whether the email
    * is registered, to prevent email enumeration.
    *
-   * Behaviour per status:
-   *   active    → sends a "login" Magic Link
-   *   pending   → resends the "signup" Magic Link (recovery for failed delivery)
-   *   suspended → silent (no email sent)
+   * Behaviour per member/store status:
+   *   member active, store active    → sends a "login" Magic Link
+   *   member pending, role owner     → resends the "signup" Magic Link
+   *   member pending, role staff     → resends the "invite" Magic Link
+   *   store suspended                → silent (no email sent)
    */
   .post("/login", bodyValidator(LoginInput), async (c) => {
     const { email } = c.req.valid("json");
     const db = createDb(c.env.DB);
 
     const rows = await db
-      .select()
-      .from(schema.stores)
-      .where(eq(schema.stores.email, email))
+      .select({
+        member_id: schema.members.id,
+        store_id: schema.members.store_id,
+        role: schema.members.role,
+        member_status: schema.members.status,
+        store_status: schema.stores.status,
+      })
+      .from(schema.members)
+      .innerJoin(schema.stores, eq(schema.members.store_id, schema.stores.id))
+      .where(eq(schema.members.email, email))
       .limit(1);
 
-    const store = rows[0];
+    const member = rows[0];
     let magicLinkUrl: string | undefined;
 
-    if (store && store.status !== "suspended") {
+    if (member && member.store_status !== "suspended") {
       try {
-        const purpose = store.status === "active" ? "login" : "signup";
-        const token = await issueMagicLink(db, store.id, purpose);
+        const purpose =
+          member.member_status === "active"
+            ? "login"
+            : member.role === "owner"
+              ? "signup"
+              : "invite";
+        const token = await issueMagicLink(
+          db,
+          member.store_id,
+          member.member_id,
+          purpose,
+        );
         // null means the store hit MAGIC_LINK_HOURLY_CAP — skip sending but
         // keep the response identical to the success case (anti-enumeration).
         if (token) {

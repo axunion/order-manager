@@ -91,6 +91,33 @@ describe("POST /api/stores", () => {
     expect(tokens[0]?.used_at).toBeNull();
   });
 
+  it("creates an owner member (role=owner, status=pending) alongside the store", async () => {
+    const email = `owner-member-${crypto.randomUUID()}@example.com`;
+    const res = await app.request(
+      "/api/stores",
+      { method: "POST", headers: JSON_HEADERS, body: storeBody({ email }) },
+      env,
+    );
+    const body = (await res.json()) as { data: { id: string } };
+
+    const db = createDb(env.DB);
+    const members = await db
+      .select()
+      .from(schema.members)
+      .where(eq(schema.members.store_id, body.data.id));
+    expect(members).toHaveLength(1);
+    expect(members[0]?.role).toBe("owner");
+    expect(members[0]?.status).toBe("pending");
+    expect(members[0]?.email).toBe(email);
+
+    // The signup token targets the new member, not just the store.
+    const tokens = await db
+      .select()
+      .from(schema.magicLinkTokens)
+      .where(eq(schema.magicLinkTokens.store_id, body.data.id));
+    expect(tokens[0]?.member_id).toBe(members[0]?.id);
+  });
+
   it("returns 400 when name is missing", async () => {
     const res = await app.request(
       "/api/stores",
