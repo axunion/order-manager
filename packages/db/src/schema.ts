@@ -487,12 +487,15 @@ export const payments = sqliteTable(
       .references(() => orders.id),
     /** sum of unit_price_snapshot x quantity for all order_items at checkout */
     total_amount: integer("total_amount").notNull(),
-    /** Phase 1: 'cash'. Phase 4 will extend to 'card' | 'qr'. */
-    method: text("method", { enum: ["cash"] }).notNull(),
+    /** Recorded at a staff-operated terminal; no processor integration. */
+    method: text("method", { enum: ["cash", "card", "qr"] }).notNull(),
     paid_at: integer("paid_at").notNull(), // Unix ms
   },
   (table) => [
     check("payments_total_amount_nonneg_chk", sql`${table.total_amount} >= 0`),
-    check("payments_method_chk", sql`${table.method} IN ('cash')`),
+    check(
+      "payments_method_chk",
+      sql`${table.method} IN ('cash', 'card', 'qr')`,
+    ),
   ],
 );

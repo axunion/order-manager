@@ -1,4 +1,4 @@
-import { render, screen } from "@solidjs/testing-library";
+import { render, screen, within } from "@solidjs/testing-library";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import SalesHistory, { shiftDate } from "./SalesHistory";
@@ -66,7 +66,10 @@ const mockPayments = [
     order_id: "order-2",
     seat_name: "テーブル2",
     total_amount: 800,
-    method: "cash",
+    // Distinct from pay-1's method: the per-method breakdown tests below
+    // need cash/card totals to differ from each other and from the grand
+    // total, or their assertions would collide with unrelated text.
+    method: "card",
     paid_at: 1_700_000_100_000,
     items: [
       {
@@ -111,6 +114,39 @@ describe("SalesHistory", () => {
     await findByText("¥2,400"); // 1600 + 800
     await findByText("2件");
     await findByText("¥1,200"); // average: 2400 / 2
+  });
+
+  it("breaks down revenue per payment method", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        { url: "/api/payments", method: "GET", json: { data: mockPayments } },
+      ]),
+    );
+
+    render(() => <SalesHistory />);
+    const breakdown = await screen.findByRole("list", {
+      name: "支払い方法別内訳",
+    });
+    const scoped = within(breakdown);
+    await scoped.findByText("¥1,600"); // cash: pay-1 only
+    await scoped.findByText("¥800"); // card: pay-2 only
+    await scoped.findByText("¥0"); // qr: no payments
+  });
+
+  it("labels each check with its payment method", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        { url: "/api/payments", method: "GET", json: { data: mockPayments } },
+      ]),
+    );
+
+    render(() => <SalesHistory />);
+    const checkList = await screen.findByRole("list", { name: "会計一覧" });
+    const scoped = within(checkList);
+    await scoped.findByText("現金");
+    await scoped.findByText("カード");
   });
 
   it("shows the empty state when there are no payments for the day", async () => {

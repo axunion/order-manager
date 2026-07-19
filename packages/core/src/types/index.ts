@@ -367,14 +367,18 @@ export const CreatePaymentInput = z.object({
     .string()
     .transform((s) => s.trim())
     .pipe(z.string().min(1)),
+  /** Recorded at a staff-operated terminal; no processor integration. */
+  method: z.enum(["cash", "card", "qr"]).default("cash"),
 });
 export type CreatePaymentInput = z.infer<typeof CreatePaymentInput>;
+
+export type PaymentMethod = "cash" | "card" | "qr";
 
 export interface PaymentResponse {
   id: string;
   order_id: string;
   total_amount: number;
-  method: "cash";
+  method: PaymentMethod;
   paid_at: number;
 }
 

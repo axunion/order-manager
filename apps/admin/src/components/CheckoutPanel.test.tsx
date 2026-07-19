@@ -156,6 +156,101 @@ describe("CheckoutPanel", () => {
     expect(postCalls.length).toBeGreaterThanOrEqual(1);
   });
 
+  it("defaults to 現金 selected and sends method 'cash' when unchanged", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch([
+      {
+        url: "/api/payments/pending",
+        method: "GET",
+        json: { data: [mockPendingOrder] },
+      },
+      {
+        url: "/api/payments",
+        method: "POST",
+        json: {
+          data: {
+            id: "payment-1",
+            order_id: "order-checkout-1",
+            total_amount: 1200,
+            method: "cash",
+            paid_at: Date.now(),
+          },
+        },
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { findByRole } = render(() => <CheckoutPanel />);
+    const cashBtn = await findByRole("radio", { name: "現金" });
+    expect(cashBtn.getAttribute("aria-checked")).toBe("true");
+
+    const checkoutBtn = await findByRole("button", { name: /会計完了/ });
+    await user.click(checkoutBtn);
+
+    const postCall = fetchMock.mock.calls.find((args: unknown[]) => {
+      const url = args[0] as string;
+      const init = args[1] as RequestInit | undefined;
+      return (
+        url.includes("/api/payments") &&
+        !url.includes("/pending") &&
+        (init?.method ?? "").toUpperCase() === "POST"
+      );
+    });
+    const body = JSON.parse((postCall?.[1] as RequestInit).body as string);
+    expect(body.method).toBe("cash");
+  });
+
+  it.each([
+    { label: "カード", method: "card" },
+    { label: "QR決済", method: "qr" },
+  ])("sends the selected payment method when $label is chosen", async ({
+    label,
+    method,
+  }) => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch([
+      {
+        url: "/api/payments/pending",
+        method: "GET",
+        json: { data: [mockPendingOrder] },
+      },
+      {
+        url: "/api/payments",
+        method: "POST",
+        json: {
+          data: {
+            id: "payment-1",
+            order_id: "order-checkout-1",
+            total_amount: 1200,
+            method,
+            paid_at: Date.now(),
+          },
+        },
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { findByRole } = render(() => <CheckoutPanel />);
+    const methodBtn = await findByRole("radio", { name: label });
+    await user.click(methodBtn);
+    expect(methodBtn.getAttribute("aria-checked")).toBe("true");
+
+    const checkoutBtn = await findByRole("button", { name: /会計完了/ });
+    await user.click(checkoutBtn);
+
+    const postCall = fetchMock.mock.calls.find((args: unknown[]) => {
+      const url = args[0] as string;
+      const init = args[1] as RequestInit | undefined;
+      return (
+        url.includes("/api/payments") &&
+        !url.includes("/pending") &&
+        (init?.method ?? "").toUpperCase() === "POST"
+      );
+    });
+    const body = JSON.parse((postCall?.[1] as RequestInit).body as string);
+    expect(body.method).toBe(method);
+  });
+
   it("shows an error when payment POST fails", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch([

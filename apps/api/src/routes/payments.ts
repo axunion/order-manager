@@ -3,6 +3,7 @@ import {
   errorResponse,
   newId,
   now,
+  type PaymentMethod,
   sumOrderItems,
 } from "@order/core";
 import { createDb, schema } from "@order/db";
@@ -36,7 +37,7 @@ type PaymentHistoryPayload = {
   order_id: string;
   seat_name: string;
   total_amount: number;
-  method: string;
+  method: PaymentMethod;
   paid_at: number;
   items: OrderItemPayload[];
 };
@@ -273,7 +274,10 @@ export const paymentsRouter = new Hono<AuthEnv>()
 
   /**
    * POST /api/payments
-   * Completes payment for a 'payment_requested' order.
+   * Completes payment for a 'payment_requested' order. `method` records
+   * which payment method the customer used at a staff-operated
+   * terminal ('cash' | 'card' | 'qr'); defaults to 'cash' when omitted.
+   * No processor integration — this is a record, not a charge.
    *
    * Steps:
    *  1. Fetch the order by order_id + store_id (404 if not found).
@@ -293,7 +297,7 @@ export const paymentsRouter = new Hono<AuthEnv>()
    */
   .post("/", bodyValidator(CreatePaymentInput), async (c) => {
     const { id: storeId } = c.var.store;
-    const { order_id: orderId } = c.req.valid("json");
+    const { order_id: orderId, method } = c.req.valid("json");
     const db = createDb(c.env.DB);
 
     // --- Step 1: Fetch the order, verifying store ownership ---
@@ -365,7 +369,7 @@ export const paymentsRouter = new Hono<AuthEnv>()
           store_id: storeId,
           order_id: orderId,
           total_amount: totalAmount,
-          method: "cash",
+          method,
           paid_at: paidAt,
         }),
         db
@@ -396,7 +400,7 @@ export const paymentsRouter = new Hono<AuthEnv>()
           id: paymentId,
           order_id: orderId,
           total_amount: totalAmount,
-          method: "cash",
+          method,
           paid_at: paidAt,
         },
       },

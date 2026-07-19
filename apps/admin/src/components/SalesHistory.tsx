@@ -12,14 +12,22 @@ type SalesItem = {
   status: "ordered" | "served" | "cancelled";
 };
 
+type PaymentMethod = "cash" | "card" | "qr";
+
 type Payment = {
   id: string;
   order_id: string;
   seat_name: string;
   total_amount: number;
-  method: string;
+  method: PaymentMethod;
   paid_at: number;
   items: SalesItem[];
+};
+
+const METHOD_LABELS: Record<PaymentMethod, string> = {
+  cash: "現金",
+  card: "カード",
+  qr: "QR決済",
 };
 
 /** Shifts a "YYYY-MM-DD" calendar date by `deltaDays`, using UTC arithmetic
@@ -76,6 +84,17 @@ export default function SalesHistory() {
   const averagePerCheck = createMemo(() =>
     checkCount() === 0 ? 0 : Math.round(totalRevenue() / checkCount()),
   );
+  const methodTotals = createMemo(() => {
+    const totals = new Map<PaymentMethod, number>();
+    for (const p of payments()) {
+      totals.set(p.method, (totals.get(p.method) ?? 0) + p.total_amount);
+    }
+    return (Object.keys(METHOD_LABELS) as PaymentMethod[]).map((method) => ({
+      method,
+      label: METHOD_LABELS[method],
+      amount: totals.get(method) ?? 0,
+    }));
+  });
 
   const toggleExpanded = (id: string) => {
     setExpanded((prev) => {
@@ -139,6 +158,19 @@ export default function SalesHistory() {
           </div>
         </div>
 
+        <ul class={styles.methodBreakdown} aria-label="支払い方法別内訳">
+          <For each={methodTotals()}>
+            {(entry) => (
+              <li class={styles.methodBreakdownItem}>
+                <span class={styles.methodBreakdownLabel}>{entry.label}</span>
+                <span class={styles.methodBreakdownAmount}>
+                  {formatCurrency(entry.amount)}
+                </span>
+              </li>
+            )}
+          </For>
+        </ul>
+
         <Show
           when={payments().length > 0}
           fallback={
@@ -147,7 +179,7 @@ export default function SalesHistory() {
             </div>
           }
         >
-          <ul class={styles.checkList}>
+          <ul class={styles.checkList} aria-label="会計一覧">
             <For each={payments()}>
               {(payment) => (
                 <li class={styles.checkItem}>
@@ -161,6 +193,9 @@ export default function SalesHistory() {
                       {formatTime(payment.paid_at)}
                     </span>
                     <span class={styles.checkSeat}>{payment.seat_name}</span>
+                    <span class={styles.checkMethod}>
+                      {METHOD_LABELS[payment.method]}
+                    </span>
                     <span class={styles.checkTotal}>
                       {formatCurrency(payment.total_amount)}
                     </span>

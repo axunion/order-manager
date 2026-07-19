@@ -54,17 +54,45 @@ type PaymentResult = {
   paid_at: number;
 };
 
+type PaymentMethod = "cash" | "card" | "qr";
+
+const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+  { value: "cash", label: "現金" },
+  { value: "card", label: "カード" },
+  { value: "qr", label: "QR決済" },
+];
+
 export default function CheckoutPanel() {
   const [orders, setOrders] = createSignal<PendingOrder[]>([]);
   const [pollError, setPollError] = createSignal("");
   const [actionError, setActionError] = createSignal("");
   const [processing, setProcessing] = createSignal<Set<string>>(new Set());
+  const [methodByOrder, setMethodByOrder] = createSignal<
+    Map<string, PaymentMethod>
+  >(new Map());
+
+  const methodFor = (orderId: string): PaymentMethod =>
+    methodByOrder().get(orderId) ?? "cash";
+
+  const setMethodFor = (orderId: string, method: PaymentMethod) => {
+    setMethodByOrder((prev) => new Map(prev).set(orderId, method));
+  };
 
   async function loadPending() {
     const result = await apiFetch<PendingOrder[]>("/api/payments/pending");
     if (result.ok && result.data) {
       setOrders(result.data);
       setPollError("");
+      // Prune method selections for orders that left the pending list
+      // (checked out or reopened), so the map doesn't grow unbounded
+      // across a long shift with many turnovers.
+      const stillPendingIds = new Set(result.data.map((o) => o.id));
+      setMethodByOrder((prev) => {
+        const next = new Map(
+          [...prev].filter(([orderId]) => stillPendingIds.has(orderId)),
+        );
+        return next;
+      });
     } else {
       setOrders([]);
       setPollError(result.message ?? "伝票の取得に失敗しました。");
@@ -83,6 +111,7 @@ export default function CheckoutPanel() {
     try {
       const result = await jsonFetch<PaymentResult>("/api/payments", "POST", {
         order_id: orderId,
+        method: methodFor(orderId),
       });
       if (!result.ok) {
         setActionError(result.message ?? "会計処理に失敗しました。");
@@ -186,6 +215,32 @@ export default function CheckoutPanel() {
                   )}
                 </For>
               </ul>
+
+              <div
+                class={styles.checkoutMethodGroup}
+                role="radiogroup"
+                aria-label="支払い方法"
+              >
+                <For each={PAYMENT_METHODS}>
+                  {(method) => (
+                    <Button
+                      type="button"
+                      role="radio"
+                      variant={
+                        methodFor(order.id) === method.value
+                          ? "primary"
+                          : "secondary"
+                      }
+                      size="sm"
+                      aria-checked={methodFor(order.id) === method.value}
+                      disabled={processing().has(order.id)}
+                      onClick={() => setMethodFor(order.id, method.value)}
+                    >
+                      {method.label}
+                    </Button>
+                  )}
+                </For>
+              </div>
 
               <div class={styles.checkoutCardFooter}>
                 <Button
