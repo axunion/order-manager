@@ -79,6 +79,27 @@ this scale.
   is blocked by browsers before a user gesture, so the first toggle-on
   click doubles as the unlock. New orders and new calls both trigger it.
 
+### Aging indicators (client-side only, no API change)
+
+Each order card shows elapsed time since its oldest still-`ordered`
+item was created (e.g. "12分"), clamped to a minimum of 0 so client/
+server clock skew can't display a negative age; an order whose items
+are all `served`/`cancelled` shows no age badge — nothing is left
+waiting on it, regardless of how long ago it opened. Recomputed on
+every card render, so it advances with the existing 5s poll rather
+than a dedicated timer (this depends on `loadOrders()` always
+producing fresh object references per poll, the same mechanism the
+new-order alert above already relies on).
+
+- Below 10 minutes: neutral/muted text.
+- ≥ 10 minutes: warning style (`var(--color-warning-fg)`).
+- ≥ 20 minutes: alert style (`var(--color-danger-fg)`).
+
+This is a second, independent escalation axis from the card's own
+status color (open vs. `payment_requested`) — see
+`apps/admin/DESIGN.md` § Order Card (`OrderBoard`) for the deliberate
+exception this takes to the color-role rule.
+
 ## Known limitations (→ roadmap)
 
 - **Polling, not push** — 5s latency and wasted requests; fine at
@@ -86,5 +107,3 @@ this scale.
   (Phase 5)
 - **No kitchen/floor split or KDS mode** — one board for everything.
   (Backlog)
-- **No prep-time or aging indicators** — orders don't visually escalate
-  as they wait. (Phase 3)

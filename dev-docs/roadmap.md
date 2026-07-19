@@ -30,8 +30,8 @@ Conventions:
 | --- | --- | --- |
 | 1 | Core business cycle | ✅ Shipped |
 | 2 | Operate a real day | ✅ Shipped |
-| 3 | Customer experience | 🔜 Next |
-| 4 | Money: payments, receipts, adjustments | Planned |
+| 3 | Customer experience | ✅ Shipped |
+| 4 | Money: payments, receipts, adjustments | 🔜 Next |
 | 5 | Team, scale, and account lifecycle | Planned |
 | — | Engineering track (parallel) | Ongoing |
 
@@ -97,14 +97,12 @@ photos, and customers stop needing to flag down staff.
    [domain-model](specs/domain-model.md)
    A "call staff" button on the order screen surfacing on the order
    board with the same alert mechanism as new orders.
-4. **Order progress for customers**
-   → [proposal](proposals/ux-refinements.md)
-   ([customer-ordering](specs/features/customer-ordering.md))
+4. **✅ Shipped — Order progress for customers**
+   → [customer-ordering](specs/features/customer-ordering.md#order-progress)
    Show per-item ordered/served status on the customer screen (data
    already exists).
-5. **Order board aging indicators**
-   → [proposal](proposals/ux-refinements.md)
-   ([order-fulfillment](specs/features/order-fulfillment.md))
+5. **✅ Shipped — Order board aging indicators**
+   → [order-fulfillment](specs/features/order-fulfillment.md#aging-indicators-client-side-only-no-api-change)
    Visual escalation for orders waiting too long.
 
 ## Phase 4 — Money: payments, receipts, adjustments

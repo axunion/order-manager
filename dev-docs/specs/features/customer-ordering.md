@@ -85,6 +85,23 @@ field (≤ 200 chars).
 - Resolved by staff from the order board (see
   [order-fulfillment.md](./order-fulfillment.md#staff-calls-apiadmincalls)).
 
+### Order progress
+
+- Each line on the order summary (`OrderSummary.tsx`) is tagged
+  `注文済み` (`ordered`) or `提供済み` (`served`); a `cancelled` line
+  keeps its existing `取消済み` strikethrough treatment instead.
+- `OrderScreen` gently polls the order status every 10s, **only while
+  an active order exists** — a customer still browsing the menu
+  generates no extra traffic. Unlike the call poll, this replaces the
+  whole `order` field (not just one sub-field), since the order
+  summary's rows have no nested interactive state to protect the way
+  an open item detail sheet would.
+- Every request that can set `order` (initial load, add-items, request-
+  payment, and the poll) is guarded by a monotonic sequence number: the
+  most recently *started* request always wins, so a slow poll response
+  can't overwrite a mutation's fresher result if it resolves after it
+  (e.g. reverting the screen post-会計をお願いする).
+
 ### Requesting the bill (`PATCH /api/order/:seatToken/request-payment`)
 
 - Transitions `open → payment_requested`. Idempotent (repeat → 200).
@@ -106,9 +123,6 @@ fresh.
   (`dev-docs/specs/features/order-fulfillment.md`); a "call staff"
   button is the intended UX for customer-initiated corrections.
   (Deliberate v1 decision — revisit with pilot feedback)
-- **No order-status feedback** — the customer cannot see
-  ordered/served progress per item (data exists; UI/API choice).
-  (Phase 3)
 - **Japanese only.** (Backlog)
 - **No paid-receipt view** — after checkout the customer has no record.
   (Phase 4, receipts)

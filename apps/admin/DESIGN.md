@@ -328,8 +328,10 @@ their visual state must communicate urgency instantly.
 - Seat name: 18px / 700 / `#0F172A` — immediately identifiable even under glare
 - Status badge: see §4 Status Badges
 - Age badge: elapsed time since the oldest still-`ordered` item was
-  created (e.g. "12分"); an order whose items are all `served`/
-  `cancelled` shows none. 14px / 500 / `var(--color-muted-foreground)`
+  created (e.g. "12分"), clamped to a minimum of 0 so client/server
+  clock skew can't display a negative age; an order whose items are
+  all `served`/`cancelled` shows none. 14px / 500 /
+  `var(--color-muted-foreground)`
   below 10 minutes; ≥ 10 minutes escalates to `var(--color-warning-fg)`
   / 600 weight; ≥ 20 minutes to `var(--color-danger-fg)` / 700 weight.
   Recomputed on every card re-render, so it advances with the existing
