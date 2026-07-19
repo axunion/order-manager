@@ -146,10 +146,10 @@ on the platform.
 Design sketch: [team-and-scale](proposals/team-and-scale.md) — covers
 all items below, including constraints earlier phases must not violate.
 
-1. **Staff accounts & roles** — owner invites staff by email; roles
-   (owner / staff) gate settings vs. daily operations. Sessions become
-   per-person; "log out everywhere" and sliding expiry
-   (`sessions.last_used_at`) land here.
+1. **Staff accounts & roles** → [staff-accounts-roles](proposals/staff-accounts-roles.md)
+   Owner invites staff by email; roles (owner / staff) gate settings vs.
+   daily operations. Sessions become per-person; "log out everywhere" and
+   sliding expiry (`sessions.last_used_at`) land here.
 2. **Account lifecycle tooling** — set/unset `suspended` (the intended
    billing-enforcement hook), account deletion with data export.
 3. **Analytics** — item-ranking and time-of-day sales reports on top of

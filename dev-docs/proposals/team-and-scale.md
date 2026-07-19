@@ -8,19 +8,9 @@ earlier phases don't paint us into a corner.
 
 ## 1. Staff accounts & roles
 
-- Sketch: a `members` table (`store_id`, `email` UNIQUE, `role:
-  'owner' | 'staff'`) replaces the single owner email as the login
-  identity; `sessions` reference a member. Magic Link flow is reused —
-  invite = signup-purpose link to the staff email.
-- Roles gate settings/menu/seat management (owner) vs. board/checkout
-  (staff). Enforcement point: `requireStore` grows a role, checked
-  per-router.
-- "Log out everywhere" and sliding session expiry
-  (`sessions.last_used_at` is already reserved) land here.
-- **Constraint on earlier phases:** don't build anything that assumes
-  `stores.email` is the only principal (Phase 2 store-settings is fine:
-  it edits the store, and the owner concept maps onto a member row
-  later).
+Promoted to its own proposal, open decisions resolved with the user:
+[staff-accounts-roles](staff-accounts-roles.md) — ready for
+implementation.
 
 ## 2. Account lifecycle
 
