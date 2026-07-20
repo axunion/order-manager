@@ -32,7 +32,7 @@ Conventions:
 | 2 | Operate a real day | ✅ Shipped |
 | 3 | Customer experience | ✅ Shipped |
 | 4 | Money: payments, receipts, adjustments | ✅ Shipped (item 4 deferred, backlog) |
-| 5 | Team, scale, and account lifecycle | 🔜 In progress (items 1–2 shipped) |
+| 5 | Team, scale, and account lifecycle | ✅ Shipped (items 4–5 deferred, backlog) |
 | — | Engineering track (parallel) | Ongoing |
 
 ---
@@ -164,10 +164,12 @@ all items below, including constraints earlier phases must not violate.
    Item ranking and weekday/time-of-day sales reports (`/reports`),
    computed client-side over the existing sales-history data; CSV
    export.
-4. **Real-time push** — replace 5s polling with SSE or Durable Objects
-   if pilot feedback shows polling latency/cost actually hurts.
-5. **Platform admin** — a minimal internal view of stores/health once
-   store count makes SQL-by-hand impractical.
+4. **Real-time push — deferred (backlog).** No pilot feedback yet
+   showing polling latency/cost actually hurts; replace 5s polling with
+   SSE or Durable Objects if/when that signal appears.
+5. **Platform admin — deferred (backlog).** Store count doesn't yet
+   make SQL-by-hand impractical; revisit with a minimal internal view
+   of stores/health once it does.
 
 ## Engineering track (parallel, not a phase)
 
