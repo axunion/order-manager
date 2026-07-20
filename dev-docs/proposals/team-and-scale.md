@@ -17,12 +17,8 @@ deleted per `dev-docs/README.md`.
 
 ## 2. Account lifecycle
 
-- Tooling to set/unset `stores.status = 'suspended'` — the intended
-  billing-enforcement hook. `requireStore` already rejects nothing for
-  suspended stores today; that check gets added here (or earlier if a
-  real abuse case appears).
-- Account deletion with data export (JSON dump of the store's rows) —
-  legally prudent before real merchants churn.
+Promoted to its own proposal, open decisions resolved with the user:
+[account-lifecycle](account-lifecycle.md) — ready for implementation.
 
 ## 3. Analytics
 

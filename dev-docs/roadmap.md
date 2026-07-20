@@ -153,8 +153,9 @@ all items below, including constraints earlier phases must not violate.
    settings/menu/seats/staff-management vs. board/checkout. Sessions
    become per-member with sliding expiry; "log out everywhere"
    (`POST /api/auth/logout-all`) lands here too.
-2. **Account lifecycle tooling** — set/unset `suspended` (the intended
-   billing-enforcement hook), account deletion with data export.
+2. **Account lifecycle tooling** → [account-lifecycle](proposals/account-lifecycle.md)
+   Owner self-service suspend/reactivate, and account deletion with a
+   JSON data export.
 3. **Analytics** — item-ranking and time-of-day sales reports on top of
    Phase 2 sales data; CSV export.
 4. **Real-time push** — replace 5s polling with SSE or Durable Objects
