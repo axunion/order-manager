@@ -84,6 +84,8 @@ export interface StaffMemberResponse {
   status: "pending" | "active";
   created_at: number;
   activated_at: number | null;
+  /** Magic Link URL. Only present when ENVIRONMENT !== "production" (POST only). */
+  verify_url?: string;
 }
 
 // ---------------------------------------------------------------------------

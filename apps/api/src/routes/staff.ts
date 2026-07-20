@@ -120,6 +120,9 @@ export const staffRouter = new Hono<AuthEnv>()
       );
     }
 
+    // Checked as an explicit opt-in (not "!== production") so an unset or
+    // misconfigured ENVIRONMENT never accidentally leaks the Magic Link.
+    const isDev = c.env.ENVIRONMENT === "development";
     return c.json(
       {
         data: {
@@ -129,6 +132,7 @@ export const staffRouter = new Hono<AuthEnv>()
           status: "pending" as const,
           created_at: Date.now(),
           activated_at: null,
+          ...(isDev && { verify_url: magicLinkUrl }),
         },
       },
       201,

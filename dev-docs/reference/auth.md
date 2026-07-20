@@ -36,7 +36,24 @@ Set-Cookie: session_token=<value>; HttpOnly; Secure; SameSite=None; Domain=.exam
 | `Secure` | — | Required for `SameSite=None` to work |
 | `SameSite=None` | — | Allows the cookie to be sent on cross-origin requests |
 | `Domain=.example.com` | env var `COOKIE_DOMAIN` | Shared across all `*.example.com` subdomains |
-| `Max-Age=2592000` | 30 days | |
+| `Max-Age=2592000` | 30 days | Sliding — see below, not a fixed clock from login |
+
+### Sliding expiry
+
+`requireStore` (`apps/api/src/middleware.ts`) refreshes both the session
+row (`sessions.expires_at`/`last_used_at`) and re-sends `Set-Cookie` with
+a fresh `Max-Age=2592000` on every request where the session's
+`last_used_at` is `null` or more than `SESSION_REFRESH_INTERVAL_MS` (1
+hour, `@order/core` `domain/auth.ts`) old. The throttle bounds the extra
+D1 write (and cookie re-send) to at most once/hour of activity even
+under 5s-polling admin/order-board traffic. **Both halves matter**: a
+session is only durably logged out — by inactivity — after 30 days with
+*no* refreshing request, because both the server-side row and the
+browser's own cookie lifetime advance together. Refreshing only the DB
+row (without re-sending `Set-Cookie`) would leave the browser's cookie on
+its original 30-day clock from login regardless of activity, silently
+defeating the feature. `POST /api/auth/logout-all` (below) is the
+explicit-action path; sliding expiry is the inactivity path.
 
 ### CORS
 
@@ -80,34 +97,55 @@ Used for both new store registration (signup) and returning admin login.
                   └─▶ 302 redirect to ADMIN_ORIGIN (e.g. https://admin.example.com)
 
 [Admin SPA]   mounts, AdminGuard calls GET /api/auth/me
-                  └─▶ API returns { id, name, email } — session valid
+                  └─▶ API returns { id, name, email, role } — session valid
                   └─▶ AdminGuard provides StoreContext to child routes
 ```
 
 The login flow is identical from the `POST /api/auth/login` step onward.
+Since Phase 5 (staff accounts), a store's login identity is a **member**
+row, not `stores.email` — `stores.email` is fixed at whatever address
+created the store, purely historical/display. `email` in the flow above,
+and everywhere else in this doc, means the calling **member's** email
+unless stated otherwise. A store's first member (created at signup) is
+always `role: 'owner'`; `POST /api/staff` (owner-only) invites additional
+members with an `invite`-purpose Magic Link, reusing this same flow.
 
 **Third purpose — email change**: `POST /api/stores/me/email-change`
-(`requireStore`) issues a `magic_link_tokens` row with `purpose =
-'email_change'` and `new_email` set, and emails it to the **new**
-address instead of the current one (proof of control before the change
-applies). `GET /api/auth/verify` handles this purpose by setting
-`stores.email = new_email` — right after marking the token consumed,
-before session creation — then continues through the same
-session-creation and redirect steps as signup/login. A UNIQUE-constraint
-race (the address claimed by another store between issuance and verify)
-falls back to the same generic `INVALID_TOKEN` 400 as any other invalid
-token, never a 500 or a distinguishing message.
+(`requireStore`, any active member) issues a `magic_link_tokens` row with
+`purpose = 'email_change'` and `new_email` set, and emails it to the
+**new** address instead of the current one (proof of control before the
+change applies). `GET /api/auth/verify` handles this purpose by setting
+`members.email = new_email` (the calling member's own row) — right after
+marking the token consumed, before session creation — then continues
+through the same session-creation and redirect steps as signup/login. A
+UNIQUE-constraint race (the address claimed by another member between
+issuance and verify) falls back to the same generic `INVALID_TOKEN` 400
+as any other invalid token, never a 500 or a distinguishing message.
+
+**Fourth purpose — invite**: `POST /api/staff` (`requireStore`,
+`requireOwner`) creates a `pending` member under the caller's store and
+issues a `magic_link_tokens` row with `purpose = 'invite'`, emailed to
+the invitee. `GET /api/auth/verify` handles this purpose by activating
+only the member (`status: 'active'`) — the inviting store is already
+active, unlike `signup` which activates both.
 
 **Key point**: The `verify` redirect must be an absolute URL (`c.env.ADMIN_ORIGIN`) because the
 verify endpoint is served from `api.example.com`, not `admin.example.com`.
 
 **Rate limiting**: `issueMagicLink` (`apps/api/src/auth.ts`) caps
-issuance at `MAGIC_LINK_HOURLY_CAP` (5) per store per rolling hour,
-combining signup-resend/login/email-change, and returns `null` instead
-of a token once hit — every call site skips sending but returns its
-normal success response (anti-enumeration). Superseding the previous
-unused token per store+purpose is a `used_at` `UPDATE`, not a `DELETE`,
-so the row survives for that count query. See
+issuance at `MAGIC_LINK_HOURLY_CAP` (5) per **member** per rolling hour,
+combining signup-resend/login/email-change/invite, and returns `null`
+instead of a token once hit — every call site skips sending but returns
+its normal success response (anti-enumeration). Scoped per member (not
+per store) because a store can have multiple members, and unrelated
+members issuing tokens concurrently must not invalidate each other's
+link. `POST /api/staff` (invite) additionally enforces its own
+**store**-scoped cap of `MAGIC_LINK_HOURLY_CAP` invites/hour — the
+per-member cap can't apply there since each invite is a brand-new member
+with no prior history, so without a separate check an owner session
+could mint unlimited invite emails. Superseding the previous unused
+token per member+purpose is a `used_at` `UPDATE`, not a `DELETE`, so the
+row survives for that count query. See
 [specs/features/authentication.md](../specs/features/authentication.md#magic-link-issuance-cap-rate-limiting)
 for the accepted concurrency/timing trade-offs. Complementary per-IP
 WAF rate limiting is deploy config, not Worker code — see
@@ -124,17 +162,20 @@ for local dev):
 1. **Console fallback (always on, any environment)** — `sendMagicLinkEmail`
    (`packages/core/src/domain/email.ts`) logs the Magic Link URL to the Worker console
    instead of calling the Resend API whenever `RESEND_API_KEY` is unset.
-2. **`verify_url` in the signup, login, and email-change responses (`ENVIRONMENT === "development"`
-   only)** — `POST /api/stores`, `POST /api/stores/me/email-change` (both
-   `apps/api/src/routes/stores.ts`), and `POST /api/auth/login`
-   (`apps/api/src/routes/auth.ts`) include the same Magic Link URL as `verify_url` in their
-   JSON response whenever a token was actually issued. The signup SPA (`RegisterForm.tsx`)
-   forwards it to `/check-email?verify_url=...`, and `CheckEmailPage.tsx` renders a `[DEV]`
-   link that goes straight to `GET /api/auth/verify`. The admin `LoginForm.tsx` and
-   `StoreSettings.tsx` render the same kind of `[DEV]` link inline after submitting — no
-   console log copy/paste required either way. The check is an explicit opt-in
-   (`=== "development"`, not `!== "production"`) so an unset or misconfigured `ENVIRONMENT`
-   in some future deploy target never accidentally leaks the Magic Link.
+2. **`verify_url` in the signup, login, email-change, and invite responses
+   (`ENVIRONMENT === "development"` only)** — `POST /api/stores`,
+   `POST /api/stores/me/email-change` (both `apps/api/src/routes/stores.ts`),
+   `POST /api/auth/login` (`apps/api/src/routes/auth.ts`), and
+   `POST /api/staff` (`apps/api/src/routes/staff.ts`) include the same Magic
+   Link URL as `verify_url` in their JSON response whenever a token was
+   actually issued. The signup SPA (`RegisterForm.tsx`) forwards it to
+   `/check-email?verify_url=...`, and `CheckEmailPage.tsx` renders a `[DEV]`
+   link that goes straight to `GET /api/auth/verify`. The admin `LoginForm.tsx`
+   and `StoreSettings.tsx` render the same kind of `[DEV]` link inline after
+   submitting — no console log copy/paste required either way. The check is
+   an explicit opt-in (`=== "development"`, not `!== "production"`) so an
+   unset or misconfigured `ENVIRONMENT` in some future deploy target never
+   accidentally leaks the Magic Link.
 
 `POST /api/auth/login`'s "always return 200 with an identical body regardless of whether the
 email is registered" anti-enumeration contract (asserted in `apps/api/src/routes/auth.test.ts`)
@@ -152,11 +193,15 @@ Since the admin app has no SSR, page-level auth is enforced client-side by `Admi
 It calls `GET /api/auth/me` on every protected route mount:
 
 - **401** → navigate to `/login` (replace history entry so Back does not loop)
-- **200** → render children with `StoreContext.Provider` providing `{ id, name, email }`
+- **200** → render children with `StoreContext.Provider` providing
+  `{ id, name, email, role }` — `email` is the calling member's own login
+  email (see Magic Link flow above), `role` is `'owner' | 'staff'`
 
 `GET /api/auth/me` is a lightweight session check endpoint added for this purpose.
 
 Child pages access the store info via `useStoreInfo()` (wraps `useContext(StoreContext)`).
+`role` gates the Staff page's nav link (`DashboardPage.tsx`) client-side;
+the real enforcement is server-side (`requireOwner` middleware).
 
 ### Logout
 
@@ -170,6 +215,12 @@ navigate("/login");
 cross-origin 302 redirect to `SIGNUP_ORIGIN` would be followed by the browser transparently,
 but that behavior is inconsistent across CORS preflight caching — using client-side navigation
 is more predictable.
+
+`POST /api/auth/logout-all` (Settings page, "log out everywhere" button)
+deletes every session for the calling member (all of their own devices,
+not other members') the same way; `StoreSettings.tsx` uses a hard
+`window.location.href` redirect instead of `navigate()` for this one,
+since that component is unit-tested standalone without a Router context.
 
 ---
 

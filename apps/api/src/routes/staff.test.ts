@@ -75,6 +75,40 @@ describe("POST /api/staff", () => {
     expect(tokens).toHaveLength(1);
   });
 
+  it("includes verify_url when ENVIRONMENT=development, omits it otherwise", async () => {
+    const { session_token: token } = await seedStore(
+      `Staff Invite Dev Test ${crypto.randomUUID()}`,
+    );
+
+    const prodRes = await app.request(
+      "/api/staff",
+      withAuth(
+        token,
+        jsonInit("POST", {
+          email: `prod-${crypto.randomUUID()}@test.internal`,
+        }),
+      ),
+      { ...env, ENVIRONMENT: "production" },
+    );
+    const prodBody = (await prodRes.json()) as {
+      data: { verify_url?: string };
+    };
+    expect(prodBody.data.verify_url).toBeUndefined();
+
+    const devRes = await app.request(
+      "/api/staff",
+      withAuth(
+        token,
+        jsonInit("POST", {
+          email: `dev-${crypto.randomUUID()}@test.internal`,
+        }),
+      ),
+      { ...env, ENVIRONMENT: "development" },
+    );
+    const devBody = (await devRes.json()) as { data: { verify_url?: string } };
+    expect(devBody.data.verify_url).toMatch(/\/api\/auth\/verify\?token=.+/);
+  });
+
   it("defaults role to staff when omitted, and accepts an explicit owner invite", async () => {
     const { session_token: token } = await seedStore(
       `Staff Invite Role Test ${crypto.randomUUID()}`,

@@ -32,7 +32,7 @@ Conventions:
 | 2 | Operate a real day | ✅ Shipped |
 | 3 | Customer experience | ✅ Shipped |
 | 4 | Money: payments, receipts, adjustments | ✅ Shipped (item 4 deferred, backlog) |
-| 5 | Team, scale, and account lifecycle | 🔜 Next |
+| 5 | Team, scale, and account lifecycle | 🔜 In progress (item 1 shipped) |
 | — | Engineering track (parallel) | Ongoing |
 
 ---
@@ -146,10 +146,13 @@ on the platform.
 Design sketch: [team-and-scale](proposals/team-and-scale.md) — covers
 all items below, including constraints earlier phases must not violate.
 
-1. **Staff accounts & roles** → [staff-accounts-roles](proposals/staff-accounts-roles.md)
-   Owner invites staff by email; roles (owner / staff) gate settings vs.
-   daily operations. Sessions become per-person; "log out everywhere" and
-   sliding expiry (`sessions.last_used_at`) land here.
+1. **✅ Shipped — Staff accounts & roles**
+   → [authentication](specs/features/authentication.md), [domain-model](specs/domain-model.md)
+   A `members` table replaces `stores.email` as the login identity.
+   Owner invites staff by email; roles (owner / staff) gate
+   settings/menu/seats/staff-management vs. board/checkout. Sessions
+   become per-member with sliding expiry; "log out everywhere"
+   (`POST /api/auth/logout-all`) lands here too.
 2. **Account lifecycle tooling** — set/unset `suspended` (the intended
    billing-enforcement hook), account deletion with data export.
 3. **Analytics** — item-ranking and time-of-day sales reports on top of

@@ -11,13 +11,22 @@ stores 1 ──── * menu_categories 1 ──── * menu_items 1 ───�
    ├──── * seats 1 ──── * orders 1 ──── * order_items 1 ──── * order_item_options
    │        │               │
    │        └──── * staff_calls
-   ├──── * sessions         └──── 0..1 payments
-   └──── * magic_link_tokens
+   └──── * members 1 ──── * sessions
+            │
+            └──── * magic_link_tokens
 ```
 
-- **stores** — one row per tenant. Owner email doubles as the login id;
-  changeable via store settings (see below), always re-verified via
-  Magic Link before it takes effect.
+- **stores** — one row per tenant. `email` is fixed at whatever address
+  created the store — historical/display only, not a login identity (see
+  **members** below; it used to double as the login id before Phase 5).
+- **members** — one row per person who can log in to a store. `email` is
+  **UNIQUE globally** (same constraint shape stores.email used to have —
+  one email = one member, across all stores; a person can't be staff at
+  two stores with the same email). `role` (`'owner' | 'staff'`) gates
+  settings/menu/seats/staff-management (owner) vs. board/checkout (both);
+  see [features/authentication.md](./features/authentication.md). A
+  store's first member (created at signup) is always an owner; the API
+  enforces at least one owner remains (see Invariants).
 - **menu_categories / menu_items** — the sellable catalog. Items may be
   uncategorized (`category_id` nullable). Prices are tax-inclusive JPY
   integers; `tax_rate` (8 or 10, default 10) is not exposed in the
@@ -62,10 +71,16 @@ stores 1 ──── * menu_categories 1 ──── * menu_items 1 ───�
   audit history; see
   [features/checkout.md](./features/checkout.md#voiding-a-payment-patch-apipaymentsidvoid).
 - **sessions / magic_link_tokens** — auth artifacts; see
-  [features/authentication.md](./features/authentication.md).
-  `magic_link_tokens.purpose` is `'signup' | 'login' | 'email_change'`;
-  the nullable `new_email` column holds the pending target address for
-  `email_change` tokens only.
+  [features/authentication.md](./features/authentication.md). Both carry
+  `member_id` (the dedup/rate-cap key — see below) and a denormalized
+  `store_id` (avoids a join on every `requireStore`-guarded request).
+  `magic_link_tokens.purpose` is `'signup' | 'login' | 'email_change' |
+  'invite'`; the nullable `new_email` column holds the pending target
+  address for `email_change` tokens only. `issueMagicLink`'s supersede
+  (only one valid link per purpose) and hourly rate cap are scoped by
+  `member_id`, not `store_id` — a store can have multiple members now,
+  and unrelated members issuing tokens concurrently must not invalidate
+  each other's link.
 
 ## State machines
 
@@ -79,6 +94,20 @@ pending ──(magic link verified)──▶ active ──(future: admin action)
 - `active` — normal operation.
 - `suspended` — reserved for future account disabling (no tooling yet).
   Login requests are silently ignored.
+
+### members.status
+
+```
+pending ──(magic link verified: signup or invite)──▶ active
+```
+
+- `pending` — created at store signup (owner) or by `POST /api/staff`
+  (staff invite); email unverified. Login resends the `signup` (owner) or
+  `invite` (staff) Magic Link. No `suspended` state at member level —
+  removing access is `DELETE /api/staff/:id` (deletes the row), not a
+  status transition.
+- `active` — can log in. `requireStore` rejects (401) if either the
+  member or the store isn't `active`.
 
 ### orders.status
 
@@ -155,6 +184,21 @@ open ──(staff resolves)──▶ resolved
 5. **Positive amounts** — `menu_items.price > 0`,
    `order_items.quantity > 0` (also capped at 99 by Zod),
    `payments.total_amount >= 0`, `payments.discount_amount >= 0`.
+
+## Invariants (API-enforced)
+
+- **A store always has at least one owner member** — not a DB constraint
+  (D1 has no cross-row trigger support here). `DELETE /api/staff/:id`
+  rejects self-removal (400) **and** rejects removing the target if it's
+  the store's last `role: 'owner'` member (counts other owners in the
+  store, excluding the target; 400 if none remain). Both checks are
+  needed: self-removal alone doesn't prevent two distinct owner sessions
+  from concurrently removing each other, which would leave zero owners
+  despite each individual request passing the self-removal check. This
+  is a check-then-act guard, not a transactional one — same accepted
+  tradeoff as the slug/email uniqueness checks elsewhere in this
+  codebase. See
+  [features/authentication.md](./features/authentication.md#staff-management-appsapisrcroutesstaffts-owner-only).
 
 ## Multi-tenant isolation rule
 

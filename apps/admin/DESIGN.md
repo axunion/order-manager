@@ -266,12 +266,15 @@ screen context.
 ### Dashboard Navigation (`DashboardPage`)
 
 The dashboard hub presents the main sections (menu, seats, orders,
-checkout, sales, settings) as navigation links.
+checkout, sales, staff, settings) as navigation links.
 
 - Container: Surface card / `border-radius: radius-lg` / `padding: space-8` /
   `border: 2px dashed border` — signals "interim" state (scaffold placeholder)
 - Links: 16px / 600 / `#1D4ED8` — hover: underline
 - Layout: single column, centered
+- The "スタッフ管理" (staff management) link renders only when
+  `useStoreInfo().role === "owner"` (`<Show>`) — hidden for a `staff`-role
+  session. Client-side only; `requireOwner` on the API is the real guard.
 
 ---
 
@@ -489,22 +492,53 @@ actions — no un-retire in v1).
 
 ### Store Settings (`StoreSettings`)
 
-Two independent forms, each a Surface card (`section` / `radius-lg` /
+Three independent sections, each a Surface card (`section` / `radius-lg` /
 `padding: space-6` / `shadow-sm`), modeled on the existing `LoginForm`
 pattern (Field + Button, `<Show>` toggles to a post-submit notice).
 
 - **Name form**: `Field` pre-filled with the current name; inline "保存"
   `Button`; a `savedNote` confirmation (`--color-success-fg`) appears
   next to the button after a successful save, not a page navigation.
-- **Email form**: current email shown as static text above the form
-  (`--color-muted-foreground`), stays visible after submit since the
+- **Email form** ("自分のメールアドレス" — the calling member's own login
+  email, not the store's): current email shown as static text above the
+  form (`--color-muted-foreground`), stays visible after submit since the
   address hasn't actually changed until the link is clicked. On submit,
   the form itself is replaced (`<Show fallback>`) by a "check your new
   inbox" notice, plus the same `[DEV]` verify-link box as `LoginForm`
   (`--color-warning-bg` / `-border` / `-fg`) when `verify_url` is
   present.
+- **Session section** ("セッション"): one line of explanatory text plus a
+  single `secondary` Button ("ログアウト（全端末）") calling
+  `POST /api/auth/logout-all`. On click, does a hard
+  `window.location.href` redirect to `/login` (not solid-router
+  `navigate()` — every session cookie was just invalidated server-side,
+  so the app must re-bootstrap rather than continue with stale in-memory
+  state; this also sidesteps this component's standalone unit-test
+  render, which has no Router context).
 
 ---
+
+### Staff Manager (`StaffManager`)
+
+Owner-only page (`/staff`, hidden from the dashboard nav for `staff`-role
+sessions). Two Surface cards, same shape as `SeatManager`/`StoreSettings`.
+
+- **Invite form**: `Field` (email, type="email") + `@order/ui` `Select`
+  (role: スタッフ / オーナー, defaults to スタッフ) + inline "招待する"
+  `Button`, laid out `flex-wrap` / `align-items: flex-end` like
+  `SeatManager`'s add-seat form.
+- **Member list**: each row shows email (`font-weight: semibold`), a
+  plain-text role label (スタッフ/オーナー — not a Status Badge; role
+  isn't a state transition), a Status Badge (`success` "有効" /
+  `warning` "招待中" for active/pending), and a `danger` `ConfirmDialog`
+  ("削除") per row. The remove trigger is `disabled` (not hidden) for the
+  caller's own row and for a `role: 'owner'` row when it's the only owner
+  left — the API's 400s are the real guard; this is UX only, matching
+  `SeatManager`'s no-op-prevention pattern for actions that would
+  obviously fail.
+- Errors (fetch failure, 403 for a staff-role session that navigates here
+  directly, invite conflicts) surface via `ErrorAlert`, same placement
+  convention as `SeatManager`.
 
 ### Inputs / Field (`@order/ui` Field)
 

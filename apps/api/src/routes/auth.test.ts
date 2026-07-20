@@ -650,7 +650,7 @@ describe("requireStore middleware (session-based)", () => {
       .then((rows) => rows[0]);
     expect(before?.last_used_at).toBeNull();
 
-    await app.request("/api/seats", withAuth(token), env);
+    const res = await app.request("/api/seats", withAuth(token), env);
 
     const after = await db
       .select({
@@ -666,6 +666,11 @@ describe("requireStore middleware (session-based)", () => {
     // refresh happened (a >-than-before comparison can tie when two now()
     // calls land in the same millisecond).
     expect(after?.expires_at).toBe((after?.last_used_at ?? 0) + SESSION_TTL_MS);
+
+    // The browser's cookie Max-Age must also be refreshed — otherwise it
+    // would still hard-expire 30 days after the original login regardless
+    // of the server-side session row being extended.
+    expect(res.headers.get("Set-Cookie")).toContain(`session_token=${token}`);
   });
 
   it("does not rewrite last_used_at/expires_at when refreshed less than an hour ago", async () => {
@@ -680,7 +685,7 @@ describe("requireStore middleware (session-based)", () => {
       .set({ last_used_at: recentTs, expires_at: originalExpiresAt })
       .where(eq(schema.sessions.session_token, token));
 
-    await app.request("/api/seats", withAuth(token), env);
+    const res = await app.request("/api/seats", withAuth(token), env);
 
     const after = await db
       .select({
@@ -692,6 +697,8 @@ describe("requireStore middleware (session-based)", () => {
       .then((rows) => rows[0]);
     expect(after?.last_used_at).toBe(recentTs);
     expect(after?.expires_at).toBe(originalExpiresAt);
+    // No refresh happened, so no Set-Cookie should be sent either.
+    expect(res.headers.get("Set-Cookie")).toBeNull();
   });
 
   it("rewrites last_used_at/expires_at when the last refresh was over an hour ago", async () => {
@@ -706,7 +713,7 @@ describe("requireStore middleware (session-based)", () => {
       .set({ last_used_at: staleTs, expires_at: originalExpiresAt })
       .where(eq(schema.sessions.session_token, token));
 
-    await app.request("/api/seats", withAuth(token), env);
+    const res = await app.request("/api/seats", withAuth(token), env);
 
     const after = await db
       .select({
@@ -719,6 +726,7 @@ describe("requireStore middleware (session-based)", () => {
     expect(after?.last_used_at).toBeGreaterThan(staleTs);
     // Same non-flaky relationship check as the "fresh session" test above.
     expect(after?.expires_at).toBe((after?.last_used_at ?? 0) + SESSION_TTL_MS);
+    expect(res.headers.get("Set-Cookie")).toContain(`session_token=${token}`);
   });
 
   it("grants access to an active store with a valid session", async () => {

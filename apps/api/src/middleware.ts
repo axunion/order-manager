@@ -1,5 +1,6 @@
 import type { SeatSession, StoreSession } from "@order/core";
 import {
+  buildSessionCookie,
   errorResponse,
   now,
   SESSION_REFRESH_INTERVAL_MS,
@@ -10,7 +11,12 @@ import { createDb, schema } from "@order/db";
 import { eq } from "drizzle-orm";
 import { getCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
-import { deleteSession, getSeatByQrToken, getStoreBySession } from "./auth";
+import {
+  deleteSession,
+  getSeatByQrToken,
+  getStoreBySession,
+  isSecureRequest,
+} from "./auth";
 
 /**
  * Shared Hono environment type for admin-authenticated routes.
@@ -59,7 +65,12 @@ export const requireStore = createMiddleware<AuthEnv>(async (c, next) => {
 
   // Sliding expiry: refresh expires_at/last_used_at, throttled to once per
   // SESSION_REFRESH_INTERVAL_MS so 5s-polling admin/order-board traffic
-  // doesn't write on every single request.
+  // doesn't write on every single request. Must also re-send Set-Cookie:
+  // the browser's cookie Max-Age is fixed at the value from the last
+  // Set-Cookie response, so without resending it here the cookie would
+  // still hard-expire 30 days after the *original* login regardless of
+  // how fresh the server-side session row is — silently defeating the
+  // whole point of sliding expiry.
   if (
     store.last_used_at === null ||
     now() - store.last_used_at >= SESSION_REFRESH_INTERVAL_MS
@@ -69,6 +80,13 @@ export const requireStore = createMiddleware<AuthEnv>(async (c, next) => {
       .update(schema.sessions)
       .set({ last_used_at: ts, expires_at: ts + SESSION_TTL_MS })
       .where(eq(schema.sessions.session_token, token));
+
+    const secure = isSecureRequest(c.req.url, c.env.ENVIRONMENT);
+    const cookieDomain = c.env.COOKIE_DOMAIN || undefined;
+    c.header(
+      "Set-Cookie",
+      buildSessionCookie(token, { secure, domain: cookieDomain }),
+    );
   }
 
   c.set("store", store);

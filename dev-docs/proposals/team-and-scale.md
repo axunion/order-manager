@@ -8,9 +8,12 @@ earlier phases don't paint us into a corner.
 
 ## 1. Staff accounts & roles
 
-Promoted to its own proposal, open decisions resolved with the user:
-[staff-accounts-roles](staff-accounts-roles.md) — ready for
-implementation.
+**✅ Shipped.** See
+[specs/features/authentication.md](../specs/features/authentication.md)
+and [specs/domain-model.md](../specs/domain-model.md) (the `members`
+table, roles, staff management API, logout-everywhere, sliding expiry).
+Its design proposal (`staff-accounts-roles.md`) has been folded and
+deleted per `dev-docs/README.md`.
 
 ## 2. Account lifecycle
 
