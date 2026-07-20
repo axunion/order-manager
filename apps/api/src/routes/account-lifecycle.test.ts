@@ -1,7 +1,7 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 /**
  * Account lifecycle (roadmap Phase 5 item 2): owner self-service
- * suspend/reactivate. Delete + export land in a later slice.
+ * suspend/reactivate, and delete + export.
  */
 import { env } from "cloudflare:workers";
 import { createDb, schema } from "@order/db";
@@ -11,6 +11,116 @@ import { app } from "../app";
 import { jsonInit, seedStore, withAuth } from "../test-helpers";
 
 const devEnv = { ...env, ENVIRONMENT: "development" };
+
+/**
+ * Seeds one row into every store-scoped table (beyond stores/members,
+ * already created by seedStore) so delete-everything tests can assert
+ * nothing is left behind.
+ */
+async function seedFullStore(storeId: string) {
+  const db = createDb(env.DB);
+  const now = Date.now();
+
+  const categoryId = crypto.randomUUID();
+  const itemId = crypto.randomUUID();
+  const groupId = crypto.randomUUID();
+  const optionId = crypto.randomUUID();
+  const seatId = crypto.randomUUID();
+  const orderId = crypto.randomUUID();
+  const orderItemId = crypto.randomUUID();
+
+  const [owner] = await db
+    .select({ id: schema.members.id })
+    .from(schema.members)
+    .where(eq(schema.members.store_id, storeId))
+    .limit(1);
+  if (!owner) throw new Error("seedFullStore requires an existing member");
+  await db.insert(schema.magicLinkTokens).values({
+    id: crypto.randomUUID(),
+    store_id: storeId,
+    member_id: owner.id,
+    token: crypto.randomUUID(),
+    purpose: "login",
+    expires_at: now + 15 * 60 * 1000,
+  });
+
+  await db.insert(schema.menuCategories).values({
+    id: categoryId,
+    store_id: storeId,
+    name: "Category",
+  });
+  await db.insert(schema.menuItems).values({
+    id: itemId,
+    store_id: storeId,
+    category_id: categoryId,
+    name: "Item",
+    price: 500,
+  });
+  await db.insert(schema.optionGroups).values({
+    id: groupId,
+    store_id: storeId,
+    name: "Group",
+  });
+  await db.insert(schema.options).values({
+    id: optionId,
+    store_id: storeId,
+    group_id: groupId,
+    name: "Option",
+  });
+  await db.insert(schema.menuItemOptionGroups).values({
+    id: crypto.randomUUID(),
+    menu_item_id: itemId,
+    group_id: groupId,
+  });
+  await db.insert(schema.seats).values({
+    id: seatId,
+    store_id: storeId,
+    name: "Seat",
+    qr_token: crypto.randomUUID(),
+  });
+  await db.insert(schema.staffCalls).values({
+    id: crypto.randomUUID(),
+    store_id: storeId,
+    seat_id: seatId,
+    status: "resolved",
+    resolved_at: now,
+  });
+  await db.insert(schema.orders).values({
+    id: orderId,
+    store_id: storeId,
+    seat_id: seatId,
+    status: "paid",
+    closed_at: now,
+  });
+  await db.insert(schema.orderItems).values({
+    id: orderItemId,
+    store_id: storeId,
+    order_id: orderId,
+    menu_item_id: itemId,
+    name_snapshot: "Item",
+    unit_price_snapshot: 500,
+    quantity: 1,
+    status: "served",
+  });
+  await db.insert(schema.orderItemOptions).values({
+    id: crypto.randomUUID(),
+    store_id: storeId,
+    order_item_id: orderItemId,
+    name_snapshot: "Option",
+    group_name_snapshot: "Group",
+    price_delta_snapshot: 0,
+  });
+  await db.insert(schema.payments).values({
+    id: crypto.randomUUID(),
+    store_id: storeId,
+    order_id: orderId,
+    method: "cash",
+    total_amount: 500,
+    paid_at: now,
+  });
+
+  return { itemId, groupId };
+}
 
 /** Directly seeds `count` magic_link_tokens rows for a member, `ageMs` old. */
 async function seedRecentTokens(
@@ -407,5 +517,153 @@ describe("GET /api/auth/verify with a reactivate token", () => {
     expect(meBody.data.id).toBe(storeId);
     expect(meBody.data.email).toBe(ownerEmail);
     expect(meBody.data.role).toBe("owner");
+  });
+});
+
+describe("DELETE /api/stores/me", () => {
+  it("returns 401 without a session", async () => {
+    const res = await app.request(
+      "/api/stores/me",
+      jsonInit("DELETE", { confirm_name: "anything" }),
+      env,
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 403 for a staff-role session", async () => {
+    const { session_token: token } = await seedStore(
+      `Delete Forbidden Test ${crypto.randomUUID()}`,
+      "staff",
+    );
+    const res = await app.request(
+      "/api/stores/me",
+      withAuth(token, jsonInit("DELETE", { confirm_name: "anything" })),
+      env,
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 400 when confirm_name does not match", async () => {
+    const storeName = `Delete Mismatch Test ${crypto.randomUUID()}`;
+    const { id: storeId, session_token: token } = await seedStore(storeName);
+    const res = await app.request(
+      "/api/stores/me",
+      withAuth(token, jsonInit("DELETE", { confirm_name: "wrong name" })),
+      env,
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("VALIDATION_ERROR");
+
+    // Nothing was deleted.
+    const db = createDb(env.DB);
+    const storeRows = await db
+      .select({ id: schema.stores.id })
+      .from(schema.stores)
+      .where(eq(schema.stores.id, storeId));
+    expect(storeRows).toHaveLength(1);
+  });
+
+  it("deletes the store and every row across all business tables on confirm_name match", async () => {
+    const storeName = `Delete Everything Test ${crypto.randomUUID()}`;
+    const { id: storeId, session_token: token } = await seedStore(storeName);
+    const { itemId } = await seedFullStore(storeId);
+
+    const res = await app.request(
+      "/api/stores/me",
+      withAuth(token, jsonInit("DELETE", { confirm_name: storeName })),
+      env,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      data: { export: Record<string, unknown[]> };
+    };
+
+    // The export captured the pre-deletion data for every table.
+    expect(body.data.export.store).toHaveLength(1);
+    expect(body.data.export.members).toHaveLength(1);
+    expect(body.data.export.menu_categories).toHaveLength(1);
+    expect(body.data.export.menu_items).toHaveLength(1);
+    expect(body.data.export.option_groups).toHaveLength(1);
+    expect(body.data.export.options).toHaveLength(1);
+    expect(body.data.export.menu_item_option_groups).toHaveLength(1);
+    expect(body.data.export.seats).toHaveLength(1);
+    expect(body.data.export.orders).toHaveLength(1);
+    expect(body.data.export.order_items).toHaveLength(1);
+    expect(body.data.export.order_item_options).toHaveLength(1);
+    expect(body.data.export.staff_calls).toHaveLength(1);
+    expect(body.data.export.payments).toHaveLength(1);
+
+    // sessions and magic_link_tokens are auth artifacts containing secrets
+    // (session/magic-link token values) — must never appear in the export.
+    expect(body.data.export).not.toHaveProperty("sessions");
+    expect(body.data.export).not.toHaveProperty("magic_link_tokens");
+
+    // Every row is actually gone from D1.
+    const db = createDb(env.DB);
+    const storeRows = await db
+      .select()
+      .from(schema.stores)
+      .where(eq(schema.stores.id, storeId));
+    expect(storeRows).toHaveLength(0);
+
+    const storeScopedTables = [
+      schema.members,
+      schema.sessions,
+      schema.magicLinkTokens,
+      schema.menuCategories,
+      schema.menuItems,
+      schema.optionGroups,
+      schema.options,
+      schema.seats,
+      schema.orders,
+      schema.orderItems,
+      schema.orderItemOptions,
+      schema.staffCalls,
+      schema.payments,
+    ];
+    for (const table of storeScopedTables) {
+      const rows = await db
+        .select()
+        .from(table)
+        .where(eq(table.store_id, storeId));
+      expect(rows).toHaveLength(0);
+    }
+
+    const menuItemOptionGroupRows = await db
+      .select()
+      .from(schema.menuItemOptionGroups)
+      .where(eq(schema.menuItemOptionGroups.menu_item_id, itemId));
+    expect(menuItemOptionGroupRows).toHaveLength(0);
+  });
+
+  it("does not affect a second store's data (tenant isolation)", async () => {
+    const storeAName = `Delete Isolation A ${crypto.randomUUID()}`;
+    const storeA = await seedStore(storeAName);
+    const storeB = await seedStore(`Delete Isolation B ${crypto.randomUUID()}`);
+    await seedFullStore(storeB.id);
+
+    const res = await app.request(
+      "/api/stores/me",
+      withAuth(
+        storeA.session_token,
+        jsonInit("DELETE", { confirm_name: storeAName }),
+      ),
+      env,
+    );
+    expect(res.status).toBe(200);
+
+    const db = createDb(env.DB);
+    const storeBRows = await db
+      .select({ id: schema.stores.id })
+      .from(schema.stores)
+      .where(eq(schema.stores.id, storeB.id));
+    expect(storeBRows).toHaveLength(1);
+
+    const storeBSeats = await db
+      .select()
+      .from(schema.seats)
+      .where(eq(schema.seats.store_id, storeB.id));
+    expect(storeBSeats).toHaveLength(1);
   });
 });

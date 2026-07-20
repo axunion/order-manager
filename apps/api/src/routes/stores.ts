@@ -1,6 +1,7 @@
 import {
   buildSlug,
   CreateStoreInput,
+  DeleteStoreInput,
   EmailChangeInput,
   errorResponse,
   MAGIC_LINK_VERIFY_PATH,
@@ -9,7 +10,7 @@ import {
   UpdateStoreNameInput,
 } from "@order/core";
 import { createDb, schema } from "@order/db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { issueMagicLink } from "../auth";
 import { requireOwner, requireStore } from "../middleware";
@@ -319,6 +320,187 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
         data: {
           sent: true,
           ...(isDev && magicLinkUrl && { verify_url: magicLinkUrl }),
+        },
+      });
+    },
+  )
+
+  /**
+   * DELETE /api/stores/me
+   * Permanently deletes the store and every row it owns. Body
+   * { confirm_name } must exactly match the store's current name — a
+   * server-side safeguard independent of whatever client-side
+   * confirmation UI exists.
+   *
+   * Hard delete, not soft: no accounting/audit retention requirement
+   * exists for this project (see dev-docs/proposals/account-lifecycle.md).
+   * The response body IS the export — produced atomically with the
+   * delete from the same pre-delete reads, not a separate endpoint, so
+   * the frontend can offer it as a download in the same action.
+   * sessions/magic_link_tokens are excluded from the export (auth
+   * artifacts containing secrets, not business data) but are deleted.
+   *
+   * Response: 200 { data: { export: { store, members, menu_categories,
+   *   menu_items, option_groups, options, menu_item_option_groups, seats,
+   *   orders, order_items, order_item_options, staff_calls, payments } } }
+   */
+  .delete(
+    "/me",
+    requireStore,
+    requireOwner,
+    bodyValidator(DeleteStoreInput),
+    async (c) => {
+      const { id: storeId, name } = c.var.store;
+      const { confirm_name } = c.req.valid("json");
+      const db = createDb(c.env.DB);
+
+      if (confirm_name !== name) {
+        return errorResponse("VALIDATION_ERROR", "店舗名が一致しません。", 400);
+      }
+
+      const [
+        storeRows,
+        memberRows,
+        menuCategoryRows,
+        menuItemRows,
+        optionGroupRows,
+        optionRows,
+        seatRows,
+        orderRows,
+        orderItemRows,
+        orderItemOptionRows,
+        staffCallRows,
+        paymentRows,
+      ] = await Promise.all([
+        db.select().from(schema.stores).where(eq(schema.stores.id, storeId)),
+        db
+          .select()
+          .from(schema.members)
+          .where(eq(schema.members.store_id, storeId)),
+        db
+          .select()
+          .from(schema.menuCategories)
+          .where(eq(schema.menuCategories.store_id, storeId)),
+        db
+          .select()
+          .from(schema.menuItems)
+          .where(eq(schema.menuItems.store_id, storeId)),
+        db
+          .select()
+          .from(schema.optionGroups)
+          .where(eq(schema.optionGroups.store_id, storeId)),
+        db
+          .select()
+          .from(schema.options)
+          .where(eq(schema.options.store_id, storeId)),
+        db
+          .select()
+          .from(schema.seats)
+          .where(eq(schema.seats.store_id, storeId)),
+        db
+          .select()
+          .from(schema.orders)
+          .where(eq(schema.orders.store_id, storeId)),
+        db
+          .select()
+          .from(schema.orderItems)
+          .where(eq(schema.orderItems.store_id, storeId)),
+        db
+          .select()
+          .from(schema.orderItemOptions)
+          .where(eq(schema.orderItemOptions.store_id, storeId)),
+        db
+          .select()
+          .from(schema.staffCalls)
+          .where(eq(schema.staffCalls.store_id, storeId)),
+        db
+          .select()
+          .from(schema.payments)
+          .where(eq(schema.payments.store_id, storeId)),
+      ]);
+
+      // menu_item_option_groups has no store_id column; every row it has
+      // for this store is reachable via this store's own menu_items (an
+      // item can only be attached to option groups already verified to
+      // belong to the same store — see menu.ts's validateOptionGroupIds).
+      const menuItemIds = menuItemRows.map((r) => r.id);
+      const menuItemOptionGroupRows =
+        menuItemIds.length > 0
+          ? await db
+              .select()
+              .from(schema.menuItemOptionGroups)
+              .where(
+                inArray(schema.menuItemOptionGroups.menu_item_id, menuItemIds),
+              )
+          : [];
+
+      // FK-dependency order: children before parents. The
+      // menu_item_option_groups delete uses a live subquery (not the
+      // menuItemIds snapshot above) so it still catches a row attached to
+      // this store's menu items between the reads above and this batch
+      // running — the export snapshot and the delete scope don't need to
+      // agree, but a stale delete scope here could otherwise leave an
+      // orphaned join row (or, if D1 enforces the FK, abort the whole
+      // batch when the referenced menu_item is deleted next).
+      await db.batch([
+        db
+          .delete(schema.orderItemOptions)
+          .where(eq(schema.orderItemOptions.store_id, storeId)),
+        db
+          .delete(schema.orderItems)
+          .where(eq(schema.orderItems.store_id, storeId)),
+        db.delete(schema.payments).where(eq(schema.payments.store_id, storeId)),
+        db
+          .delete(schema.staffCalls)
+          .where(eq(schema.staffCalls.store_id, storeId)),
+        db.delete(schema.orders).where(eq(schema.orders.store_id, storeId)),
+        db.delete(schema.seats).where(eq(schema.seats.store_id, storeId)),
+        db
+          .delete(schema.menuItemOptionGroups)
+          .where(
+            inArray(
+              schema.menuItemOptionGroups.menu_item_id,
+              db
+                .select({ id: schema.menuItems.id })
+                .from(schema.menuItems)
+                .where(eq(schema.menuItems.store_id, storeId)),
+            ),
+          ),
+        db.delete(schema.options).where(eq(schema.options.store_id, storeId)),
+        db
+          .delete(schema.menuItems)
+          .where(eq(schema.menuItems.store_id, storeId)),
+        db
+          .delete(schema.menuCategories)
+          .where(eq(schema.menuCategories.store_id, storeId)),
+        db
+          .delete(schema.optionGroups)
+          .where(eq(schema.optionGroups.store_id, storeId)),
+        db
+          .delete(schema.magicLinkTokens)
+          .where(eq(schema.magicLinkTokens.store_id, storeId)),
+        db.delete(schema.sessions).where(eq(schema.sessions.store_id, storeId)),
+        db.delete(schema.members).where(eq(schema.members.store_id, storeId)),
+        db.delete(schema.stores).where(eq(schema.stores.id, storeId)),
+      ]);
+
+      return c.json({
+        data: {
+          export: {
+            store: storeRows,
+            members: memberRows,
+            menu_categories: menuCategoryRows,
+            menu_items: menuItemRows,
+            option_groups: optionGroupRows,
+            options: optionRows,
+            menu_item_option_groups: menuItemOptionGroupRows,
+            seats: seatRows,
+            orders: orderRows,
+            order_items: orderItemRows,
+            order_item_options: orderItemOptionRows,
+            staff_calls: staffCallRows,
+            payments: paymentRows,
+          },
         },
       });
     },

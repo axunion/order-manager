@@ -46,6 +46,13 @@ export const EmailChangeInput = z.object({
 });
 export type EmailChangeInput = z.infer<typeof EmailChangeInput>;
 
+export const DeleteStoreInput = z.object({
+  /** Must exactly match the store's current name — a server-side safeguard
+   * against an accidental or scripted delete, independent of client UI. */
+  confirm_name: z.string().min(1),
+});
+export type DeleteStoreInput = z.infer<typeof DeleteStoreInput>;
+
 export interface EmailChangeResponse {
   sent: true;
   /** Magic Link URL. Only present when ENVIRONMENT !== "production". */
