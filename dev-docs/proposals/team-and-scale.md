@@ -26,12 +26,8 @@ design proposal (`account-lifecycle.md`) has been folded and deleted per
 
 ## 3. Analytics
 
-- Item ranking, time-of-day/weekday sales, CSV export — server-side
-  aggregation endpoints on top of Phase 2 sales data (that proposal
-  deliberately kept aggregation client-side; the cutover point is when
-  windows exceed a day or two).
-- Consider a `paid_at`-indexed covering query first; only reach for
-  materialized aggregates if D1 latency actually hurts.
+Promoted to its own proposal, open decisions resolved with the user:
+[sales-reports](sales-reports.md) — ready for implementation.
 
 ## 4. Realtime push
 
