@@ -26,8 +26,10 @@ design proposal (`account-lifecycle.md`) has been folded and deleted per
 
 ## 3. Analytics
 
-Promoted to its own proposal, open decisions resolved with the user:
-[sales-reports](sales-reports.md) — ready for implementation.
+**✅ Shipped.** See
+[specs/features/checkout.md](../specs/features/checkout.md#sales-reports-reports-appsadmin).
+Its design proposal (`sales-reports.md`) has been folded and deleted per
+`dev-docs/README.md`.
 
 ## 4. Realtime push
 

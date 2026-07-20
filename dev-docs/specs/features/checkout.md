@@ -89,6 +89,31 @@ renders both so staff can double-check the bill before settling it.
   day via `jstDayRange` (`@order/core`, `domain/time.ts`), with
   prev/next-day navigation and a date picker (defaults to today JST).
 
+### Sales reports (`/reports`, `apps/admin`)
+
+- Separate page from `/sales`; same access (open to both roles, not
+  `requireOwner`-gated). Reuses `GET /api/payments?from&to` as-is — no
+  new server endpoints or schema changes; all aggregation below runs
+  client-side over the returned payments.
+- **Date range**: presets 今週 (`jstWeekRange`, Monday-start) and 今月
+  (`jstMonthRange`), plus a custom `from`/`to` date-picker pair
+  (`jstDayRange`, same ≤ 62-day validation as `/sales`). Defaults to
+  今週.
+- **Item ranking**: aggregates non-voided payments' non-`cancelled`
+  line items by `name_snapshot`, summing `quantity` and revenue
+  (`(unit_price_snapshot + Σ price_delta_snapshot) × quantity`, same
+  formula as receipts). Sortable by 売上金額 (default) or 数量; no
+  pagination, same volume assumption as `/sales`.
+- **Weekday / hourly breakdown**: buckets non-voided payments'
+  `total_amount` by JST weekday (`toJstWeekday`, 7 buckets) and JST
+  hour-of-day (`toJstHour`, 24 buckets), rendered as simple `%`-width
+  bars (no charting dependency).
+- **CSV export**: item ranking and weekday breakdown each have a
+  "CSVダウンロード" button (`downloadCsv`, `apps/admin/src/lib/download.ts`
+  — BOM-prefixed, CRLF rows, shared with the account-data export). The
+  hourly breakdown has no export button (24 rows is easy to eyeball;
+  not requested).
+
 ### Tax breakdown
 
 - `menu_items.tax_rate` (8 or 10, default 10) is snapshotted onto
@@ -113,5 +138,7 @@ renders both so staff can double-check the bill before settling it.
   actually charged through a processor. (Backlog; evaluate only if
   pilot restaurants don't already own a terminal.)
 - **No per-staff audit trail** — discount/void reasons are recorded,
-  but not which staff member applied them (sessions are store-scoped,
-  not staff-scoped). (Phase 5, staff accounts)
+  but `payments` has no column capturing which member applied them.
+  Sessions are per-member since Phase 5 item 1, so the acting member is
+  known at request time; it just isn't persisted onto the payment row.
+  Deferred to backlog; revisit only on real demand.

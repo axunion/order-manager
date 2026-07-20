@@ -266,7 +266,7 @@ screen context.
 ### Dashboard Navigation (`DashboardPage`)
 
 The dashboard hub presents the main sections (menu, seats, orders,
-checkout, sales, staff, settings) as navigation links.
+checkout, sales, reports, staff, settings) as navigation links.
 
 - Container: Surface card / `border-radius: radius-lg` / `padding: space-8` /
   `border: 2px dashed border` — signals "interim" state (scaffold placeholder)
@@ -413,6 +413,27 @@ itself is the refresh action.
 - Empty state: same pattern as Order Card's empty state (dashed-border
   placeholder is Dashboard-only; this one mirrors OrderBoard's plain
   Surface-card empty message)
+
+---
+
+### Sales Reports (`ReportsManager`)
+
+Analytical view over a wider range than `SalesHistory` — presets and
+tables, not a day-by-day flip.
+
+- Range nav: 今週 / 今月 / カスタム `Button` toggle group (`aria-pressed`
+  marks the active mode), custom mode reveals a `from`/`to`
+  `<input type="date">` pair
+- Item ranking / weekday breakdown: plain `<table>`s; column headers
+  that sort are `<button>`s with `aria-sort` on their `<th>`
+  (商品ランキング's 数量/売上金額 columns)
+- Weekday / hourly breakdown bars: a `<div>` bar sized by `%` of the
+  bucket max, same "no charting dependency" bias as `SalesHistory`'s
+  header stats — value label rendered alongside, never colour alone
+- Each table with a CSV export has a `secondary`/`sm` "CSVダウンロード"
+  `Button` in its section header
+- Empty state: same plain Surface-card message pattern as
+  `SalesHistory`
 
 ---
 

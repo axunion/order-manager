@@ -159,9 +159,11 @@ all items below, including constraints earlier phases must not violate.
    trigger suspension externally, so this is scoped to what an owner can
    do to their own store), and hard-delete account deletion with a JSON
    data export produced atomically in the delete response.
-3. **Analytics** → [sales-reports](proposals/sales-reports.md)
-   Item ranking and weekday/time-of-day sales reports, computed
-   client-side over the existing sales-history data; CSV export.
+3. **✅ Shipped — Analytics**
+   → [checkout](specs/features/checkout.md)
+   Item ranking and weekday/time-of-day sales reports (`/reports`),
+   computed client-side over the existing sales-history data; CSV
+   export.
 4. **Real-time push** — replace 5s polling with SSE or Durable Objects
    if pilot feedback shows polling latency/cost actually hurts.
 5. **Platform admin** — a minimal internal view of stores/health once
