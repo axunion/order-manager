@@ -59,3 +59,32 @@
   color: inherit;
   font-weight: var(--font-semibold);
 }
+
+.dangerZone {
+  border: 1px solid var(--color-danger-border);
+}
+
+.dangerZone .heading {
+  color: var(--color-danger-fg);
+}
+
+.dangerAction {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.dangerAction:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.dangerActionTitle {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-foreground);
+}

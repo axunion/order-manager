@@ -236,3 +236,140 @@ describe("StoreSettings — log out everywhere", () => {
     );
   });
 });
+
+describe("StoreSettings — danger zone", () => {
+  it("hides the danger zone for a staff-role session", async () => {
+    renderWithStore({
+      id: "store-1",
+      name: "テスト食堂",
+      email: "staff@test.internal",
+      role: "staff",
+    });
+    await screen.findByLabelText("店舗名");
+    expect(screen.queryByText("危険な操作")).toBeNull();
+  });
+
+  it("shows the danger zone for an owner-role session", async () => {
+    renderWithStore();
+    await screen.findByText("危険な操作");
+  });
+
+  it("calls POST /api/stores/me/suspend when suspend is confirmed", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch([
+      {
+        url: "/api/stores/me/suspend",
+        method: "POST",
+        json: { data: { id: "store-1", status: "suspended" } },
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithStore();
+    await user.click(screen.getByRole("button", { name: "一時停止する" }));
+    await user.click(
+      await screen.findByRole("button", { name: "一時停止を確定する" }),
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/stores/me/suspend",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("keeps the delete trigger disabled until the typed name matches the store name", async () => {
+    const user = userEvent.setup();
+    renderWithStore();
+
+    const deleteBtn = screen.getByRole("button", {
+      name: "アカウントを削除する",
+    });
+    expect((deleteBtn as HTMLButtonElement).disabled).toBe(true);
+
+    const input = screen.getByLabelText(
+      "確認のため店舗名「テスト食堂」を入力してください",
+    );
+    await user.type(input, "違う名前");
+    expect((deleteBtn as HTMLButtonElement).disabled).toBe(true);
+
+    await user.clear(input);
+    await user.type(input, "テスト食堂");
+    expect((deleteBtn as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("calls DELETE /api/stores/me with confirm_name once confirmed", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch([
+      {
+        url: "/api/stores/me",
+        method: "DELETE",
+        json: { data: { export: { store: [{ id: "store-1" }] } } },
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    // happy-dom doesn't implement URL.createObjectURL; add it without
+    // replacing the URL constructor itself (a full stubGlobal replacement
+    // breaks happy-dom's internal navigation, which uses `new URL(...)`).
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    // The download link's click() would otherwise trigger happy-dom's
+    // real anchor-navigation handling, which isn't relevant here.
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    renderWithStore();
+    const input = screen.getByLabelText(
+      "確認のため店舗名「テスト食堂」を入力してください",
+    );
+    await user.type(input, "テスト食堂");
+
+    const deleteBtn = screen.getByRole("button", {
+      name: "アカウントを削除する",
+    });
+    await user.click(deleteBtn);
+    await user.click(
+      await screen.findByRole("button", { name: "完全に削除する" }),
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/stores/me",
+      expect.objectContaining({
+        method: "DELETE",
+        body: expect.stringContaining('"confirm_name":"テスト食堂"'),
+      }),
+    );
+  });
+
+  it("shows an error and does not lose the typed confirmation when delete fails", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        {
+          url: "/api/stores/me",
+          method: "DELETE",
+          ok: false,
+          json: {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "店舗名が一致しません。",
+            },
+          },
+        },
+      ]),
+    );
+
+    renderWithStore();
+    const input = screen.getByLabelText(
+      "確認のため店舗名「テスト食堂」を入力してください",
+    );
+    await user.type(input, "テスト食堂");
+    await user.click(
+      screen.getByRole("button", { name: "アカウントを削除する" }),
+    );
+    await user.click(
+      await screen.findByRole("button", { name: "完全に削除する" }),
+    );
+
+    await screen.findByText("店舗名が一致しません。");
+  });
+});

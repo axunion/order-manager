@@ -1,9 +1,31 @@
 import type { EmailChangeResponse, StoreResponse } from "@order/core";
 import { apiFetch, jsonFetch } from "@order/core/client";
-import { Button, Field } from "@order/ui";
+import { Button, ConfirmDialog, ErrorAlert, Field } from "@order/ui";
 import { createSignal, Show } from "solid-js";
 import { useStoreInfo } from "../layouts/AdminGuard";
 import styles from "./StoreSettings.module.css";
+
+/**
+ * Triggers a browser download of `data` as a JSON file named `filename`.
+ * The link is attached to the document before clicking (some browsers
+ * require this for `download` to fire reliably), and the object URL is
+ * revoked on a delay rather than immediately — this export is the only
+ * copy of the store's data before it's permanently deleted, so callers
+ * that navigate away right after must not race the download's start.
+ */
+function downloadJson(data: unknown, filename: string): void {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 export default function StoreSettings() {
   const store = useStoreInfo();
@@ -47,6 +69,60 @@ export default function StoreSettings() {
       window.location.href = "/login";
     } finally {
       setLoggingOutAll(false);
+    }
+  };
+
+  const [suspending, setSuspending] = createSignal(false);
+  const [suspendError, setSuspendError] = createSignal("");
+
+  const handleSuspend = async () => {
+    setSuspendError("");
+    setSuspending(true);
+    try {
+      const result = await apiFetch("/api/stores/me/suspend", {
+        method: "POST",
+      });
+      if (!result.ok) {
+        setSuspendError(result.message ?? "一時停止に失敗しました。");
+        return;
+      }
+      // Every session for the store (including this one) was just deleted
+      // server-side — re-bootstrap from scratch, same reasoning as logout-all.
+      window.location.href = "/login";
+    } finally {
+      setSuspending(false);
+    }
+  };
+
+  const [deleteConfirmName, setDeleteConfirmName] = createSignal("");
+  const [deleting, setDeleting] = createSignal(false);
+  const [deleteError, setDeleteError] = createSignal("");
+
+  const handleDelete = async () => {
+    setDeleteError("");
+    setDeleting(true);
+    try {
+      const result = await jsonFetch<{ export: unknown }>(
+        "/api/stores/me",
+        "DELETE",
+        { confirm_name: deleteConfirmName() },
+      );
+      if (!result.ok || !result.data) {
+        setDeleteError(result.message ?? "削除に失敗しました。");
+        return;
+      }
+      downloadJson(
+        result.data.export,
+        `${store.name}-export-${Date.now()}.json`,
+      );
+      // Give the browser a moment to actually start the download before
+      // navigating away — this export is the owner's only copy of their
+      // data, so a same-tick redirect risks cancelling it mid-start.
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 300);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -162,6 +238,62 @@ export default function StoreSettings() {
           {loggingOutAll() ? "処理中..." : "ログアウト（全端末）"}
         </Button>
       </section>
+
+      <Show when={store.role === "owner"}>
+        <section class={`${styles.section} ${styles.dangerZone}`}>
+          <h2 class={styles.heading}>危険な操作</h2>
+
+          <div class={styles.dangerAction}>
+            <div>
+              <h3 class={styles.dangerActionTitle}>店舗の一時停止</h3>
+              <p class={styles.currentEmail}>
+                店舗を一時停止します。全メンバーが直ちにログアウトされます。再開はオーナーのログインから行えます。
+              </p>
+            </div>
+            <Show when={suspendError()}>
+              <ErrorAlert>{suspendError()}</ErrorAlert>
+            </Show>
+            <ConfirmDialog
+              triggerLabel="一時停止する"
+              triggerVariant="secondary"
+              triggerDisabled={suspending()}
+              title="店舗の一時停止"
+              description="店舗を一時停止しますか？全メンバーのログインセッションが終了し、オーナーが再ログインするまで店舗は利用できなくなります。"
+              confirmLabel="一時停止を確定する"
+              confirmVariant="secondary"
+              onConfirm={handleSuspend}
+            />
+          </div>
+
+          <div class={styles.dangerAction}>
+            <div>
+              <h3 class={styles.dangerActionTitle}>アカウントの削除</h3>
+              <p class={styles.currentEmail}>
+                店舗のすべてのデータ（メニュー、座席、注文、決済履歴を含む）を完全に削除します。この操作は元に戻せません。
+              </p>
+            </div>
+            <Field
+              id="settings-delete-confirm"
+              label={`確認のため店舗名「${store.name}」を入力してください`}
+              value={deleteConfirmName()}
+              onInput={(e) => setDeleteConfirmName(e.currentTarget.value)}
+              disabled={deleting()}
+            />
+            <Show when={deleteError()}>
+              <ErrorAlert>{deleteError()}</ErrorAlert>
+            </Show>
+            <ConfirmDialog
+              triggerLabel="アカウントを削除する"
+              triggerVariant="danger"
+              triggerDisabled={deleteConfirmName() !== store.name || deleting()}
+              title="アカウントの削除"
+              description="この操作は元に戻せません。店舗のすべてのデータが完全に削除されます。削除前のデータはJSONファイルとしてダウンロードされます。"
+              confirmLabel="完全に削除する"
+              onConfirm={handleDelete}
+            />
+          </div>
+        </section>
+      </Show>
     </div>
   );
 }
