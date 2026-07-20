@@ -12,7 +12,7 @@ const DEFAULT_FROM = "noreply@order-manager.example.com";
 interface SendMagicLinkOptions {
   to: string;
   magicLinkUrl: string;
-  purpose: "signup" | "login" | "email_change" | "invite";
+  purpose: "signup" | "login" | "email_change" | "invite" | "reactivate";
 }
 
 interface EmailConfig {
@@ -64,9 +64,21 @@ export async function sendMagicLinkEmail(
 }
 
 export function buildEmailContent(
-  purpose: "signup" | "login" | "email_change" | "invite",
+  purpose: "signup" | "login" | "email_change" | "invite" | "reactivate",
   magicLinkUrl: string,
 ): { subject: string; html: string } {
+  if (purpose === "reactivate") {
+    return {
+      subject: "アカウントの再開",
+      html: `
+        <p>オーダーマネージャーの店舗アカウントが一時停止中です。</p>
+        <p>以下のリンクをクリックして店舗を再開してください。<br>
+        このリンクは15分間有効で、一度しか使用できません。</p>
+        <p><a href="${magicLinkUrl}">${magicLinkUrl}</a></p>
+        <p>このメールに心当たりがない場合は無視してください。</p>
+      `,
+    };
+  }
   if (purpose === "invite") {
     return {
       subject: "スタッフ招待のご案内",

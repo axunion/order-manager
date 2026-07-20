@@ -66,7 +66,7 @@ export async function issueMagicLink(
   db: Database,
   storeId: string,
   memberId: string,
-  purpose: "signup" | "login" | "email_change" | "invite",
+  purpose: "signup" | "login" | "email_change" | "invite" | "reactivate",
   newEmail?: string,
 ): Promise<string | null> {
   const ts = now();

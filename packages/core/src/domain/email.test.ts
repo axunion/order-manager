@@ -43,13 +43,25 @@ describe("buildEmailContent", () => {
     expect(html).toContain("https://api.example.com/verify?token=jkl");
   });
 
+  it("returns reactivate subject/body with the magic link embedded", () => {
+    const { subject, html } = buildEmailContent(
+      "reactivate",
+      "https://api.example.com/verify?token=mno",
+    );
+    expect(subject).toContain("再開");
+    expect(html).toContain("https://api.example.com/verify?token=mno");
+  });
+
   it("produces distinct content per purpose", () => {
     const url = "https://api.example.com/verify?token=x";
     const signup = buildEmailContent("signup", url);
     const login = buildEmailContent("login", url);
     const emailChange = buildEmailContent("email_change", url);
     const invite = buildEmailContent("invite", url);
-    const subjects = [signup, login, emailChange, invite].map((c) => c.subject);
+    const reactivate = buildEmailContent("reactivate", url);
+    const subjects = [signup, login, emailChange, invite, reactivate].map(
+      (c) => c.subject,
+    );
     expect(new Set(subjects).size).toBe(subjects.length);
   });
 });

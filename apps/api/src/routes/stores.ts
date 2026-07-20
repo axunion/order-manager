@@ -179,6 +179,45 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
   )
 
   /**
+   * POST /api/stores/me/suspend
+   * Owner self-service pause: sets stores.status = 'suspended' and deletes
+   * every session for the store (all members, all devices) in the same
+   * batch — not just the caller's own. Two reasons this must happen, not
+   * just rely on requireStore's status check to block usage: (1) without
+   * it, reactivating later would silently hand back every pre-suspension
+   * session with no re-authentication, defeating suspension as an
+   * incident-response control; (2) requireStore's sliding-expiry refresh
+   * runs before this handler in the same request, so the *suspending*
+   * session's own expires_at could otherwise be extended by this very
+   * call. Deleting the rows makes both moot. Reactivation goes through
+   * the normal POST /api/auth/login flow (an owner-role member logging in
+   * to a suspended store gets a 'reactivate' Magic Link instead of the
+   * usual silent no-op) — there is no separate unsuspend endpoint, since
+   * no session survives suspension to call one.
+   * Response: 200 { data: { id, status } }
+   */
+  .post("/me/suspend", requireStore, requireOwner, async (c) => {
+    const { id: storeId } = c.var.store;
+    const db = createDb(c.env.DB);
+
+    const [updated] = await db.batch([
+      db
+        .update(schema.stores)
+        .set({ status: "suspended" })
+        .where(eq(schema.stores.id, storeId))
+        .returning(),
+      db.delete(schema.sessions).where(eq(schema.sessions.store_id, storeId)),
+    ]);
+
+    const result = updated[0];
+    if (!result) {
+      return errorResponse("NOT_FOUND", "Store not found", 404);
+    }
+
+    return c.json({ data: { id: result.id, status: result.status } });
+  })
+
+  /**
    * POST /api/stores/me/email-change
    * Requests a change of the calling member's own login email: issues a
    * Magic Link (purpose 'email_change') sent to the NEW address, proving

@@ -111,6 +111,15 @@ export const authRouter = new Hono<{ Bindings: Env }>()
         .where(eq(schema.members.id, linkToken.member_id));
     }
 
+    // For reactivate tokens, the owner is already active — only the
+    // suspended store transitions back to active.
+    if (linkToken.purpose === "reactivate") {
+      await db
+        .update(schema.stores)
+        .set({ status: "active" })
+        .where(eq(schema.stores.id, linkToken.store_id));
+    }
+
     // For email_change tokens, apply the pending address now that the
     // member has proven control of it. A UNIQUE race (the address was
     // claimed by another member after this token was issued) fails
@@ -158,10 +167,15 @@ export const authRouter = new Hono<{ Bindings: Env }>()
    * is registered, to prevent email enumeration.
    *
    * Behaviour per member/store status:
-   *   member active, store active    → sends a "login" Magic Link
-   *   member pending, role owner     → resends the "signup" Magic Link
-   *   member pending, role staff     → resends the "invite" Magic Link
-   *   store suspended                → silent (no email sent)
+   *   member active, store active            → sends a "login" Magic Link
+   *   member pending, role owner              → resends the "signup" Magic Link
+   *   member pending, role staff              → resends the "invite" Magic Link
+   *   member active, store suspended, owner   → sends a "reactivate" Magic Link
+   *   member active, store suspended, staff   → silent (only an owner can reactivate)
+   * A pending member's signup/invite resend is unaffected by the store's
+   * suspended status — completing an invite doesn't grant any access
+   * (requireStore still blocks on store.status), so there's no reason to
+   * also lock down onboarding; only an already-active owner can reactivate.
    */
   .post("/login", bodyValidator(LoginInput), async (c) => {
     const { email } = c.req.valid("json");
@@ -183,14 +197,22 @@ export const authRouter = new Hono<{ Bindings: Env }>()
     const member = rows[0];
     let magicLinkUrl: string | undefined;
 
-    if (member && member.store_status !== "suspended") {
+    // null means "stay silent" (an active staff member on a suspended
+    // store — only an active owner may reactivate).
+    const purpose = member
+      ? member.store_status === "suspended" && member.member_status === "active"
+        ? member.role === "owner"
+          ? "reactivate"
+          : null
+        : member.member_status === "active"
+          ? "login"
+          : member.role === "owner"
+            ? "signup"
+            : "invite"
+      : null;
+
+    if (member && purpose) {
       try {
-        const purpose =
-          member.member_status === "active"
-            ? "login"
-            : member.role === "owner"
-              ? "signup"
-              : "invite";
         const token = await issueMagicLink(
           db,
           member.store_id,

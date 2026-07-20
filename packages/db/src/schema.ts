@@ -288,10 +288,11 @@ export const magicLinkTokens = sqliteTable(
     /**
      * 'signup' for first-time onboarding; 'login' for returning members;
      * 'email_change' for re-verifying a new member email (see new_email);
-     * 'invite' for a staff invite (owner-issued, targets a new member).
+     * 'invite' for a staff invite (owner-issued, targets a new member);
+     * 'reactivate' for an owner reactivating their own suspended store.
      */
     purpose: text("purpose", {
-      enum: ["signup", "login", "email_change", "invite"],
+      enum: ["signup", "login", "email_change", "invite", "reactivate"],
     }).notNull(),
     /** Target address for 'email_change' tokens only; null otherwise */
     new_email: text("new_email"), // nullable
@@ -308,7 +309,7 @@ export const magicLinkTokens = sqliteTable(
     index("idx_magic_link_tokens_member").on(table.member_id),
     check(
       "magic_link_tokens_purpose_chk",
-      sql`${table.purpose} IN ('signup', 'login', 'email_change', 'invite')`,
+      sql`${table.purpose} IN ('signup', 'login', 'email_change', 'invite', 'reactivate')`,
     ),
   ],
 );
