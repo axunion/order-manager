@@ -5,6 +5,7 @@ import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import MenuPage from "./pages/MenuPage";
 import OrdersPage from "./pages/OrdersPage";
+import ReportsPage from "./pages/ReportsPage";
 import SalesPage from "./pages/SalesPage";
 import SeatsPage from "./pages/SeatsPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/orders" component={OrdersPage} />
         <Route path="/checkout" component={CheckoutPage} />
         <Route path="/sales" component={SalesPage} />
+        <Route path="/reports" component={ReportsPage} />
         <Route path="/settings" component={SettingsPage} />
         <Route path="/staff" component={StaffPage} />
       </Route>

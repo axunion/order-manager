@@ -25,6 +25,9 @@ export default function DashboardPage() {
         <A href="/sales" class={styles.menuLink}>
           売上履歴
         </A>
+        <A href="/reports" class={styles.menuLink}>
+          レポート
+        </A>
         <Show when={store.role === "owner"}>
           <A href="/staff" class={styles.menuLink}>
             スタッフ管理

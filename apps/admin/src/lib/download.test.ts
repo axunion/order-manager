@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { downloadJson } from "./download";
+import { downloadCsv, downloadJson } from "./download";
 
 describe("downloadJson", () => {
   beforeEach(() => {
@@ -58,5 +58,64 @@ describe("downloadJson", () => {
 
     vi.runAllTimers();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");
+  });
+});
+
+describe("downloadCsv", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  function captureBlob() {
+    const createObjectURL = vi
+      .spyOn(URL, "createObjectURL")
+      .mockReturnValue("blob:mock-url");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    return createObjectURL;
+  }
+
+  it("builds a UTF-8 CSV with a BOM prefix (for Excel) and CRLF line endings", async () => {
+    const createObjectURL = captureBlob();
+
+    downloadCsv(
+      ["商品名", "数量", "売上金額"],
+      [["ラーメン", 3, 2400]],
+      "ranking.csv",
+    );
+
+    const blob = createObjectURL.mock.calls[0]?.[0] as Blob;
+    expect(blob.type).toBe("text/csv;charset=utf-8;");
+    const text = await blob.text();
+    expect(text.charCodeAt(0)).toBe(0xfeff); // BOM
+    expect(text.slice(1)).toBe("商品名,数量,売上金額\r\nラーメン,3,2400");
+  });
+
+  it("quotes fields containing commas, quotes, or newlines", async () => {
+    const createObjectURL = captureBlob();
+
+    downloadCsv(["name", "note"], [['A, B"', "line1\nline2"]], "export.csv");
+
+    const blob = createObjectURL.mock.calls[0]?.[0] as Blob;
+    const text = (await blob.text()).slice(1); // drop BOM
+    expect(text).toBe('name,note\r\n"A, B""","line1\nline2"');
+  });
+
+  it("triggers the same download mechanism as downloadJson", () => {
+    captureBlob();
+    const appendChild = vi.spyOn(document.body, "appendChild");
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click");
+
+    downloadCsv(["a"], [[1]], "export.csv");
+
+    expect(appendChild).toHaveBeenCalled();
+    const link = appendChild.mock.calls[0]?.[0] as HTMLAnchorElement;
+    expect(link.download).toBe("export.csv");
+    expect(click).toHaveBeenCalledTimes(1);
   });
 });
