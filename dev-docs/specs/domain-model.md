@@ -87,13 +87,22 @@ stores 1 ──── * menu_categories 1 ──── * menu_items 1 ───�
 ### stores.status
 
 ```
-pending ──(magic link verified)──▶ active ──(future: admin action)──▶ suspended
+pending ──(magic link verified)──▶ active ──(owner: POST /me/suspend)──▶ suspended
+                                       ▲                                     │
+                                       └──(owner: reactivate magic link)─────┘
 ```
 
 - `pending` — registered, email unverified. Login resends the signup link.
 - `active` — normal operation.
-- `suspended` — reserved for future account disabling (no tooling yet).
-  Login requests are silently ignored.
+- `suspended` — set by the store's own owner (`POST /api/stores/me/suspend`
+  — owner self-service only, no billing/platform-admin trigger exists;
+  see [features/authentication.md](./features/authentication.md#account-lifecycle-appsadmin-settingspage-owner-only-danger-zone)).
+  All sessions for the store are deleted in the same batch. An
+  owner-role member's next login attempt issues a `reactivate` Magic
+  Link instead of the usual silent no-op for a suspended store; verifying
+  it sets the store back to `active`. A store row can also be deleted
+  entirely (`DELETE /api/stores/me`, hard delete, no retention) — not
+  a `stores.status` transition, the row stops existing.
 
 ### members.status
 

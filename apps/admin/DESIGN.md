@@ -492,7 +492,7 @@ actions — no un-retire in v1).
 
 ### Store Settings (`StoreSettings`)
 
-Three independent sections, each a Surface card (`section` / `radius-lg` /
+Four independent sections, each a Surface card (`section` / `radius-lg` /
 `padding: space-6` / `shadow-sm`), modeled on the existing `LoginForm`
 pattern (Field + Button, `<Show>` toggles to a post-submit notice).
 
@@ -515,6 +515,30 @@ pattern (Field + Button, `<Show>` toggles to a post-submit notice).
   so the app must re-bootstrap rather than continue with stale in-memory
   state; this also sidesteps this component's standalone unit-test
   render, which has no Router context).
+- **Danger zone** ("危険な操作", owner-role only — `<Show when={store.role
+  === "owner"}>`): a Surface card with a `--color-danger-border` border
+  and a `--color-danger-fg` heading, containing two `dangerAction` rows
+  (each separated by a `border-top`, first one has none) instead of
+  separate cards.
+  - **Suspend**: explanatory text + a `secondary`-variant `ConfirmDialog`
+    ("一時停止する" trigger, distinct "一時停止を確定する" confirm label to
+    avoid an accessible-name collision between the two buttons) calling
+    `POST /api/stores/me/suspend`, then the same hard
+    `window.location.href` redirect to `/login` as the logout-all button
+    above (every session for the store — not just this one — was just
+    deleted server-side). Deliberately `secondary`, not `danger`, despite
+    living in the danger zone: suspension is reversible (via reactivate
+    login), unlike delete.
+  - **Delete**: a `Field` asking the owner to type the store's exact name,
+    gating a `danger`-variant `ConfirmDialog` ("アカウントを削除する" /
+    "完全に削除する") via `triggerDisabled` until the typed value matches
+    — mirrors `StaffManager`'s self/last-owner disable pattern (UX
+    convenience only; the server's `confirm_name` check is the real
+    guard). On confirm, downloads the response's `export` field as a JSON
+    file (`Blob` + `URL.createObjectURL`, anchor attached to the document
+    before `.click()`) and delays the post-delete redirect briefly so the
+    download can't be cancelled by a same-tick navigation, before
+    redirecting to `/login`.
 
 ---
 

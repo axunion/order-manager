@@ -17,8 +17,12 @@ deleted per `dev-docs/README.md`.
 
 ## 2. Account lifecycle
 
-Promoted to its own proposal, open decisions resolved with the user:
-[account-lifecycle](account-lifecycle.md) — ready for implementation.
+**✅ Shipped.** See
+[specs/features/authentication.md](../specs/features/authentication.md#account-lifecycle-appsadmin-settingspage-owner-only-danger-zone)
+and [specs/domain-model.md](../specs/domain-model.md) (owner self-service
+suspend/reactivate; hard-delete account deletion with JSON export). Its
+design proposal (`account-lifecycle.md`) has been folded and deleted per
+`dev-docs/README.md`.
 
 ## 3. Analytics
 

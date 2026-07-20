@@ -39,10 +39,15 @@ this spec covers product behavior.
 - Always returns 200 with an identical body regardless of whether the
   email exists (anti-enumeration). Email delivery is deferred via
   `waitUntil` so response latency doesn't leak registration status either.
-- Per member/store status: member `active` (and store `active`) → login
+- Per member/store status: member `active`, store `active` → `login`
   link. Member `pending`: resends the `signup` Magic Link if the member is
   an `owner` (first-time onboarding), or the `invite` Magic Link if
-  `staff` (unactivated invite). Store `suspended` → silently no email.
+  `staff` (unactivated invite) — **regardless of the store's status**,
+  since completing an invite/signup grants no access on its own
+  (`requireStore` still blocks on store status), so there's no reason to
+  also gate onboarding on suspension. Member `active`, store `suspended`:
+  `owner` → `reactivate` Magic Link (see "Account lifecycle" below);
+  `staff` → silently no email (only an owner can reactivate).
 - Rate limited per member: see "Magic Link issuance cap" below.
 
 ### Verification (`GET /api/auth/verify?token=`)
@@ -53,6 +58,8 @@ this spec covers product behavior.
 - `purpose = 'signup'`: activates both the store and the member.
 - `purpose = 'invite'`: activates the member only (the inviting store is
   already active).
+- `purpose = 'reactivate'`: activates the store only (the owner member is
+  already active) — see "Account lifecycle" below.
 - Every failure mode returns the same `INVALID_TOKEN` 400.
 
 ### Session & logout
@@ -109,6 +116,49 @@ this spec covers product behavior.
   for self and the sole remaining owner — the API check above is the
   actual guard, this is UX only).
 
+### Account lifecycle (`apps/admin` SettingsPage, owner-only "danger zone")
+
+Owner self-service only — this project has no billing integration and no
+platform-admin auth (roadmap Phase 5 item 5), so there is no external
+actor to trigger suspension. Billing-triggered suspension is deferred
+until a real billing system exists to trigger it.
+
+- **Suspend** — `POST /api/stores/me/suspend` (`requireStore`,
+  `requireOwner`) sets `stores.status = 'suspended'` and, in the same
+  batch, deletes **every session for the store** (all members, all
+  devices) — not just the caller's own. This is required, not optional:
+  without it, reactivating later would silently hand back every
+  pre-suspension session with no re-authentication, and `requireStore`'s
+  sliding-expiry refresh (which runs before this handler in the same
+  request) could otherwise extend the very session being "shut down."
+  Takes effect immediately — the request itself succeeds (the store was
+  still active when `requireStore` admitted it), but every subsequent
+  request is rejected, including from the session that just suspended it.
+  There is no separate unsuspend endpoint, since no session survives
+  suspension to call one — see "Login" above for how an owner reactivates.
+- **Delete + export** — `DELETE /api/stores/me` (`requireStore`,
+  `requireOwner`), body `{ confirm_name }` must exactly match the store's
+  current name (400 otherwise) — a server-side safeguard independent of
+  whatever client-side confirmation UI exists. On match: reads every
+  store-scoped row, then hard-deletes all of it plus the `stores` row
+  itself in one `db.batch` (no soft-delete/retention — no accounting/audit
+  requirement exists for this project; revisit if a real pilot's
+  accounting needs surface one). Response is `200 { data: { export: {...} } }`
+  — the pre-deletion data **is** the response body (one key per table,
+  `sessions`/`magic_link_tokens` excluded as secrets, not business data),
+  produced atomically with the delete rather than via a separate export
+  endpoint, so the frontend can offer it as a download in the same action.
+- Frontend: "一時停止" (suspend, `ConfirmDialog`) redirects to `/login`
+  afterward (the session is about to stop working anyway — same reasoning
+  as the logout-all button). "アカウントを削除" (delete) requires typing the
+  store's exact name before its `ConfirmDialog` trigger enables (mirrors
+  the Staff page's self/last-owner disable pattern: client-side
+  convenience, the server's `confirm_name` check is the real guard); on
+  confirm, downloads the response's `export` as a JSON file before
+  redirecting, with the download attached to the document and the
+  redirect delayed slightly so a same-tick navigation can't cancel it —
+  this export is the owner's only copy of the data.
+
 ### Store settings — rename & email change (`apps/admin` SettingsPage)
 
 - `PATCH /api/stores/me` (`requireStore`, `requireOwner`) updates the
@@ -141,7 +191,8 @@ this spec covers product behavior.
   returning `null` instead — once a **member** has reached
   `MAGIC_LINK_HOURLY_CAP` (5, `@order/core` `domain/auth.ts`) issuances
   in the last rolling hour, across signup-resend, login, email-change,
-  and invite combined. Scoped per member (not per store): a store can
+  invite, and reactivate combined. Scoped per member (not per store): a
+  store can
   have multiple members now, and two members issuing unrelated tokens
   (concurrent logins, or two simultaneous staff invites) must not
   invalidate each other's link. Callers (`POST /api/auth/login`,
@@ -187,5 +238,19 @@ dev works without email delivery.
   v1 scope decision (proof of control of the *new* address is
   required; the old address is not). Hardening follow-up, tracked
   here — no roadmap phase assigned yet.
-- **`suspended` has no admin tooling** — the state exists but nothing can
-  set it. (Phase 5)
+- **No billing-triggered suspension** — only owner self-service pause
+  exists; there is no billing system or platform-admin actor to suspend a
+  store externally. Revisit if/when a real billing integration exists.
+- **Account deletion has no recovery path** — hard delete, no
+  soft-delete/tombstone window, no notice to co-owners/staff before a
+  single owner deletes the store. The response's JSON export is the only
+  copy of the data once deleted. Acceptable for the current pre-launch
+  scope (no real merchant data exists yet); revisit before a real pilot
+  if this needs a grace period or co-owner confirmation.
+- **Delete reads and deletes are not one atomic transaction** — the
+  pre-delete export reads run before the destructive `db.batch`, not
+  inside it. A row created for the store in that narrow window (e.g. a
+  customer placing an order via `qr_token` at the exact moment of
+  deletion) would be deleted without ever appearing in the export.
+  Accepted trade-off given D1's batch API doesn't support reading
+  batch-internal state to build a response.

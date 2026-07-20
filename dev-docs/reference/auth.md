@@ -129,13 +129,40 @@ the invitee. `GET /api/auth/verify` handles this purpose by activating
 only the member (`status: 'active'`) — the inviting store is already
 active, unlike `signup` which activates both.
 
+**Fifth purpose — reactivate**: `POST /api/stores/me/suspend`
+(`requireStore`, `requireOwner`) sets `stores.status = 'suspended'` and
+deletes every session for the store (all members) in the same
+`db.batch` — required so reactivating doesn't silently hand back
+pre-suspension sessions, and so the request's own sliding-expiry
+refresh (which runs before the handler) can't extend the session being
+shut down. There is no unsuspend endpoint; `POST /api/auth/login`
+carves out an exception to the normal "suspended → silent" rule: an
+owner-role member's login attempt on a suspended store issues a
+`magic_link_tokens` row with `purpose = 'reactivate'` instead. A
+staff-role member on a suspended store still gets silence — only an
+owner can reactivate. `GET /api/auth/verify` handles `reactivate` by
+setting `stores.status = 'active'` (the member is already active) and
+continuing through the normal session-creation steps. This is a
+deliberate exception to anti-enumeration (an owner login attempt now
+takes a visibly different code path than the previous always-silent
+one for a suspended store), accepted because it doesn't bypass any
+billing/compliance gate — there is none in this project — see
+[specs/features/authentication.md](../specs/features/authentication.md#account-lifecycle-appsadmin-settingspage-owner-only-danger-zone).
+
+Account deletion (`DELETE /api/stores/me`, same file) is unrelated to
+the Magic Link flow — it's a direct `requireStore`+`requireOwner`
+action with a `confirm_name` body check, not a token-based flow, since
+there's nothing to prove control of (the caller is already
+authenticated as the store's owner).
+
 **Key point**: The `verify` redirect must be an absolute URL (`c.env.ADMIN_ORIGIN`) because the
 verify endpoint is served from `api.example.com`, not `admin.example.com`.
 
 **Rate limiting**: `issueMagicLink` (`apps/api/src/auth.ts`) caps
 issuance at `MAGIC_LINK_HOURLY_CAP` (5) per **member** per rolling hour,
-combining signup-resend/login/email-change/invite, and returns `null`
-instead of a token once hit — every call site skips sending but returns
+combining signup-resend/login/email-change/invite/reactivate, and
+returns `null` instead of a token once hit — every call site skips
+sending but returns
 its normal success response (anti-enumeration). Scoped per member (not
 per store) because a store can have multiple members, and unrelated
 members issuing tokens concurrently must not invalidate each other's

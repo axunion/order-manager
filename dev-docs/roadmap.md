@@ -32,7 +32,7 @@ Conventions:
 | 2 | Operate a real day | ✅ Shipped |
 | 3 | Customer experience | ✅ Shipped |
 | 4 | Money: payments, receipts, adjustments | ✅ Shipped (item 4 deferred, backlog) |
-| 5 | Team, scale, and account lifecycle | 🔜 In progress (item 1 shipped) |
+| 5 | Team, scale, and account lifecycle | 🔜 In progress (items 1–2 shipped) |
 | — | Engineering track (parallel) | Ongoing |
 
 ---
@@ -153,9 +153,12 @@ all items below, including constraints earlier phases must not violate.
    settings/menu/seats/staff-management vs. board/checkout. Sessions
    become per-member with sliding expiry; "log out everywhere"
    (`POST /api/auth/logout-all`) lands here too.
-2. **Account lifecycle tooling** → [account-lifecycle](proposals/account-lifecycle.md)
-   Owner self-service suspend/reactivate, and account deletion with a
-   JSON data export.
+2. **✅ Shipped — Account lifecycle tooling**
+   → [authentication](specs/features/authentication.md), [domain-model](specs/domain-model.md)
+   Owner self-service suspend/reactivate (no billing system exists to
+   trigger suspension externally, so this is scoped to what an owner can
+   do to their own store), and hard-delete account deletion with a JSON
+   data export produced atomically in the delete response.
 3. **Analytics** — item-ranking and time-of-day sales reports on top of
    Phase 2 sales data; CSV export.
 4. **Real-time push** — replace 5s polling with SSE or Durable Objects
