@@ -24,6 +24,14 @@ Two authentication mechanisms are used:
 
 ## Session cookie
 
+### Storage at rest
+
+Only a SHA-256 hash of the session token (`hashToken`, `@order/core` `domain/auth.ts`) is
+written to `sessions.session_token`. The same applies to `magic_link_tokens.token`. The raw
+value lives solely in the client-facing cookie / email link and is hashed on every lookup
+before comparison; a D1 read (backup export, console access, etc.) never yields a value that
+could be replayed as a live session or Magic Link.
+
 ### Attributes
 
 ```
@@ -55,20 +63,37 @@ its original 30-day clock from login regardless of activity, silently
 defeating the feature. `POST /api/auth/logout-all` (below) is the
 explicit-action path; sliding expiry is the inactivity path.
 
-### CORS
+### CORS and CSRF
 
 The API must allow credentials and enumerate each allowed origin explicitly (`*` is forbidden
-when `Access-Control-Allow-Credentials: true`):
+when `Access-Control-Allow-Credentials: true`). This is a hand-written middleware
+(`corsMiddleware`, `apps/api/src/app.ts`), not Hono's built-in `cors()` helper, because it also
+has to defend against CSRF:
 
 ```ts
-// apps/api/src/app.ts
-app.use(cors({
-  origin: [env.ADMIN_ORIGIN, env.ORDER_ORIGIN, env.SIGNUP_ORIGIN],
-  credentials: true,
-  allowHeaders: ["Content-Type"],
-  allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-}));
+// apps/api/src/app.ts (shape, not verbatim)
+const allowed = [env.ADMIN_ORIGIN, env.ORDER_ORIGIN, env.SIGNUP_ORIGIN];
+const origin = c.req.header("Origin") ?? "";
+const isAllowedOrigin = allowed.includes(origin);
+
+if (isAllowedOrigin) {
+  // set Access-Control-Allow-Origin/Credentials/Methods/Headers, Vary: Origin
+}
+if (c.req.method === "OPTIONS") return c.body(null, 204);
+if (origin && !isAllowedOrigin && STATE_CHANGING_METHODS.has(c.req.method)) {
+  return c.body(null, 403); // CSRF guard, see below
+}
 ```
+
+CORS headers alone only control whether client-side JS can *read* a cross-origin response —
+they don't stop the browser from *sending* the request in the first place (e.g. a hidden
+cross-site form POST). Combined with `SameSite=None` (required below for cross-subdomain
+cookie delivery), that gap would let a cross-site page trigger state-changing requests
+(`POST`/`PUT`/`PATCH`/`DELETE`) with the victim's session cookie attached. The middleware
+closes it by hard-rejecting (403) any such request whose `Origin` header is present but not
+in the allowlist. A request with no `Origin` header at all (same-origin navigations,
+non-browser clients, most test requests) is left to the route's own auth check instead of
+being rejected here.
 
 ### Frontend fetch
 
@@ -177,6 +202,13 @@ row survives for that count query. See
 for the accepted concurrency/timing trade-offs. Complementary per-IP
 WAF rate limiting is deploy config, not Worker code — see
 [deploy.md](./deploy.md).
+
+`POST /api/stores/me/email-change` has a third, independent cap
+(`EMAIL_CHANGE_HOURLY_CAP`, tracked on `members.email_change_attempt_count`
+/ `email_change_window_started_at`) bounding attempts regardless of
+outcome — its "address already in use" conflict check never touches
+`magic_link_tokens`, so the two caps above don't bound it. See
+[specs/features/authentication.md](../specs/features/authentication.md#store-settings--rename--email-change-appsadmin-settingspage).
 
 ### Local dev: skipping email delivery
 

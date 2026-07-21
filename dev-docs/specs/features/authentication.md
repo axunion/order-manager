@@ -145,9 +145,11 @@ until a real billing system exists to trigger it.
   requirement exists for this project; revisit if a real pilot's
   accounting needs surface one). Response is `200 { data: { export: {...} } }`
   — the pre-deletion data **is** the response body (one key per table,
-  `sessions`/`magic_link_tokens` excluded as secrets, not business data),
-  produced atomically with the delete rather than via a separate export
-  endpoint, so the frontend can offer it as a download in the same action.
+  `sessions`/`magic_link_tokens`/`seats.qr_token` excluded as secrets, not
+  business data — `qr_token` is a bearer credential for the customer order
+  API), produced atomically with the delete rather than via a separate
+  export endpoint, so the frontend can offer it as a download in the same
+  action.
 - Frontend: "一時停止" (suspend, `ConfirmDialog`) redirects to `/login`
   afterward (the session is about to stop working anyway — same reasoning
   as the logout-all button). "アカウントを削除" (delete) requires typing the
@@ -171,7 +173,16 @@ until a real billing system exists to trigger it.
   before the change applies. Rejects 400 if the address equals the
   current one or is already registered to another member — the caller is
   authenticated here, so anti-enumeration doesn't apply (unlike
-  `/api/auth/login`).
+  `/api/auth/login`). Because that conflict check reveals whether an
+  arbitrary address belongs to another member (across the whole
+  `members.email` namespace, not just this store) and — unlike issuing a
+  Magic Link — never touches `magic_link_tokens`, it has its own cap
+  (`EMAIL_CHANGE_HOURLY_CAP`, `@order/core` `domain/auth.ts`, 5/rolling
+  hour) tracked on `members.email_change_attempt_count` /
+  `email_change_window_started_at`, counted regardless of outcome
+  (conflict or not) — `MAGIC_LINK_HOURLY_CAP` alone doesn't bound this
+  path since a conflicting request never reaches token issuance. Past the
+  cap: 429 `RATE_LIMITED`.
 - `GET /api/auth/verify` applies the pending address to `members.email`
   on `email_change` token verification, right after marking the token
   consumed and before session creation. A UNIQUE-constraint race — the
