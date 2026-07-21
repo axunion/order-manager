@@ -309,11 +309,12 @@ export const AddOrderItemsInput = z.object({
           .transform((s) => s.trim())
           .pipe(z.string().min(1)),
         quantity: z.number().int().min(1).max(99),
-        option_ids: z.array(z.string()).default([]),
+        option_ids: z.array(z.string()).max(20).default([]),
         note: orderItemNote.optional().default(null),
       }),
     )
-    .min(1),
+    .min(1)
+    .max(50),
 });
 export type AddOrderItemsInput = z.infer<typeof AddOrderItemsInput>;
 

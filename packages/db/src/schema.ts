@@ -50,16 +50,20 @@ export const stores = sqliteTable(
 // ---------------------------------------------------------------------------
 // menu_categories
 // ---------------------------------------------------------------------------
-export const menuCategories = sqliteTable("menu_categories", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  store_id: text("store_id")
-    .notNull()
-    .references(() => stores.id),
-  name: text("name").notNull(),
-  sort_order: integer("sort_order").notNull().default(0),
-});
+export const menuCategories = sqliteTable(
+  "menu_categories",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    name: text("name").notNull(),
+    sort_order: integer("sort_order").notNull().default(0),
+  },
+  (table) => [index("idx_menu_categories_store").on(table.store_id)],
+);
 
 // ---------------------------------------------------------------------------
 // menu_items
@@ -586,6 +590,8 @@ export const payments = sqliteTable(
     void_reason: text("void_reason"), // nullable
   },
   (table) => [
+    // Backs the sales-reports date-range queries (store_id + paid_at).
+    index("idx_payments_store_paid_at").on(table.store_id, table.paid_at),
     check("payments_total_amount_nonneg_chk", sql`${table.total_amount} >= 0`),
     check(
       "payments_method_chk",
