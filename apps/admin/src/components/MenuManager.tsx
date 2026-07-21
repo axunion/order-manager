@@ -71,17 +71,29 @@ export default function MenuManager() {
 
   async function loadCategories() {
     const result = await apiFetch<Category[]>("/api/menu/categories");
-    if (result.ok && result.data) setCategories(result.data);
+    if (result.ok && result.data) {
+      setCategories(result.data);
+    } else {
+      setError(result.message ?? "カテゴリの取得に失敗しました");
+    }
   }
 
   async function loadItems() {
     const result = await apiFetch<Item[]>("/api/menu/items");
-    if (result.ok && result.data) setItems(result.data);
+    if (result.ok && result.data) {
+      setItems(result.data);
+    } else {
+      setError(result.message ?? "商品の取得に失敗しました");
+    }
   }
 
   async function loadOptionGroups() {
     const result = await apiFetch<OptionGroup[]>("/api/menu/option-groups");
-    if (result.ok && result.data) setOptionGroups(result.data);
+    if (result.ok && result.data) {
+      setOptionGroups(result.data);
+    } else {
+      setError(result.message ?? "オプショングループの取得に失敗しました");
+    }
   }
 
   onMount(async () => {

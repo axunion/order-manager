@@ -1,6 +1,6 @@
 import { menuImageUrl } from "@order/core/client";
-import { Button } from "@order/ui";
-import { createSignal, For, Show } from "solid-js";
+import { Button, ErrorAlert } from "@order/ui";
+import { createSignal, For, onCleanup, Show } from "solid-js";
 import ItemDetailSheet from "./ItemDetailSheet";
 import styles from "./MenuList.module.css";
 import type { AddItemsInput, MenuGroup, MenuItem } from "./OrderScreen";
@@ -18,6 +18,14 @@ export default function MenuList(props: {
   const [error, setError] = createSignal("");
   const [success, setSuccess] = createSignal("");
   const [detailItem, setDetailItem] = createSignal<MenuItem | null>(null);
+
+  let successTimeoutId: ReturnType<typeof setTimeout> | undefined;
+  function showSuccessTemporarily() {
+    setSuccess("注文しました！");
+    clearTimeout(successTimeoutId);
+    successTimeoutId = setTimeout(() => setSuccess(""), 2000);
+  }
+  onCleanup(() => clearTimeout(successTimeoutId));
 
   function getQuantity(itemId: string): number {
     return quantities()[itemId] ?? 1;
@@ -44,8 +52,7 @@ export default function MenuList(props: {
           delete next[itemId];
           return next;
         });
-        setSuccess("注文しました！");
-        setTimeout(() => setSuccess(""), 2000);
+        showSuccessTemporarily();
       }
     } finally {
       setSubmitting(false);
@@ -58,8 +65,7 @@ export default function MenuList(props: {
     setError("");
     const result = await props.onAddItems(items);
     if (result.ok) {
-      setSuccess("注文しました！");
-      setTimeout(() => setSuccess(""), 2000);
+      showSuccessTemporarily();
     }
     return result;
   }
@@ -69,9 +75,7 @@ export default function MenuList(props: {
       <h2 class={styles.heading}>メニュー</h2>
 
       <Show when={error()}>
-        <p class={styles.alertError} role="alert">
-          {error()}
-        </p>
+        <ErrorAlert>{error()}</ErrorAlert>
       </Show>
 
       <Show when={success()}>

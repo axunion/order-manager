@@ -103,6 +103,11 @@ export default function OrderBoard() {
   const [orders, setOrders] = createSignal<AdminOrder[]>([]);
   const [calls, setCalls] = createSignal<AdminCall[]>([]);
   const [error, setError] = createSignal("");
+  // Separate from `error` so the two independently-polled loaders
+  // (loadOrders, loadCalls) can't clobber each other's error state — e.g.
+  // orders succeeding right after calls failed must not silently clear the
+  // calls failure, and vice versa.
+  const [callsError, setCallsError] = createSignal("");
   const [pendingActions, setPendingActions] = createSignal<Set<string>>(
     new Set(),
   );
@@ -178,8 +183,10 @@ export default function OrderBoard() {
         triggerAlert(newCallIds);
       }
       setCalls(result.data);
+      setCallsError("");
     } else {
       setCalls([]);
+      setCallsError(result.message ?? "呼び出しの取得に失敗しました。");
     }
   }
 
@@ -309,8 +316,8 @@ export default function OrderBoard() {
         </button>
       </div>
 
-      <Show when={error()}>
-        <ErrorAlert>{error()}</ErrorAlert>
+      <Show when={error() || callsError()}>
+        <ErrorAlert>{error() || callsError()}</ErrorAlert>
       </Show>
 
       <Show when={calls().length > 0}>

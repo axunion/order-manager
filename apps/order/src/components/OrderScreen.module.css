@@ -14,16 +14,6 @@
   margin: 0;
 }
 
-.error {
-  background: var(--color-danger-bg);
-  border: 1px solid var(--color-danger-border);
-  color: var(--color-danger-fg);
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-sm);
-  margin: var(--space-4) 0;
-}
-
 .receiptBanner {
   background: var(--color-success-bg);
   border: 1px solid var(--color-success-border);

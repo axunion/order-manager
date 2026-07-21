@@ -1,5 +1,5 @@
 import type { JSX } from "solid-js";
-import { splitProps } from "solid-js";
+import { Show, splitProps } from "solid-js";
 import styles from "./Field.module.css";
 
 interface FieldProps extends JSX.InputHTMLAttributes<HTMLInputElement> {
@@ -34,11 +34,11 @@ export default function Field(props: FieldProps) {
         aria-describedby={local.error ? `${local.id}-error` : undefined}
         {...rest}
       />
-      {local.error && (
+      <Show when={local.error}>
         <p id={`${local.id}-error`} class={styles.error} role="alert">
           {local.error}
         </p>
-      )}
+      </Show>
     </div>
   );
 }

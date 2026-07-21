@@ -23,7 +23,7 @@
   color: var(--color-foreground);
   cursor: pointer;
   text-align: left;
-  min-height: 2rem;
+  min-height: var(--space-8);
 }
 
 .trigger:focus-visible {
@@ -74,7 +74,7 @@
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
   padding: var(--space-1) 0;
-  min-width: 180px;
+  min-width: var(--dropdown-min-width);
   z-index: 50;
 }
 

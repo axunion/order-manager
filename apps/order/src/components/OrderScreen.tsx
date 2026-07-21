@@ -1,4 +1,5 @@
 import { apiFetch, jsonFetch } from "@order/core/client";
+import { ErrorAlert } from "@order/ui";
 import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import CategoryNav from "./CategoryNav";
 import CheckoutBar from "./CheckoutBar";
@@ -300,9 +301,7 @@ export default function OrderScreen(props: { seatToken: string }) {
         </Show>
 
         <Show when={!loading() && error()}>
-          <p class={styles.error} role="alert">
-            {error()}
-          </p>
+          <ErrorAlert>{error()}</ErrorAlert>
         </Show>
 
         <Show when={receiptOrderId()}>

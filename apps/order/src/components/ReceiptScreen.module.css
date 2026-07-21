@@ -15,7 +15,7 @@
   background: var(--color-surface);
   border-radius: var(--radius-lg);
   padding: var(--space-5);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -113,7 +113,7 @@
 }
 
 .summaryTotal {
-  font-weight: var(--font-bold);
+  font-weight: var(--font-semibold);
   font-size: var(--text-lg);
   padding-top: var(--space-2);
   border-top: 1px solid var(--color-border);

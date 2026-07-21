@@ -42,6 +42,7 @@
   --color-border: hsl(220 13% 88%); /* dividers  ≈ #e5e7eb   */
   --color-input: hsl(220 13% 82%); /* input border ≈ #d1d5db */
   --color-ring: var(--color-primary);
+  --color-overlay: rgb(0 0 0 / 0.35); /* modal/dialog backdrop */
 
   /* ── Semantic states ───────────────────────────────────────────────────── */
   --color-danger-bg: hsl(0 86% 97%);
@@ -88,4 +89,6 @@
 
   /* ── Layout ───────────────────────────────────────────────────────────── */
   --container-mobile: 420px; /* max content width on the customer order screen */
+  --dropdown-min-width: 180px; /* Select content min-width */
+  --dialog-max-width: 400px; /* ConfirmDialog content max-width */
 }

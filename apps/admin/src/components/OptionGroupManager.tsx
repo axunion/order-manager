@@ -63,6 +63,8 @@ export default function OptionGroupManager() {
         ...prev,
         [groupId]: result.data as Option[],
       }));
+    } else {
+      setError(result.message ?? "選択肢の取得に失敗しました");
     }
   }
 
@@ -71,6 +73,8 @@ export default function OptionGroupManager() {
     if (result.ok && result.data) {
       setGroups(result.data);
       await Promise.all(result.data.map((g) => loadOptionsForGroup(g.id)));
+    } else {
+      setError(result.message ?? "オプショングループの取得に失敗しました");
     }
   }
 

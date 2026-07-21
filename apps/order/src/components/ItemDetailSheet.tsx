@@ -1,5 +1,5 @@
 import { Dialog } from "@kobalte/core/dialog";
-import { Button } from "@order/ui";
+import { Button, ErrorAlert } from "@order/ui";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import styles from "./ItemDetailSheet.module.css";
 import type {
@@ -139,9 +139,7 @@ export default function ItemDetailSheet(props: {
 
             <form onSubmit={handleSubmit} class={styles.form}>
               <Show when={error()}>
-                <p class={styles.alertError} role="alert">
-                  {error()}
-                </p>
+                <ErrorAlert>{error()}</ErrorAlert>
               </Show>
 
               <For each={visibleGroups()}>

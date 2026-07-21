@@ -51,4 +51,7 @@
   --font-sans:
     system-ui, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP",
     Meiryo, sans-serif;
+
+  /* ── Layout ─────────────────────────────────────────────────────────── */
+  --container-login-card: 400px;
 }

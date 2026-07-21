@@ -3,6 +3,14 @@ import styles from "./Select.module.css";
 
 type SelectOption = { value: string; label: string };
 
+/**
+ * Every usage must give the trigger an accessible name: either pass `id`
+ * and pair it with an external `<label for={id}>` (labels associate with
+ * button elements, which is what the trigger renders as), or pass
+ * `aria-label` directly for cases with no visible label. Neither is
+ * enforced by the type — TypeScript can't verify a DOM label association —
+ * so this is left as a contract for callers to honor.
+ */
 interface SelectProps {
   options: SelectOption[];
   value: string | null;

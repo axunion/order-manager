@@ -1,7 +1,7 @@
 import type { StoreCreatedResponse } from "@order/core";
 import { jsonFetch } from "@order/core/client";
-import { Button, Field } from "@order/ui";
-import { createSignal } from "solid-js";
+import { Button, ErrorAlert, Field } from "@order/ui";
+import { createSignal, Show } from "solid-js";
 import styles from "./RegisterForm.module.css";
 
 export default function RegisterForm() {
@@ -58,11 +58,9 @@ export default function RegisterForm() {
         required
         disabled={submitting()}
       />
-      {error() && (
-        <p class={styles.formError} role="alert">
-          {error()}
-        </p>
-      )}
+      <Show when={error()}>
+        <ErrorAlert>{error()}</ErrorAlert>
+      </Show>
       <Button type="submit" fullWidth disabled={submitting()}>
         {submitting() ? "送信中..." : "申し込む"}
       </Button>

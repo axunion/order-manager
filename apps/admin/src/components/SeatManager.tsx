@@ -59,6 +59,8 @@ export default function SeatManager() {
       }
       setQrUrls(urls);
       if (hasQrError) setError("一部の QR コードを生成できませんでした。");
+    } else {
+      setError(result.message ?? "座席の取得に失敗しました");
     }
   }
 
