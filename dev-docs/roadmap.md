@@ -185,8 +185,10 @@ Sequenced against product needs rather than after them:
 - **CI deploy** — manual `wrangler deploy` is fine until the pilot;
   automate on `main` once deploys become routine.
 - **Browser E2E** — API-level cycle coverage exists
-  (`business-cycle.test.ts`); add a Playwright smoke of the three SPAs
-  around the Phase 2 pilot.
+  (`business-cycle.test.ts`); [manual-smoke-test.md](reference/manual-smoke-test.md)
+  covers the same cycle by hand through the three SPAs. Design sketch for
+  automating it: [browser-e2e](proposals/browser-e2e.md) — not yet
+  scheduled; open decisions listed there.
 - **Observability** — Workers analytics/log tail is enough now; add
   error alerting before the pilot goes unattended.
 - **Backups** — D1 time-travel/export procedure documented before real
