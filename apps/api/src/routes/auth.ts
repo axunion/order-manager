@@ -235,7 +235,9 @@ export const authRouter = new Hono<{ Bindings: Env }>()
               mailFrom: c.env.MAIL_FROM,
             },
           ).catch(() => {
-            console.error(`[auth/login] Email delivery failed for ${email}`);
+            console.error(
+              `[auth/login] Email delivery failed for member ${member.member_id}`,
+            );
           });
           if (c.executionCtx?.waitUntil) {
             c.executionCtx.waitUntil(emailPromise);
@@ -246,7 +248,9 @@ export const authRouter = new Hono<{ Bindings: Env }>()
       } catch {
         // Silent failure — the "always 200" contract must hold even if token
         // issuance fails (e.g., transient D1 error).
-        console.error(`[auth/login] Magic link issuance failed for ${email}`);
+        console.error(
+          `[auth/login] Magic link issuance failed for member ${member.member_id}`,
+        );
       }
     }
 

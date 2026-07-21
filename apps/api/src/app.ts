@@ -24,6 +24,16 @@ import { storesRouter } from "./routes/stores";
 // the strategy that allows a single API Worker to serve multiple SPA origins
 // while keeping the cookie HttpOnly. The "Vary: Origin" header ensures
 // downstream caches do not serve one origin's CORS headers to another.
+//
+// CORS alone only governs whether client-side JS can read a cross-origin
+// response — it does not stop the browser from sending the request in the
+// first place (e.g. a cross-site form POST), so with SameSite=None cookies
+// that would still execute as CSRF. State-changing methods therefore hard-
+// reject any request whose Origin header is present but not allowlisted;
+// requests with no Origin header (same-origin navigations, non-browser
+// clients, tests) are left to the route's own auth checks.
+const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
 const corsMiddleware = createMiddleware<{ Bindings: Env }>(async (c, next) => {
   const allowed = [
     c.env.ADMIN_ORIGIN,
@@ -32,8 +42,9 @@ const corsMiddleware = createMiddleware<{ Bindings: Env }>(async (c, next) => {
   ].filter(Boolean);
 
   const origin = c.req.header("Origin") ?? "";
+  const isAllowedOrigin = allowed.includes(origin);
 
-  if (allowed.includes(origin)) {
+  if (isAllowedOrigin) {
     c.header("Access-Control-Allow-Origin", origin);
     c.header("Access-Control-Allow-Credentials", "true");
     c.header(
@@ -46,6 +57,10 @@ const corsMiddleware = createMiddleware<{ Bindings: Env }>(async (c, next) => {
 
   if (c.req.method === "OPTIONS") {
     return c.body(null, 204);
+  }
+
+  if (origin && !isAllowedOrigin && STATE_CHANGING_METHODS.has(c.req.method)) {
+    return c.body(null, 403);
   }
 
   await next();
