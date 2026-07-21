@@ -2,6 +2,7 @@ import {
   buildClearSessionCookie,
   buildSessionCookie,
   errorResponse,
+  hashToken,
   LoginInput,
   MAGIC_LINK_VERIFY_PATH,
   newId,
@@ -57,6 +58,7 @@ export const authRouter = new Hono<{ Bindings: Env }>()
 
     const db = createDb(c.env.DB);
     const ts = now();
+    const tokenHash = await hashToken(token);
 
     // Look up the token — must be unused and not expired.
     const rows = await db
@@ -70,7 +72,7 @@ export const authRouter = new Hono<{ Bindings: Env }>()
       .from(schema.magicLinkTokens)
       .where(
         and(
-          eq(schema.magicLinkTokens.token, token),
+          eq(schema.magicLinkTokens.token, tokenHash),
           isNull(schema.magicLinkTokens.used_at),
           gt(schema.magicLinkTokens.expires_at, ts),
         ),
@@ -145,7 +147,7 @@ export const authRouter = new Hono<{ Bindings: Env }>()
       id: newId(),
       store_id: linkToken.store_id,
       member_id: linkToken.member_id,
-      session_token: sessionToken,
+      session_token: await hashToken(sessionToken),
       expires_at: ts + SESSION_TTL_MS,
     });
 

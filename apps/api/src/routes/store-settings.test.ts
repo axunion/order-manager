@@ -3,7 +3,7 @@
  * Store settings (roadmap Phase 2 item 4): rename and owner email change.
  */
 import { env } from "cloudflare:workers";
-import { now, SESSION_TTL_MS } from "@order/core";
+import { hashToken, now, SESSION_TTL_MS } from "@order/core";
 import { createDb, schema } from "@order/db";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
@@ -320,7 +320,7 @@ describe("POST /api/stores/me/email-change", () => {
       id: crypto.randomUUID(),
       store_id: storeId,
       member_id: memberBId,
-      session_token: tokenB,
+      session_token: await hashToken(tokenB),
       expires_at: now() + SESSION_TTL_MS,
     });
 

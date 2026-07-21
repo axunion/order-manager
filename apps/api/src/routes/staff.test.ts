@@ -4,6 +4,7 @@
  * members of their own store.
  */
 import { env } from "cloudflare:workers";
+import { hashToken } from "@order/core";
 import { createDb, schema } from "@order/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
@@ -294,26 +295,19 @@ describe("invite → GET /api/auth/verify", () => {
     const inviteRes = await app.request(
       "/api/staff",
       withAuth(ownerToken, jsonInit("POST", { email: staffEmail })),
-      env,
+      { ...env, ENVIRONMENT: "development" },
     );
-    const inviteBody = (await inviteRes.json()) as { data: { id: string } };
+    const inviteBody = (await inviteRes.json()) as {
+      data: { id: string; verify_url?: string };
+    };
     const staffMemberId = inviteBody.data.id;
-
-    const tokenRow = await db
-      .select({ token: schema.magicLinkTokens.token })
-      .from(schema.magicLinkTokens)
-      .where(
-        and(
-          eq(schema.magicLinkTokens.member_id, staffMemberId),
-          eq(schema.magicLinkTokens.purpose, "invite"),
-          isNull(schema.magicLinkTokens.used_at),
-        ),
-      )
-      .then((rows) => rows[0]);
-    if (!tokenRow) throw new Error("invite token not found");
+    const inviteToken = inviteBody.data.verify_url
+      ? new URL(inviteBody.data.verify_url).searchParams.get("token")
+      : null;
+    if (!inviteToken) throw new Error("invite verify_url/token missing");
 
     const verifyRes = await app.request(
-      `/api/auth/verify?token=${tokenRow.token}`,
+      `/api/auth/verify?token=${inviteToken}`,
       {},
       env,
     );
@@ -460,7 +454,7 @@ describe("DELETE /api/staff/:id", () => {
       id: crypto.randomUUID(),
       store_id: storeId,
       member_id: staffMemberId,
-      session_token: staffSessionToken,
+      session_token: await hashToken(staffSessionToken),
       expires_at: Date.now() + 60_000,
     });
 

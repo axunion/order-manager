@@ -5,6 +5,7 @@
  * prerequisite that makes the cap countable.
  */
 import { env } from "cloudflare:workers";
+import { hashToken } from "@order/core";
 import { createDb, schema } from "@order/db";
 import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
@@ -99,7 +100,7 @@ describe("issueMagicLink dedup is member-scoped, not store-scoped", () => {
     const ownerTokenRow = await db
       .select({ used_at: schema.magicLinkTokens.used_at })
       .from(schema.magicLinkTokens)
-      .where(eq(schema.magicLinkTokens.token, ownerToken))
+      .where(eq(schema.magicLinkTokens.token, await hashToken(ownerToken)))
       .then((rows) => rows[0]);
     expect(ownerTokenRow?.used_at).toBeNull();
 
@@ -190,7 +191,7 @@ describe("issueMagicLink token supersession (UPDATE, not DELETE)", () => {
     const rows = await db
       .select({ used_at: schema.magicLinkTokens.used_at })
       .from(schema.magicLinkTokens)
-      .where(eq(schema.magicLinkTokens.token, firstToken));
+      .where(eq(schema.magicLinkTokens.token, await hashToken(firstToken)));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.used_at).not.toBeNull();
   });

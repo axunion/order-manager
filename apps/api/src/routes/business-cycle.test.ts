@@ -13,8 +13,6 @@
  * the same cycle concurrently.
  */
 import { env } from "cloudflare:workers";
-import { createDb, schema } from "@order/db";
-import { and, eq, isNull } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { app } from "../app";
 import {
@@ -32,8 +30,9 @@ import {
  * Registers a store via HTTP, then follows the Magic Link verification flow
  * to obtain an active session_token.
  *
- * The magic link token is read directly from D1 because in tests the
- * RESEND_API_KEY is absent and email delivery falls back to console.log only.
+ * Only a hash of the magic link token is persisted to D1, so the raw value
+ * must come from the dev-mode verify_url in the registration response, not
+ * a DB read.
  */
 async function registerAndVerify(
   storeName: string,
@@ -42,31 +41,19 @@ async function registerAndVerify(
   const storeRes = await app.request(
     "/api/stores",
     jsonInit("POST", { name: storeName, email }),
-    env,
+    { ...env, ENVIRONMENT: "development" },
   );
   if (storeRes.status !== 201)
     throw new Error(`Store registration failed: ${storeRes.status}`);
 
-  const body = (await storeRes.json()) as { data: { id: string } };
-  const storeId = body.data.id;
-
-  const db = createDb(env.DB);
-  const tokenRow = await db
-    .select()
-    .from(schema.magicLinkTokens)
-    .where(
-      and(
-        eq(schema.magicLinkTokens.store_id, storeId),
-        eq(schema.magicLinkTokens.purpose, "signup"),
-        isNull(schema.magicLinkTokens.used_at),
-      ),
-    )
-    .then((rows) => rows[0]);
-
-  if (!tokenRow) throw new Error("Signup magic_link_token not found");
+  const body = (await storeRes.json()) as { data: { verify_url?: string } };
+  const token = body.data.verify_url
+    ? new URL(body.data.verify_url).searchParams.get("token")
+    : null;
+  if (!token) throw new Error("verify_url/token missing (dev mode)");
 
   const verifyRes = await app.request(
-    `/api/auth/verify?token=${tokenRow.token}`,
+    `/api/auth/verify?token=${token}`,
     {},
     env,
   );

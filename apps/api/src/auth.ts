@@ -1,5 +1,6 @@
 import type { SeatSession, StoreSession } from "@order/core";
 import {
+  hashToken,
   MAGIC_LINK_HOURLY_CAP,
   MAGIC_LINK_TTL_MS,
   newId,
@@ -61,6 +62,10 @@ export function isSecureRequest(
  * superseded so an UPDATE failure leaves two temporarily valid tokens
  * (harmless — the old one expires naturally) while an INSERT failure
  * leaves the old token intact.
+ *
+ * Only a SHA-256 hash of the token is persisted (`hashToken`) — the raw
+ * value returned here is the one that goes into the email link and must
+ * never be written to D1.
  */
 export async function issueMagicLink(
   db: Database,
@@ -87,13 +92,14 @@ export async function issueMagicLink(
   }
 
   const token = newId();
+  const tokenHash = await hashToken(token);
   const expires_at = ts + MAGIC_LINK_TTL_MS;
 
   await db.insert(schema.magicLinkTokens).values({
     id: newId(),
     store_id: storeId,
     member_id: memberId,
-    token,
+    token: tokenHash,
     purpose,
     new_email: newEmail ?? null,
     expires_at,
@@ -107,7 +113,7 @@ export async function issueMagicLink(
         eq(schema.magicLinkTokens.member_id, memberId),
         eq(schema.magicLinkTokens.purpose, purpose),
         isNull(schema.magicLinkTokens.used_at),
-        ne(schema.magicLinkTokens.token, token),
+        ne(schema.magicLinkTokens.token, tokenHash),
       ),
     );
 
@@ -138,6 +144,7 @@ export async function getStoreBySession(
     })
   | null
 > {
+  const tokenHash = await hashToken(token);
   const result = await db
     .select({
       id: schema.stores.id,
@@ -153,7 +160,7 @@ export async function getStoreBySession(
     .innerJoin(schema.stores, eq(schema.sessions.store_id, schema.stores.id))
     .where(
       and(
-        eq(schema.sessions.session_token, token),
+        eq(schema.sessions.session_token, tokenHash),
         gt(schema.sessions.expires_at, now()),
       ),
     )
@@ -170,9 +177,10 @@ export async function deleteSession(
   db: Database,
   token: string,
 ): Promise<void> {
+  const tokenHash = await hashToken(token);
   await db
     .delete(schema.sessions)
-    .where(eq(schema.sessions.session_token, token));
+    .where(eq(schema.sessions.session_token, tokenHash));
 }
 
 /**

@@ -2,6 +2,7 @@ import type { SeatSession, StoreSession } from "@order/core";
 import {
   buildSessionCookie,
   errorResponse,
+  hashToken,
   now,
   SESSION_REFRESH_INTERVAL_MS,
   SESSION_TOKEN_COOKIE,
@@ -79,7 +80,7 @@ export const requireStore = createMiddleware<AuthEnv>(async (c, next) => {
     await db
       .update(schema.sessions)
       .set({ last_used_at: ts, expires_at: ts + SESSION_TTL_MS })
-      .where(eq(schema.sessions.session_token, token));
+      .where(eq(schema.sessions.session_token, await hashToken(token)));
 
     const secure = isSecureRequest(c.req.url, c.env.ENVIRONMENT);
     const cookieDomain = c.env.COOKIE_DOMAIN || undefined;

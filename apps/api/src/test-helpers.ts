@@ -7,7 +7,7 @@
 // Import from cloudflare:workers is safe here because this file is only
 // executed in the workers test project.
 import { env } from "cloudflare:workers";
-import { newId, now, SESSION_TTL_MS } from "@order/core";
+import { hashToken, newId, now, SESSION_TTL_MS } from "@order/core";
 import { createDb, schema } from "@order/db";
 
 // ---------------------------------------------------------------------------
@@ -61,7 +61,7 @@ export async function seedStore(
     id: newId(),
     store_id: id,
     member_id,
-    session_token,
+    session_token: await hashToken(session_token),
     expires_at: now() + SESSION_TTL_MS,
   });
 

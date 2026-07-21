@@ -1,6 +1,6 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 import { env } from "cloudflare:workers";
-import { MAGIC_LINK_TTL_MS, now, SESSION_TTL_MS } from "@order/core";
+import { hashToken, MAGIC_LINK_TTL_MS, now, SESSION_TTL_MS } from "@order/core";
 import { createDb, schema } from "@order/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
@@ -18,7 +18,11 @@ import {
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
-/** Registers a store via the API and returns its id + the signup magic token. */
+/**
+ * Registers a store via the API and returns its id + the signup magic token.
+ * Only a hash of the token is persisted to D1, so the raw value must come
+ * from the API response itself (dev-mode verify_url), not a DB read.
+ */
 async function registerStore(
   name: string,
   email: string,
@@ -30,15 +34,21 @@ async function registerStore(
       headers: JSON_HEADERS,
       body: JSON.stringify({ name, email }),
     },
-    env,
+    { ...env, ENVIRONMENT: "development" },
   );
   if (!res.ok) throw new Error(`registerStore failed: ${res.status}`);
-  const body = (await res.json()) as { data: { id: string } };
+  const body = (await res.json()) as {
+    data: { id: string; verify_url?: string };
+  };
   const storeId = body.data.id;
+  const signupToken = body.data.verify_url
+    ? new URL(body.data.verify_url).searchParams.get("token")
+    : null;
+  if (!signupToken) throw new Error("registerStore: verify_url/token missing");
 
   const db = createDb(env.DB);
   const tokenRow = await db
-    .select()
+    .select({ member_id: schema.magicLinkTokens.member_id })
     .from(schema.magicLinkTokens)
     .where(
       and(
@@ -50,7 +60,7 @@ async function registerStore(
     .then((rows) => rows[0]);
 
   if (!tokenRow) throw new Error("signup magic_link_token not found");
-  return { storeId, memberId: tokenRow.member_id, signupToken: tokenRow.token };
+  return { storeId, memberId: tokenRow.member_id, signupToken };
 }
 
 /** Verifies a token via the API (follows the 302 redirect internally). */
@@ -178,7 +188,7 @@ describe("GET /api/auth/verify", () => {
     const tokenRow = await db
       .select()
       .from(schema.magicLinkTokens)
-      .where(eq(schema.magicLinkTokens.token, signupToken))
+      .where(eq(schema.magicLinkTokens.token, await hashToken(signupToken)))
       .then((rows) => rows[0]);
     expect(tokenRow).toBeTruthy();
     expect(tokenRow?.used_at).toBeTruthy();
@@ -206,7 +216,7 @@ describe("GET /api/auth/verify", () => {
       id: crypto.randomUUID(),
       store_id: storeId,
       member_id: memberId,
-      token: expiredToken,
+      token: await hashToken(expiredToken),
       purpose: "login",
       expires_at: now() - 1,
     });
@@ -246,7 +256,7 @@ describe("GET /api/auth/verify", () => {
       id: crypto.randomUUID(),
       store_id: storeId,
       member_id: memberId,
-      token: loginToken,
+      token: await hashToken(loginToken),
       purpose: "login",
       expires_at: now() + MAGIC_LINK_TTL_MS,
     });
@@ -507,7 +517,7 @@ describe("POST /api/auth/logout", () => {
       id: crypto.randomUUID(),
       store_id: storeId,
       member_id: memberId,
-      token: loginToken,
+      token: await hashToken(loginToken),
       purpose: "login",
       expires_at: now() + MAGIC_LINK_TTL_MS,
     });
@@ -547,7 +557,7 @@ describe("POST /api/auth/logout-all", () => {
           .where(eq(schema.members.id, memberId))
       )[0]?.store_id as string,
       member_id: memberId,
-      session_token: token2,
+      session_token: await hashToken(token2),
       expires_at: now() + SESSION_TTL_MS,
     });
 
@@ -587,7 +597,7 @@ describe("POST /api/auth/logout-all", () => {
       id: crypto.randomUUID(),
       store_id: storeId,
       member_id: otherMemberId,
-      session_token: otherSessionToken,
+      session_token: await hashToken(otherSessionToken),
       expires_at: now() + SESSION_TTL_MS,
     });
 
@@ -646,7 +656,7 @@ describe("requireStore middleware (session-based)", () => {
         last_used_at: schema.sessions.last_used_at,
       })
       .from(schema.sessions)
-      .where(eq(schema.sessions.session_token, token))
+      .where(eq(schema.sessions.session_token, await hashToken(token)))
       .then((rows) => rows[0]);
     expect(before?.last_used_at).toBeNull();
 
@@ -658,7 +668,7 @@ describe("requireStore middleware (session-based)", () => {
         last_used_at: schema.sessions.last_used_at,
       })
       .from(schema.sessions)
-      .where(eq(schema.sessions.session_token, token))
+      .where(eq(schema.sessions.session_token, await hashToken(token)))
       .then((rows) => rows[0]);
     expect(after?.last_used_at).toBeTruthy();
     // expires_at and last_used_at are set from the same now() call in the
@@ -683,7 +693,7 @@ describe("requireStore middleware (session-based)", () => {
     await db
       .update(schema.sessions)
       .set({ last_used_at: recentTs, expires_at: originalExpiresAt })
-      .where(eq(schema.sessions.session_token, token));
+      .where(eq(schema.sessions.session_token, await hashToken(token)));
 
     const res = await app.request("/api/seats", withAuth(token), env);
 
@@ -693,7 +703,7 @@ describe("requireStore middleware (session-based)", () => {
         last_used_at: schema.sessions.last_used_at,
       })
       .from(schema.sessions)
-      .where(eq(schema.sessions.session_token, token))
+      .where(eq(schema.sessions.session_token, await hashToken(token)))
       .then((rows) => rows[0]);
     expect(after?.last_used_at).toBe(recentTs);
     expect(after?.expires_at).toBe(originalExpiresAt);
@@ -711,7 +721,7 @@ describe("requireStore middleware (session-based)", () => {
     await db
       .update(schema.sessions)
       .set({ last_used_at: staleTs, expires_at: originalExpiresAt })
-      .where(eq(schema.sessions.session_token, token));
+      .where(eq(schema.sessions.session_token, await hashToken(token)));
 
     const res = await app.request("/api/seats", withAuth(token), env);
 
@@ -721,7 +731,7 @@ describe("requireStore middleware (session-based)", () => {
         last_used_at: schema.sessions.last_used_at,
       })
       .from(schema.sessions)
-      .where(eq(schema.sessions.session_token, token))
+      .where(eq(schema.sessions.session_token, await hashToken(token)))
       .then((rows) => rows[0]);
     expect(after?.last_used_at).toBeGreaterThan(staleTs);
     // Same non-flaky relationship check as the "fresh session" test above.

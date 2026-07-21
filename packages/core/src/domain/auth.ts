@@ -1,3 +1,17 @@
+/**
+ * Hashes a session or Magic Link token for storage at rest (SHA-256, hex).
+ * Only the hash is ever persisted to D1; the raw token lives only in the
+ * client-facing cookie / email link, so a DB read (backup export, console
+ * access, etc.) never yields a value usable to impersonate a session.
+ */
+export async function hashToken(raw: string): Promise<string> {
+  const bytes = new TextEncoder().encode(raw);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 /** Name of the HttpOnly cookie used to authenticate admin sessions. */
 export const SESSION_TOKEN_COOKIE = "session_token";
 
