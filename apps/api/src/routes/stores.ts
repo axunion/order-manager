@@ -2,10 +2,13 @@ import {
   buildSlug,
   CreateStoreInput,
   DeleteStoreInput,
+  EMAIL_CHANGE_HOURLY_CAP,
+  EMAIL_CHANGE_WINDOW_MS,
   EmailChangeInput,
   errorResponse,
   MAGIC_LINK_VERIFY_PATH,
   newId,
+  now,
   sendMagicLinkEmail,
   UpdateStoreNameInput,
 } from "@order/core";
@@ -229,7 +232,11 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
    *
    * Rejects 400 if new_email equals the current email or is already
    * registered to another member — the caller is authenticated here, so
-   * (unlike /api/auth/login) anti-enumeration does not apply.
+   * (unlike /api/auth/login) anti-enumeration does not apply. Rejects 429
+   * past EMAIL_CHANGE_HOURLY_CAP attempts per rolling hour (counted
+   * regardless of outcome) to bound how fast that conflict response can be
+   * used to probe arbitrary emails against the global members.email
+   * namespace.
    *
    * Response: 200 { data: { sent: true, verify_url? } }
    */
@@ -243,14 +250,46 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
       const db = createDb(c.env.DB);
 
       const memberRows = await db
-        .select({ email: schema.members.email })
+        .select({
+          email: schema.members.email,
+          attempt_count: schema.members.email_change_attempt_count,
+          window_started_at: schema.members.email_change_window_started_at,
+        })
         .from(schema.members)
         .where(eq(schema.members.id, memberId))
         .limit(1);
-      const currentEmail = memberRows[0]?.email;
-      if (!currentEmail) {
+      const member = memberRows[0];
+      if (!member) {
         return errorResponse("NOT_FOUND", "Member not found", 404);
       }
+      const currentEmail = member.email;
+
+      // Rate limit attempts (conflict or not) — a rejected "already in use"
+      // response would otherwise let an authenticated member probe
+      // arbitrary emails against the global members.email namespace at
+      // unlimited speed, since MAGIC_LINK_HOURLY_CAP below only counts
+      // tokens actually issued.
+      const ts = now();
+      const withinWindow =
+        member.window_started_at !== null &&
+        ts - member.window_started_at < EMAIL_CHANGE_WINDOW_MS;
+      const attemptsSoFar = withinWindow ? member.attempt_count : 0;
+      if (attemptsSoFar >= EMAIL_CHANGE_HOURLY_CAP) {
+        return errorResponse(
+          "RATE_LIMITED",
+          "しばらくしてから再度お試しください。",
+          429,
+        );
+      }
+      await db
+        .update(schema.members)
+        .set({
+          email_change_attempt_count: attemptsSoFar + 1,
+          email_change_window_started_at: withinWindow
+            ? member.window_started_at
+            : ts,
+        })
+        .where(eq(schema.members.id, memberId));
 
       if (new_email === currentEmail) {
         return errorResponse(
@@ -334,11 +373,17 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
    *
    * Hard delete, not soft: no accounting/audit retention requirement
    * exists for this project (see dev-docs/proposals/account-lifecycle.md).
-   * The response body IS the export — produced atomically with the
-   * delete from the same pre-delete reads, not a separate endpoint, so
-   * the frontend can offer it as a download in the same action.
-   * sessions/magic_link_tokens are excluded from the export (auth
-   * artifacts containing secrets, not business data) but are deleted.
+   * The response body IS the export — read from the same pre-delete
+   * snapshot the delete batch below acts on, not a separate endpoint, so
+   * the frontend can offer it as a download in the same action. The
+   * snapshot reads and the delete batch are NOT one transaction: a row
+   * written in the narrow window between them (e.g. a customer order via
+   * a still-live qr_token) is still caught by the delete's live store_id
+   * filters — no orphan — but won't appear in the returned export. Accepted
+   * as a negligible gap given how narrow the window is; not worth the
+   * complexity of folding ~25 statements into one db.batch to close it.
+   * sessions/magic_link_tokens/seats.qr_token are excluded from the export
+   * (auth/bearer secrets, not business data) but are deleted.
    *
    * Response: 200 { data: { export: { store, members, menu_categories,
    *   menu_items, option_groups, options, menu_item_option_groups, seats,
@@ -393,8 +438,18 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
           .select()
           .from(schema.options)
           .where(eq(schema.options.store_id, storeId)),
+        // qr_token excluded — it's a bearer credential for the customer
+        // order API (same sensitivity class as a session token), not
+        // business data; sessions/magic_link_tokens are excluded for the
+        // same reason (see doc comment above).
         db
-          .select()
+          .select({
+            id: schema.seats.id,
+            store_id: schema.seats.store_id,
+            name: schema.seats.name,
+            is_active: schema.seats.is_active,
+            created_at: schema.seats.created_at,
+          })
           .from(schema.seats)
           .where(eq(schema.seats.store_id, storeId)),
         db

@@ -224,6 +224,18 @@ export const members = sqliteTable(
       .default("pending"),
     /** Set when status transitions to 'active' (Unix ms) */
     activated_at: integer("activated_at"), // nullable
+    /**
+     * Rate limiting for POST /me/email-change: counts attempts (conflict or
+     * not) within the current hourly window, reset when the window expires.
+     * Separate from magic_link_tokens' own MAGIC_LINK_HOURLY_CAP, which only
+     * counts tokens actually issued — a request rejected for a conflicting
+     * new_email never reaches issuance, so it would otherwise go uncounted.
+     */
+    email_change_attempt_count: integer("email_change_attempt_count")
+      .notNull()
+      .default(0),
+    /** Unix ms; null until the first attempt in a window */
+    email_change_window_started_at: integer("email_change_window_started_at"), // nullable
     created_at: integer("created_at")
       .notNull()
       .$defaultFn(() => Date.now()), // Unix ms

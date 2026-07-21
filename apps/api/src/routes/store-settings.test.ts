@@ -3,7 +3,13 @@
  * Store settings (roadmap Phase 2 item 4): rename and owner email change.
  */
 import { env } from "cloudflare:workers";
-import { hashToken, now, SESSION_TTL_MS } from "@order/core";
+import {
+  EMAIL_CHANGE_HOURLY_CAP,
+  EMAIL_CHANGE_WINDOW_MS,
+  hashToken,
+  now,
+  SESSION_TTL_MS,
+} from "@order/core";
 import { createDb, schema } from "@order/db";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
@@ -417,5 +423,150 @@ describe("POST /api/stores/me/email-change", () => {
       .from(schema.members)
       .where(eq(schema.members.id, memberId));
     expect(rows[0]?.email).not.toBe(raceEmail);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/stores/me/email-change — rate limiting
+// ---------------------------------------------------------------------------
+
+describe("POST /api/stores/me/email-change rate limiting", () => {
+  it("rejects the 6th attempt within the hour with 429 RATE_LIMITED", async () => {
+    const { member_id: memberId, session_token: token } = await seedStore(
+      `Email Change Cap Test ${crypto.randomUUID()}`,
+    );
+    const db = createDb(env.DB);
+    await db
+      .update(schema.members)
+      .set({
+        email_change_attempt_count: EMAIL_CHANGE_HOURLY_CAP,
+        email_change_window_started_at: now() - 5 * 60 * 1000,
+      })
+      .where(eq(schema.members.id, memberId));
+
+    const res = await app.request(
+      "/api/stores/me/email-change",
+      withAuth(
+        token,
+        jsonInit("POST", {
+          new_email: `blocked-${crypto.randomUUID()}@test.internal`,
+        }),
+      ),
+      env,
+    );
+    expect(res.status).toBe(429);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("RATE_LIMITED");
+  });
+
+  it("still succeeds at one below the cap (boundary)", async () => {
+    const { member_id: memberId, session_token: token } = await seedStore(
+      `Email Change Below Cap Test ${crypto.randomUUID()}`,
+    );
+    const db = createDb(env.DB);
+    await db
+      .update(schema.members)
+      .set({
+        email_change_attempt_count: EMAIL_CHANGE_HOURLY_CAP - 1,
+        email_change_window_started_at: now() - 5 * 60 * 1000,
+      })
+      .where(eq(schema.members.id, memberId));
+
+    const res = await app.request(
+      "/api/stores/me/email-change",
+      withAuth(
+        token,
+        jsonInit("POST", {
+          new_email: `allowed-${crypto.randomUUID()}@test.internal`,
+        }),
+      ),
+      env,
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("resets the window once it has expired", async () => {
+    const { member_id: memberId, session_token: token } = await seedStore(
+      `Email Change Window Reset Test ${crypto.randomUUID()}`,
+    );
+    const db = createDb(env.DB);
+    await db
+      .update(schema.members)
+      .set({
+        email_change_attempt_count: EMAIL_CHANGE_HOURLY_CAP,
+        email_change_window_started_at: now() - EMAIL_CHANGE_WINDOW_MS - 1,
+      })
+      .where(eq(schema.members.id, memberId));
+
+    const res = await app.request(
+      "/api/stores/me/email-change",
+      withAuth(
+        token,
+        jsonInit("POST", {
+          new_email: `fresh-window-${crypto.randomUUID()}@test.internal`,
+        }),
+      ),
+      env,
+    );
+    expect(res.status).toBe(200);
+
+    const rows = await db
+      .select({
+        count: schema.members.email_change_attempt_count,
+        window_started_at: schema.members.email_change_window_started_at,
+      })
+      .from(schema.members)
+      .where(eq(schema.members.id, memberId));
+    expect(rows[0]?.count).toBe(1);
+    expect(rows[0]?.window_started_at).toBeGreaterThan(
+      now() - EMAIL_CHANGE_WINDOW_MS,
+    );
+  });
+
+  it("counts a conflicting (already-registered) attempt toward the cap", async () => {
+    const storeA = await seedStore(`Conflict Cap A ${crypto.randomUUID()}`);
+    const storeB = await seedStore(`Conflict Cap B ${crypto.randomUUID()}`);
+    const db = createDb(env.DB);
+    const storeBEmail = (
+      await db
+        .select({ email: schema.members.email })
+        .from(schema.members)
+        .where(eq(schema.members.id, storeB.member_id))
+    )[0]?.email;
+    if (!storeBEmail) throw new Error("seedStore did not set a member email");
+
+    await db
+      .update(schema.members)
+      .set({
+        email_change_attempt_count: EMAIL_CHANGE_HOURLY_CAP - 1,
+        email_change_window_started_at: now() - 5 * 60 * 1000,
+      })
+      .where(eq(schema.members.id, storeA.member_id));
+
+    // 5th attempt: conflicts (already used by store B's member) but still
+    // counts toward the cap.
+    const conflictRes = await app.request(
+      "/api/stores/me/email-change",
+      withAuth(
+        storeA.session_token,
+        jsonInit("POST", { new_email: storeBEmail }),
+      ),
+      env,
+    );
+    expect(conflictRes.status).toBe(400);
+
+    // 6th attempt: a perfectly valid new email, but the cap was already hit
+    // by the conflicting attempt above.
+    const blockedRes = await app.request(
+      "/api/stores/me/email-change",
+      withAuth(
+        storeA.session_token,
+        jsonInit("POST", {
+          new_email: `never-sent-${crypto.randomUUID()}@test.internal`,
+        }),
+      ),
+      env,
+    );
+    expect(blockedRes.status).toBe(429);
   });
 });

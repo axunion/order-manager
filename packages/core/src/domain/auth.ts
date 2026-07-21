@@ -38,6 +38,18 @@ export const MAGIC_LINK_TTL_MS = 15 * 60 * 1000;
  */
 export const MAGIC_LINK_HOURLY_CAP = 5;
 
+/**
+ * Max POST /me/email-change attempts per member per rolling hour, counted
+ * regardless of outcome (including "new_email already in use" conflicts).
+ * Bounds using the endpoint as an oracle to probe whether an arbitrary
+ * email belongs to some other member — MAGIC_LINK_HOURLY_CAP alone doesn't
+ * cover this, since a conflicting request never reaches token issuance.
+ */
+export const EMAIL_CHANGE_HOURLY_CAP = 5;
+
+/** Rolling window size for EMAIL_CHANGE_HOURLY_CAP, in milliseconds. */
+export const EMAIL_CHANGE_WINDOW_MS = 60 * 60 * 1000;
+
 /** API path (no origin) that verifies a Magic Link token. */
 export const MAGIC_LINK_VERIFY_PATH = "/api/auth/verify";
 
