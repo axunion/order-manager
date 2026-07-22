@@ -280,23 +280,19 @@ export default function CheckoutPanel() {
                 </For>
               </ul>
 
-              <div
-                class={styles.checkoutMethodGroup}
-                role="radiogroup"
-                aria-label="支払い方法"
-              >
+              <fieldset class={styles.checkoutMethodGroup}>
+                <legend class={styles.visuallyHidden}>支払い方法</legend>
                 <For each={PAYMENT_METHODS}>
                   {(method) => (
                     <Button
                       type="button"
-                      role="radio"
                       variant={
                         methodFor(order.id) === method.value
                           ? "primary"
                           : "secondary"
                       }
                       size="sm"
-                      aria-checked={methodFor(order.id) === method.value}
+                      aria-pressed={methodFor(order.id) === method.value}
                       disabled={processing().has(order.id)}
                       onClick={() => setMethodFor(order.id, method.value)}
                     >
@@ -304,7 +300,7 @@ export default function CheckoutPanel() {
                     </Button>
                   )}
                 </For>
-              </div>
+              </fieldset>
 
               <div class={styles.checkoutDiscount}>
                 <Button

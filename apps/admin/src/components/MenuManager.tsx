@@ -1,5 +1,5 @@
 import { apiFetch, jsonFetch, menuImageUrl } from "@order/core/client";
-import { Button, ConfirmDialog, ErrorAlert, Select } from "@order/ui";
+import { Button, ConfirmDialog, ErrorAlert, Field, Select } from "@order/ui";
 import { createSignal, For, onMount, Show } from "solid-js";
 import { downscaleImage } from "../lib/downscaleImage";
 import styles from "./MenuManager.module.css";
@@ -328,30 +328,25 @@ export default function MenuManager() {
       <section class={styles.menuSection}>
         <h2>メニューカテゴリ</h2>
         <form onSubmit={handleCategorySubmit} class={styles.menuForm}>
-          <div class={styles.field}>
-            <label for="cat-name">カテゴリ名</label>
-            <input
-              id="cat-name"
-              type="text"
-              value={catName()}
-              onInput={(e) => setCatName(e.currentTarget.value)}
-              placeholder="例：ドリンク"
-              required
-              maxLength={100}
-              disabled={catSubmitting()}
-            />
-          </div>
-          <div class={styles.field}>
-            <label for="cat-sort">表示順</label>
-            <input
-              id="cat-sort"
-              type="number"
-              min={0}
-              value={catSortOrder()}
-              onInput={(e) => setCatSortOrder(Number(e.currentTarget.value))}
-              disabled={catSubmitting()}
-            />
-          </div>
+          <Field
+            id="cat-name"
+            label="カテゴリ名"
+            value={catName()}
+            onInput={(e) => setCatName(e.currentTarget.value)}
+            placeholder="例：ドリンク"
+            required
+            maxLength={100}
+            disabled={catSubmitting()}
+          />
+          <Field
+            id="cat-sort"
+            label="表示順"
+            type="number"
+            min={0}
+            value={catSortOrder()}
+            onInput={(e) => setCatSortOrder(Number(e.currentTarget.value))}
+            disabled={catSubmitting()}
+          />
           <Button type="submit" disabled={catSubmitting()}>
             {catSubmitting() ? "追加中..." : "カテゴリを追加"}
           </Button>
@@ -383,32 +378,27 @@ export default function MenuManager() {
       <section class={styles.menuSection}>
         <h2>メニュー商品</h2>
         <form onSubmit={handleItemSubmit} class={styles.menuForm}>
-          <div class={styles.field}>
-            <label for="item-name">商品名</label>
-            <input
-              id="item-name"
-              type="text"
-              value={itemName()}
-              onInput={(e) => setItemName(e.currentTarget.value)}
-              placeholder="例：ラテ"
-              required
-              maxLength={100}
-              disabled={itemSubmitting()}
-            />
-          </div>
-          <div class={styles.field}>
-            <label for="item-price">価格（円）</label>
-            <input
-              id="item-price"
-              type="number"
-              min={1}
-              value={itemPrice()}
-              onInput={(e) => setItemPrice(e.currentTarget.value)}
-              placeholder="例：500"
-              required
-              disabled={itemSubmitting()}
-            />
-          </div>
+          <Field
+            id="item-name"
+            label="商品名"
+            value={itemName()}
+            onInput={(e) => setItemName(e.currentTarget.value)}
+            placeholder="例：ラテ"
+            required
+            maxLength={100}
+            disabled={itemSubmitting()}
+          />
+          <Field
+            id="item-price"
+            label="価格（円）"
+            type="number"
+            min={1}
+            value={itemPrice()}
+            onInput={(e) => setItemPrice(e.currentTarget.value)}
+            placeholder="例：500"
+            required
+            disabled={itemSubmitting()}
+          />
           <div class={styles.field}>
             <label for="item-category">カテゴリ</label>
             <Select
@@ -434,17 +424,15 @@ export default function MenuManager() {
               提供中
             </label>
           </div>
-          <div class={styles.field}>
-            <label for="item-sort">表示順</label>
-            <input
-              id="item-sort"
-              type="number"
-              min={0}
-              value={itemSortOrder()}
-              onInput={(e) => setItemSortOrder(Number(e.currentTarget.value))}
-              disabled={itemSubmitting()}
-            />
-          </div>
+          <Field
+            id="item-sort"
+            label="表示順"
+            type="number"
+            min={0}
+            value={itemSortOrder()}
+            onInput={(e) => setItemSortOrder(Number(e.currentTarget.value))}
+            disabled={itemSubmitting()}
+          />
           <div class={styles.field}>
             <label for="item-description">商品説明（任意）</label>
             <textarea

@@ -97,7 +97,7 @@
   padding: 0 0 0 var(--space-2);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-tax-row-gap);
 }
 
 .optionItem {

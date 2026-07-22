@@ -1,5 +1,5 @@
 import { apiFetch, jsonFetch } from "@order/core/client";
-import { Button, ConfirmDialog, ErrorAlert } from "@order/ui";
+import { Button, ConfirmDialog, ErrorAlert, Field } from "@order/ui";
 import { createSignal, For, onMount, Show } from "solid-js";
 import styles from "./OptionGroupManager.module.css";
 
@@ -260,41 +260,34 @@ export default function OptionGroupManager() {
           「サイズ」「トッピング」のように、複数の商品で使い回せる選択肢のまとまりです。
         </p>
         <form onSubmit={handleGroupSubmit} class={styles.form}>
-          <div class={styles.field}>
-            <label for="group-name">グループ名</label>
-            <input
-              id="group-name"
-              type="text"
-              value={groupName()}
-              onInput={(e) => setGroupName(e.currentTarget.value)}
-              placeholder="例：サイズ"
-              required
-              maxLength={100}
-              disabled={groupSubmitting()}
-            />
-          </div>
-          <div class={styles.field}>
-            <label for="group-min">最小選択数</label>
-            <input
-              id="group-min"
-              type="number"
-              min={0}
-              value={groupMinSelect()}
-              onInput={(e) => setGroupMinSelect(Number(e.currentTarget.value))}
-              disabled={groupSubmitting()}
-            />
-          </div>
-          <div class={styles.field}>
-            <label for="group-max">最大選択数</label>
-            <input
-              id="group-max"
-              type="number"
-              min={1}
-              value={groupMaxSelect()}
-              onInput={(e) => setGroupMaxSelect(Number(e.currentTarget.value))}
-              disabled={groupSubmitting()}
-            />
-          </div>
+          <Field
+            id="group-name"
+            label="グループ名"
+            value={groupName()}
+            onInput={(e) => setGroupName(e.currentTarget.value)}
+            placeholder="例：サイズ"
+            required
+            maxLength={100}
+            disabled={groupSubmitting()}
+          />
+          <Field
+            id="group-min"
+            label="最小選択数"
+            type="number"
+            min={0}
+            value={groupMinSelect()}
+            onInput={(e) => setGroupMinSelect(Number(e.currentTarget.value))}
+            disabled={groupSubmitting()}
+          />
+          <Field
+            id="group-max"
+            label="最大選択数"
+            type="number"
+            min={1}
+            value={groupMaxSelect()}
+            onInput={(e) => setGroupMaxSelect(Number(e.currentTarget.value))}
+            disabled={groupSubmitting()}
+          />
           <Button type="submit" disabled={groupSubmitting()}>
             {groupSubmitting() ? "追加中..." : "グループを追加"}
           </Button>

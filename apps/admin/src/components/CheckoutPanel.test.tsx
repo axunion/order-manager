@@ -181,8 +181,8 @@ describe("CheckoutPanel", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { findByRole } = render(() => <CheckoutPanel />);
-    const cashBtn = await findByRole("radio", { name: "現金" });
-    expect(cashBtn.getAttribute("aria-checked")).toBe("true");
+    const cashBtn = await findByRole("button", { name: "現金" });
+    expect(cashBtn.getAttribute("aria-pressed")).toBe("true");
 
     const checkoutBtn = await findByRole("button", { name: /会計完了/ });
     await user.click(checkoutBtn);
@@ -231,9 +231,9 @@ describe("CheckoutPanel", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { findByRole } = render(() => <CheckoutPanel />);
-    const methodBtn = await findByRole("radio", { name: label });
+    const methodBtn = await findByRole("button", { name: label });
     await user.click(methodBtn);
-    expect(methodBtn.getAttribute("aria-checked")).toBe("true");
+    expect(methodBtn.getAttribute("aria-pressed")).toBe("true");
 
     const checkoutBtn = await findByRole("button", { name: /会計完了/ });
     await user.click(checkoutBtn);

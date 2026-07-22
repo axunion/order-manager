@@ -7,6 +7,10 @@
   --color-primary-active: #1e3a8a;
   --color-primary-foreground: #ffffff;
   --color-primary-subtle: #eff4ff;
+  /* Overlays for content sitting directly on --color-primary (header chrome). */
+  --color-on-primary-subtle: rgb(255 255 255 / 0.2);
+  --color-on-primary-border: rgb(255 255 255 / 0.4);
+  --color-on-primary-muted: rgb(255 255 255 / 0.8);
 
   /* ── Neutrals — Cool Slate ─────────────────────────────────────────── */
   --color-background: #eef1f6;

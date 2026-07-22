@@ -51,6 +51,7 @@
     Meiryo, sans-serif;
   --text-chip: 0.8125rem; /* 13px — Category Nav Chip label */
   --space-chip-y: 0.375rem; /* 6px — Category Nav Chip vertical padding */
+  --space-tax-row-gap: 2px; /* Tax breakdown list row spacing (tighter than --space-1) */
 
   /* ── App-specific layout tokens ───────────────────────────────────── */
   --touch-target-min: 44px; /* WCAG 2.1 §2.5.5 */
