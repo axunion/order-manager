@@ -56,6 +56,12 @@ describe("jstDayRange", () => {
     expect(() => jstDayRange("2026/07/16")).toThrow();
     expect(() => jstDayRange("not-a-date")).toThrow();
   });
+
+  it("throws on a calendar-invalid date instead of silently rolling over", () => {
+    expect(() => jstDayRange("2024-02-30")).toThrow();
+    expect(() => jstDayRange("2026-13-01")).toThrow();
+    expect(() => jstDayRange("2026-01-32")).toThrow();
+  });
 });
 
 describe("toJstDateString", () => {

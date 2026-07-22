@@ -8,30 +8,50 @@ export const now = (): number => Date.now();
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 /**
+ * Parses a "YYYY-MM-DD" string, rejecting both malformed strings and
+ * calendar-invalid dates (e.g. "2024-02-30") — `Date.UTC` silently rolls
+ * those over into the next month rather than erroring, so the roundtrip
+ * is checked explicitly.
+ */
+function parseDateParts(dateStr: string): {
+  year: number;
+  month: number;
+  day: number;
+} {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  if (!match) {
+    throw new Error(`Invalid date string (expected YYYY-MM-DD): ${dateStr}`);
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    throw new Error(`Invalid calendar date: ${dateStr}`);
+  }
+  return { year, month, day };
+}
+
+/**
  * Returns the `[from, to)` Unix ms range covering a JST calendar day
  * (00:00 JST inclusive to 24:00 JST exclusive) for a "YYYY-MM-DD" date
  * string. Used to scope sales-history queries to a business day.
  */
 export function jstDayRange(dateStr: string): { from: number; to: number } {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
-  if (!match) {
-    throw new Error(`Invalid date string (expected YYYY-MM-DD): ${dateStr}`);
-  }
-  const [, year, month, day] = match;
-  const from =
-    Date.UTC(Number(year), Number(month) - 1, Number(day)) - JST_OFFSET_MS;
+  const { year, month, day } = parseDateParts(dateStr);
+  const from = Date.UTC(year, month - 1, day) - JST_OFFSET_MS;
   return { from, to: from + 24 * 60 * 60 * 1000 };
 }
 
 /** Parses a "YYYY-MM-DD" string into a UTC-midnight Date (calendar math only,
  * not an actual instant — JST conversion happens via jstDayRange below). */
 function parseDateStr(dateStr: string): Date {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
-  if (!match) {
-    throw new Error(`Invalid date string (expected YYYY-MM-DD): ${dateStr}`);
-  }
-  const [, year, month, day] = match;
-  return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  const { year, month, day } = parseDateParts(dateStr);
+  return new Date(Date.UTC(year, month - 1, day));
 }
 
 function formatDateStr(date: Date): string {

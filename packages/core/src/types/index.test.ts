@@ -55,13 +55,12 @@ describe("CreateItemInput description", () => {
     ).toThrow(z.ZodError);
   });
 
-  it("checks the length limit against the raw string, before trimming", () => {
+  it("checks the length limit against the trimmed string, not the raw one", () => {
     // 502 raw chars that trim down to exactly 500 non-whitespace chars are
-    // still rejected: max(500) runs before the trim transform.
+    // accepted: the trim transform runs before max(500).
     const description = ` ${"a".repeat(500)} `;
-    expect(() => CreateItemInput.parse({ ...baseCreate, description })).toThrow(
-      z.ZodError,
-    );
+    const result = CreateItemInput.parse({ ...baseCreate, description });
+    expect(result.description).toBe("a".repeat(500));
   });
 });
 

@@ -10,6 +10,19 @@ const displayName = z
   .transform((s) => s.trim())
   .pipe(z.string().min(1).max(100));
 
+/**
+ * Sort order used across menu categories/items/option groups/options.
+ * Upper bound is a sanity cap (no real menu approaches it), not a
+ * meaningful business constraint.
+ */
+const sortOrderValue = z.number().int().min(0).max(100_000);
+
+/** Price in JPY (tax-inclusive), > 0. Upper bound is a sanity cap. */
+const priceValue = z.number().int().positive().max(1_000_000);
+
+/** JPY delta applied to an item's unit price when an option is selected; may be negative. */
+const priceDeltaValue = z.number().int().min(-1_000_000).max(1_000_000);
+
 // ---------------------------------------------------------------------------
 // Stores
 // ---------------------------------------------------------------------------
@@ -48,8 +61,14 @@ export type EmailChangeInput = z.infer<typeof EmailChangeInput>;
 
 export const DeleteStoreInput = z.object({
   /** Must exactly match the store's current name — a server-side safeguard
-   * against an accidental or scripted delete, independent of client UI. */
-  confirm_name: z.string().min(1),
+   * against an accidental or scripted delete, independent of client UI.
+   * Trimmed so incidental leading/trailing whitespace (e.g. from a
+   * copy-paste) doesn't cause a false rejection; the actual authorization
+   * boundary is requireStore + requireOwner, not this string comparison. */
+  confirm_name: z
+    .string()
+    .transform((s) => s.trim())
+    .pipe(z.string().min(1)),
 });
 export type DeleteStoreInput = z.infer<typeof DeleteStoreInput>;
 
@@ -101,13 +120,13 @@ export interface StaffMemberResponse {
 
 export const CreateCategoryInput = z.object({
   name: displayName,
-  sort_order: z.number().int().min(0).default(0),
+  sort_order: sortOrderValue.default(0),
 });
 export type CreateCategoryInput = z.infer<typeof CreateCategoryInput>;
 
 export const UpdateCategoryInput = z.object({
   name: displayName,
-  sort_order: z.number().int().min(0).default(0),
+  sort_order: sortOrderValue.default(0),
 });
 export type UpdateCategoryInput = z.infer<typeof UpdateCategoryInput>;
 
@@ -125,32 +144,32 @@ export interface CategoryResponse {
 /** Trimmed description, ≤ 500 chars; empty after trimming normalizes to null. */
 const itemDescription = z
   .string()
-  .max(500)
   .nullable()
   .transform((s) => {
     if (s === null) return null;
     const trimmed = s.trim();
     return trimmed.length === 0 ? null : trimmed;
-  });
+  })
+  .pipe(z.string().max(500).nullable());
 
 export const CreateItemInput = z.object({
   name: displayName,
   /** Price in JPY (tax-inclusive). Must be > 0. */
-  price: z.number().int().positive(),
+  price: priceValue,
   is_available: z.boolean().default(true),
   category_id: z.string().nullable().default(null),
-  sort_order: z.number().int().min(0).default(0),
+  sort_order: sortOrderValue.default(0),
   description: itemDescription.optional().default(null),
 });
 export type CreateItemInput = z.infer<typeof CreateItemInput>;
 
 export const UpdateItemInput = z.object({
   name: displayName,
-  price: z.number().int().positive(),
+  price: priceValue,
   is_available: z.boolean(),
   // optional: omitting preserves the current DB value; null clears it.
   category_id: z.string().nullable().optional(),
-  sort_order: z.number().int().min(0).optional(),
+  sort_order: sortOrderValue.optional(),
   description: itemDescription.optional(),
   // optional: omitting preserves current attachments; [] detaches all groups.
   option_group_ids: z.array(z.string()).optional(),
@@ -190,7 +209,7 @@ const optionGroupSelectRefinement = {
 export const CreateOptionGroupInput = z
   .object({
     name: displayName,
-    sort_order: z.number().int().min(0).default(0),
+    sort_order: sortOrderValue.default(0),
     ...optionGroupSelectFields,
   })
   .refine(
@@ -205,7 +224,7 @@ export type CreateOptionGroupInput = z.infer<typeof CreateOptionGroupInput>;
 export const UpdateOptionGroupInput = z
   .object({
     name: displayName,
-    sort_order: z.number().int().min(0).default(0),
+    sort_order: sortOrderValue.default(0),
     ...optionGroupSelectFields,
   })
   .refine(
@@ -226,15 +245,15 @@ export interface OptionGroupResponse {
 export const CreateOptionInput = z.object({
   name: displayName,
   /** JPY delta applied to the item's unit price when selected; may be negative. */
-  price_delta: z.number().int(),
-  sort_order: z.number().int().min(0).default(0),
+  price_delta: priceDeltaValue,
+  sort_order: sortOrderValue.default(0),
 });
 export type CreateOptionInput = z.infer<typeof CreateOptionInput>;
 
 export const UpdateOptionInput = z.object({
   name: displayName,
-  price_delta: z.number().int(),
-  sort_order: z.number().int().min(0).default(0),
+  price_delta: priceDeltaValue,
+  sort_order: sortOrderValue.default(0),
 });
 export type UpdateOptionInput = z.infer<typeof UpdateOptionInput>;
 
@@ -292,13 +311,13 @@ export interface SeatResponse {
 /** Trimmed customer note, ≤ 200 chars; empty after trimming normalizes to null. */
 const orderItemNote = z
   .string()
-  .max(200)
   .nullable()
   .transform((s) => {
     if (s === null) return null;
     const trimmed = s.trim();
     return trimmed.length === 0 ? null : trimmed;
-  });
+  })
+  .pipe(z.string().max(200).nullable());
 
 export const AddOrderItemsInput = z.object({
   items: z
@@ -307,9 +326,9 @@ export const AddOrderItemsInput = z.object({
         menu_item_id: z
           .string()
           .transform((s) => s.trim())
-          .pipe(z.string().min(1)),
+          .pipe(z.string().min(1).max(64)),
         quantity: z.number().int().min(1).max(99),
-        option_ids: z.array(z.string()).max(20).default([]),
+        option_ids: z.array(z.string().max(64)).max(20).default([]),
         note: orderItemNote.optional().default(null),
       }),
     )
@@ -395,20 +414,20 @@ export interface AdminOrderResponse {
 /** Trimmed discount reason, ≤ 200 chars; empty after trimming normalizes to null. */
 const discountReason = z
   .string()
-  .max(200)
   .nullable()
   .transform((s) => {
     if (s === null) return null;
     const trimmed = s.trim();
     return trimmed.length === 0 ? null : trimmed;
-  });
+  })
+  .pipe(z.string().max(200).nullable());
 
 export const CreatePaymentInput = z
   .object({
     order_id: z
       .string()
       .transform((s) => s.trim())
-      .pipe(z.string().min(1)),
+      .pipe(z.string().min(1).max(64)),
     /** Recorded at a staff-operated terminal; no processor integration. */
     method: z.enum(["cash", "card", "qr"]).default("cash"),
     /** Whole-check discount; server bounds it to [0, items total]. */
