@@ -3,6 +3,8 @@
 pnpm + Cloudflare Workers monorepo. SolidJS SPA frontends + a Hono API Worker
 on D1, with shared logic in `packages/*`.
 
+Bias toward caution over speed; on trivial tasks, use judgment.
+
 ## Approach
 
 - **Think before coding.** State assumptions. Make routine judgment calls yourself and

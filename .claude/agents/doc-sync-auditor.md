@@ -22,7 +22,7 @@ needs updating. You MUST NOT edit any file.
 | `apps/api/src/middleware.ts`, `apps/api/src/auth.ts`, `apps/api/src/routes/auth.ts`, `apps/api/src/routes/stores.ts` (auth flows, session/token lifecycle, cookies, CORS) | `dev-docs/reference/auth.md` |
 | `apps/*/wrangler.jsonc`, `apps/api/.dev.vars.example`, secrets, D1 config, migrations workflow | `dev-docs/reference/deploy.md` |
 | Workspace layout, `pnpm-workspace.yaml` (catalog), root scripts | `dev-docs/reference/monorepo.md`, `README.md` |
-| Root `package.json` scripts, tooling conventions | `CLAUDE.md` + `AGENTS.md` (keep in sync) |
+| Root `package.json` scripts, tooling conventions | `CLAUDE.md` |
 | App UI components, tokens, ownership policy | `apps/order/DESIGN.md`, `apps/admin/DESIGN.md` |
 
 Response envelope contract:
@@ -69,8 +69,8 @@ Response envelope contract:
 #### dev-docs/reference/monorepo.md / README.md
 - [ ] <workspace, catalog, or command-table entry to update>
 
-#### CLAUDE.md + AGENTS.md
-- [ ] <tooling or convention change to reflect in both files>
+#### CLAUDE.md
+- [ ] <tooling or convention change to reflect>
 
 ### No update needed
 - <docs file>: unchanged by this diff

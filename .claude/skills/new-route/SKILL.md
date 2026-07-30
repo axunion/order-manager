@@ -17,11 +17,8 @@ description: Scaffold a new Hono API route with Zod validation and a correspondi
 - Mount the router in `apps/api/src/app.ts`
 
 **Test file** (`apps/api/src/routes/<name>.test.ts`):
-- Start with `/// <reference types="@cloudflare/vitest-pool-workers/types" />`
-- Import `{ env } from "cloudflare:workers"`
-- Use `app.request(path, init, env)` — always pass `env` as the third argument
-- Import helpers from `../test-helpers`: `seedStore`, `withAuth`, `jsonInit`, `extractSessionToken`
-- Each test is fully self-contained; use `crypto.randomUUID()` for unique email/name seeds to avoid D1 UNIQUE conflicts across tests in the same pool run
+- Follow the Workers runtime test conventions in `.claude/rules/testing.md` (reference
+  import, `env` binding, `../test-helpers`, `crypto.randomUUID()` seeds)
 
 ## Security checklist (tenant isolation)
 
