@@ -57,16 +57,15 @@ order either way.
      agent, passing the proposal path and the slice's test files. This
      is the loop's safeguard against tests that pass trivially or skip
      the proposal's Testing section.
-   - Touched auth, session/token handling, or CORS →
-     `security-reviewer` agent.
-   - Touched tenant-scoped queries or routes, or added a table →
-     `tenant-security-reviewer` agent (the deep isolation audit; the
-     checklist in `/db-migrate` is only the quick pass for schema
-     slices).
+   - Touched tenant-scoped queries/routes, added a table, or touched
+     auth/session/token handling, CORS, or D1 query construction →
+     `tenant-security-reviewer` agent (the deep security + isolation
+     audit; the checklist in `/db-migrate` is only the quick pass for
+     schema slices).
    - Touched SolidJS components, `packages/ui`, or CSS →
      `ui-reviewer` agent.
    Triggers are per-surface, so a typical slice runs one or two
-   reviewers, not all four. When more than one reviewer matches, launch
+   reviewers, not all three. When more than one reviewer matches, launch
    them in parallel — they are read-only and independent.
 5. **Commit** following the CLAUDE.md commit format. Never bypass
    lefthook (it re-runs Biome and the full test suite). Committing at

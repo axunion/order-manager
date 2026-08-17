@@ -1,7 +1,7 @@
 ---
 name: "doc-sync-auditor"
 description: Read-only documentation drift auditor. Given a diff or list of changed source files, identifies which dev-docs/ files need updating and exactly what to add or revise. Invoke with "run doc-sync-auditor on <files or diff>" after implementing a feature or schema change.
-model: haiku
+model: sonnet
 tools:
   - Read
   - Bash

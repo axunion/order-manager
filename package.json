@@ -34,6 +34,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.0",
+    "@playwright/test": "catalog:",
     "lefthook": "^2.1.9",
     "typescript": "^6.0.3"
   }

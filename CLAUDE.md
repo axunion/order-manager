@@ -10,9 +10,8 @@ Bias toward caution over speed; on trivial tasks, use judgment.
 - **Think before coding.** State assumptions. Make routine judgment calls yourself and
   note them; ask only when different interpretations would lead to materially different
   work. If a simpler path exists, say so and push back when warranted.
-- **Simplest thing that works.** Write the minimum code that solves the stated problem —
-  nothing speculative. No unasked-for abstractions, flexibility, or error handling for
-  impossible cases. If 200 lines could be 50, rewrite it.
+- **Simplest thing that works.** No unasked-for abstractions, flexibility, or error
+  handling for impossible cases — if 200 lines could be 50, rewrite it.
 - **Surgical changes.** Every changed line should trace to the request. Don't refactor,
   reformat, or "improve" adjacent code that isn't broken; match the surrounding style.
   Remove only the imports and symbols your change orphaned; leave unrelated dead code alone
@@ -47,6 +46,57 @@ Run `pnpm check` before committing.
   criteria.
 - Test observable outcomes and edge cases, not implementation details.
 - Each test is fully self-contained; no shared mutable state between tests.
+- **Structural correctness** (state transitions, API responses, rendered DOM
+  behavior) belongs in the automated suite and runs via `pnpm check` / `pnpm test`.
+  **Visual/subjective judgment** ("does this look right", spacing, color) is not
+  something a script can reliably judge — that's a human-in-the-loop check: use
+  `dev-docs/reference/manual-smoke-test.md` for the full cross-app walkthrough, or
+  the `inspector` agent (see Subagents below) for an isolated change. Persist a new
+  automated regression test only for a durable flow worth protecting, ideally one
+  with evidence it can break — not for a one-off "let me verify this" check.
+
+## Subagents
+
+Three tiers of agent involvement, based on how risky and contained the change is.
+**The main conversation always writes the code, at every tier** — no agent here
+implements anything; each one checks or investigates work it didn't do, which is what
+makes it safe to spawn without asking first.
+
+- **Trivial** (typos, config tweaks, one-line fixes): implement directly, no agents.
+- **Contained** (a self-contained change in one area): implement directly. Optionally
+  run the built-in `Explore` agent first to confirm a convention, or `researcher` when
+  the change leans on an unfamiliar external API. Afterward, **without asking first**,
+  run `reviewer` and `tester` in parallel, plus `tenant-security-reviewer` or
+  `ui-reviewer` if their surface was touched (see the trigger table in
+  `dev-docs/reference/implementation-loop.md`). `reviewer` always
+  runs — it covers scope, simplicity, and general correctness that the surface-specific
+  reviewers don't; they add a deeper, surface-specific pass on top when applicable.
+  All of these agents are read-only or test-only, so running them costs little and
+  they exist specifically to catch the blind spot of reviewing your own work.
+- **Large, ambiguous, or high-risk** (spans many files, touches
+  `packages/core`, `apps/api` auth/payment/tenant logic substantially, or the task
+  itself is genuinely ambiguous):
+  - If it's a roadmap item, use `/implement-item` — `dev-docs/reference/implementation-loop.md`
+    is the procedure of record and already wires in the matching reviewers per slice;
+    this section doesn't change or duplicate that gate list.
+  - Otherwise, propose the built-in `/goal` command to the user rather than assuming
+    it's wanted (a `/goal` run is a real chunk of time/tokens). Write its completion
+    condition to explicitly name `reviewer` and `tester` — e.g. "implement X; done when
+    `reviewer` reports no findings and `tester` reports check + test green" — since
+    `/goal`'s evaluator only pattern-matches the condition text and has no built-in
+    knowledge that these agents exist.
+
+**Visual-verification gate** (separate axis from the tiers above — keyed to whether
+the change touches rendered UI, not to how risky the change is): no rendered surface
+touched → skip; a small, isolated, single-property UI tweak → a quick manual glance at
+the running app is enough; layout that can vary by viewport, a change spanning
+multiple components sharing styles, or chasing a reported visual bug → run the
+`inspector` agent. This needs no confirmation to run, but isn't automatic for every UI
+change either — it costs real time (dev servers + browser), so invoking it is a
+judgment call each time. `inspector` is a per-change, throwaway check; it doesn't
+overlap with `dev-docs/reference/manual-smoke-test.md` (the full manual cross-app
+walkthrough) or the still-draft `dev-docs/proposals/browser-e2e.md` (a persistent
+regression suite that explicitly excludes visual regression checking from its scope).
 
 ## Language
 

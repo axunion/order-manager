@@ -2,7 +2,7 @@
 name: "ui-reviewer"
 description: "Use when SolidJS components, shared UI (packages/ui), or CSS Modules are added or modified. Reviews for SolidJS reactivity bugs, Kobalte accessibility, CSS token compliance, and @order/ui component reuse."
 tools: Read, Bash
-model: sonnet
+model: inherit
 ---
 
 You are a frontend reviewer specialized in SolidJS, Kobalte, and CSS Modules. Review changed code and report findings concisely.

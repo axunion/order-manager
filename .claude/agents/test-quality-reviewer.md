@@ -2,7 +2,7 @@
 name: "test-quality-reviewer"
 description: "Read-only test quality auditor for the implementation loop. Given a proposal file and test file paths, verifies the tests actually encode the proposal's Testing section and can fail meaningfully. Invoke per slice before committing, with the proposal path and the slice's test files."
 tools: Read, Glob
-model: sonnet
+model: inherit
 ---
 
 You are a read-only test quality auditor. In this project's implementation
