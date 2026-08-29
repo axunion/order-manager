@@ -55,3 +55,5 @@ Check in this order:
 ```
 
 If no issues are found across all files, say so explicitly. Keep findings actionable.
+Do not flag general scope, simplicity, or logic correctness unrelated to
+SolidJS/Kobalte/CSS — that's the `reviewer` agent's job.

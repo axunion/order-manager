@@ -63,19 +63,20 @@ implements anything; each one checks or investigates work it didn't do, which is
 makes it safe to spawn without asking first.
 
 - **Trivial** (typos, config tweaks, one-line fixes): implement directly, no agents.
-- **Contained** (a self-contained change in one area): implement directly. Optionally
-  run the built-in `Explore` agent first to confirm a convention, or `researcher` when
-  the change leans on an unfamiliar external API. Afterward, **without asking first**,
-  run `reviewer` and `tester` in parallel, plus `tenant-security-reviewer` or
-  `ui-reviewer` if their surface was touched (see the trigger table in
-  `dev-docs/reference/implementation-loop.md`). `reviewer` always
-  runs — it covers scope, simplicity, and general correctness that the surface-specific
-  reviewers don't; they add a deeper, surface-specific pass on top when applicable.
-  All of these agents are read-only or test-only, so running them costs little and
-  they exist specifically to catch the blind spot of reviewing your own work.
-- **Large, ambiguous, or high-risk** (spans many files, touches
-  `packages/core`, `apps/api` auth/payment/tenant logic substantially, or the task
-  itself is genuinely ambiguous):
+- **Non-trivial but contained** (a self-contained change in one area): implement
+  directly. Optionally run the built-in `Explore` agent first to confirm a convention,
+  or `researcher` when the change leans on an unfamiliar external API (Hono/Cloudflare
+  Workers, Drizzle/D1, SolidJS, Kobalte). Afterward, **without asking first**, run
+  `reviewer` and `tester` in parallel, plus `tenant-security-reviewer` or `ui-reviewer`
+  if their surface was touched (see the trigger table in
+  `dev-docs/reference/implementation-loop.md`). `reviewer` always runs — it covers
+  scope, simplicity, and general correctness that the surface-specific reviewers don't;
+  they add a deeper, surface-specific pass on top when applicable. All of these agents
+  are read-only or test-only, so running them costs little and they exist specifically
+  to catch the blind spot of reviewing your own work.
+- **Large, ambiguous, or high-risk** (spans many files, touches `packages/core`,
+  `apps/api` auth/payment/tenant logic substantially, or the task itself is genuinely
+  ambiguous):
   - If it's a roadmap item, use `/implement-item` — `dev-docs/reference/implementation-loop.md`
     is the procedure of record and already wires in the matching reviewers per slice;
     this section doesn't change or duplicate that gate list.
@@ -85,6 +86,15 @@ makes it safe to spawn without asking first.
     `reviewer` reports no findings and `tester` reports check + test green" — since
     `/goal`'s evaluator only pattern-matches the condition text and has no built-in
     knowledge that these agents exist.
+
+Note what stays constant across all three tiers: the main conversation writes the code
+every time. Only the scaffolding around it changes — none, then verification after,
+then research before and verification after with iteration. There is deliberately no
+`implementer` agent: implementation needs the full context of planning and iteration
+built up in this conversation, a write agent enforces no tool restriction worth having,
+and each retry pass would re-spawn it with no memory of the code it just wrote. What
+`reviewer`/`tester`/`researcher`/`inspector` provide — an opinion from something that
+didn't write the code — depends on none of them writing it either.
 
 **Visual-verification gate** (separate axis from the tiers above — keyed to whether
 the change touches rendered UI, not to how risky the change is): no rendered surface

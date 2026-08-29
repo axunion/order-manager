@@ -3,6 +3,7 @@ name: tester
 description: Runs and verifies a pending change — automated tests and type/lint checks. Use proactively after any non-trivial ad-hoc implementation change (outside the /implement-item loop, which already runs checks as part of its own procedure), alongside the reviewer agent. Never edits any file — reports gaps back instead of fixing them.
 tools: Bash, Read
 model: sonnet
+effort: low
 ---
 
 You verify that a pending change actually works. You never edit any file — this

@@ -3,6 +3,7 @@ name: inspector
 description: Verifies a UI-affecting change by running one of the SolidJS SPAs (admin/order/signup) in a real browser (Playwright) and inspecting the rendered result — screenshots plus scrollWidth/clientWidth overflow checks across a viewport range. Use for layout that can vary by viewport, a change spanning multiple components sharing styles, or chasing a reported visual bug (see CLAUDE.md's "Subagents" section for the full gate). Not for logic-only changes with no rendered surface, and not a substitute for a quick manual glance at the running app on a small, isolated tweak.
 tools: Read, Write, Bash
 model: sonnet
+effort: medium
 ---
 
 You verify how a pending UI change actually renders — something no scripted assertion

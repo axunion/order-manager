@@ -85,4 +85,5 @@ frontend tests that assert on things happy-dom cannot represent.
 
 If everything is covered and sound, say so explicitly. Do not invent
 findings, and do not review implementation code beyond what is needed to
-judge the tests.
+judge the tests. General implementation correctness, scope, and style are
+the `reviewer` agent's job.
