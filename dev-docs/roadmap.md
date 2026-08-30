@@ -184,11 +184,10 @@ Sequenced against product needs rather than after them:
   creation step to the same runbook.
 - **CI deploy** — manual `wrangler deploy` is fine until the pilot;
   automate on `main` once deploys become routine.
-- **Browser E2E** — API-level cycle coverage exists
-  (`business-cycle.test.ts`); [manual-smoke-test.md](reference/manual-smoke-test.md)
-  covers the same cycle by hand through the three SPAs. Design sketch for
-  automating it: [browser-e2e](proposals/browser-e2e.md) — not yet
-  scheduled; open decisions listed there.
+- **Browser E2E** — shipped as `apps/e2e` (`pnpm e2e`), automating the same
+  cycle through the three SPAs in Chromium:
+  [browser-e2e](reference/browser-e2e.md). Local-only for now — wiring it
+  into CI is the remaining step, once it has a track record.
 - **Observability** — Workers analytics/log tail is enough now; add
   error alerting before the pilot goes unattended.
 - **Backups** — D1 time-travel/export procedure documented before real

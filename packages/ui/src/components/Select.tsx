@@ -4,12 +4,17 @@ import styles from "./Select.module.css";
 type SelectOption = { value: string; label: string };
 
 /**
- * Every usage must give the trigger an accessible name: either pass `id`
- * and pair it with an external `<label for={id}>` (labels associate with
- * button elements, which is what the trigger renders as), or pass
- * `aria-label` directly for cases with no visible label. Neither is
- * enforced by the type — TypeScript can't verify a DOM label association —
- * so this is left as a contract for callers to honor.
+ * Every usage must pass `aria-label`. An external `<label for={id}>` is not
+ * enough on its own, even though the trigger renders as a labelable button:
+ * Kobalte gives the trigger its own `aria-labelledby` pointing at the
+ * selected-value text, and that wins over the `<label for>` association, so
+ * the control is announced as only its current value ("-- なし --") with no
+ * hint of what it selects. Passing `aria-label` makes the accessible name
+ * "<label> <value>" (e.g. "カテゴリ -- なし --"). Keep the visible
+ * `<label for={id}>` as well — it still drives click-to-focus.
+ *
+ * Not enforced by the type — TypeScript can't verify a DOM label
+ * association — so this is left as a contract for callers to honor.
  */
 interface SelectProps {
   options: SelectOption[];

@@ -105,8 +105,9 @@ multiple components sharing styles, or chasing a reported visual bug → run the
 change either — it costs real time (dev servers + browser), so invoking it is a
 judgment call each time. `inspector` is a per-change, throwaway check; it doesn't
 overlap with `dev-docs/reference/manual-smoke-test.md` (the full manual cross-app
-walkthrough) or the still-draft `dev-docs/proposals/browser-e2e.md` (a persistent
-regression suite that explicitly excludes visual regression checking from its scope).
+walkthrough) or the `apps/e2e` Playwright suite (`pnpm e2e`, see
+`dev-docs/reference/browser-e2e.md` — a persistent regression suite that
+explicitly excludes visual regression checking from its scope).
 
 ## Language
 

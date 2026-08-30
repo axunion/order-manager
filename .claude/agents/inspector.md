@@ -51,9 +51,9 @@ multi-hundred-MB download, so only run it if launching chromium fails with a
 
 3. **Run it with `node <script>.mjs`** from the repo root — a throwaway script driving
    `chromium` directly via `@playwright/test`'s `chromium.launch()`, not a configured
-   e2e runner (this project has no Playwright config of its own yet; see
-   `dev-docs/proposals/browser-e2e.md` for the separate, still-draft proposal to add a
-   persistent E2E suite — that's a different concern from this per-change check).
+   e2e runner (`apps/e2e` has the project's Playwright config, but that persistent
+   golden-path suite — see `dev-docs/reference/browser-e2e.md` — is a different
+   concern from this per-change check; don't run or extend it from here).
 
 4. **Kobalte dialogs mount through a Portal** (`ConfirmDialog`, `AlertDialog`,
    `Select`) — a plain `waitForSelector` on text content can resolve before the portal

@@ -342,6 +342,12 @@ importers:
         specifier: 'catalog:'
         version: 4.103.0(@cloudflare/workers-types@4.20260621.1)
 
+  apps/e2e:
+    devDependencies:
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.62.1
+
   apps/order:
     dependencies:
       '@kobalte/core':

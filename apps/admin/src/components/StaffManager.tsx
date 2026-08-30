@@ -99,6 +99,7 @@ export default function StaffManager() {
             </label>
             <Select
               id="staff-invite-role"
+              aria-label="権限"
               options={ROLE_OPTIONS}
               value={role()}
               onChange={setRole}
