@@ -83,14 +83,26 @@ INSERT INTO subscriptions (id, store_id, product, status, created_at)
 SELECT
   lower(substr(h, 1, 8) || '-' || substr(h, 9, 4) || '-4' || substr(h, 14, 3)
         || '-a' || substr(h, 18, 3) || '-' || substr(h, 21, 12)),
-  store_id, 'order', 'active', CAST(unixepoch('subsec') * 1000 AS INTEGER)
-FROM (SELECT id AS store_id, hex(randomblob(16)) AS h FROM stores);
+  store_id, 'order', 'active', CAST(strftime('%s', 'now') AS INTEGER) * 1000
+FROM (
+  SELECT id AS store_id, hex(randomblob(16)) AS h
+  FROM stores
+  WHERE NOT EXISTS (
+    SELECT 1 FROM subscriptions s
+    WHERE s.store_id = stores.id AND s.product = 'order'
+  )
+);
 ```
 
 This is the only place in the repo where a timestamp comes from SQL
 rather than `Date.now()` in the Worker — a backfill has no request
-context. New stores get their `order` row inside the existing
-registration write in `apps/api/src/routes/stores.ts`.
+context; `strftime` gives second precision, which is enough for one.
+The `NOT EXISTS` guard makes the statement replayable, so a partially
+applied migration can be re-run instead of aborting on the
+`(store_id, product)` unique index. New stores get their `order` row
+inside the existing registration write in
+`apps/api/src/routes/stores.ts`, and the same file's registration
+rollback must delete the subscription before the store it references.
 
 **Existing order-product routes are not gated.** Every store holds
 `order`, so a gate there would only add a D1 read per request and put
@@ -322,7 +334,11 @@ Following `docs/reference/implementation-loop.md`; one slice = one commit.
    (schema and its single consumer are too small to split).
 2. Shift-domain migration (the nine tables above).
 3. `packages/core`: types + `domain/shift.ts`.
-4. API: positions, members, templates.
+4. API: positions, members, templates. Carries an obligation from slice
+   1: `requireEntitlement`'s tests mount it on a router built in the test
+   file (no shift route existed yet), so this slice owes at least one 403
+   asserted through a real endpoint — that is what catches a router that
+   forgets the gate.
 5. API: periods, availability.
 6. API: schedule and shifts, plus the `SHIFT_ORIGIN` / verify-redirect
    change.
@@ -359,8 +375,9 @@ Following `docs/reference/implementation-loop.md`; one slice = one commit.
 - `requireEntitlement`: a store with no `shift` subscription gets 403
   `FORBIDDEN` on a shift route; with one, 200. A `suspended` shift
   subscription is also 403.
-- The migration backfill: a store seeded before the shift tables has an
-  `order` subscription, and newly registered stores get one.
+- Registration writes exactly one `order` subscription (`active`) for the
+  new store; the account hard-delete removes it before the store, and
+  leaves another store's subscription alone.
 - Every shift resource: happy path, 400 on invalid body, 401 with no
   cookie, **403 for a staff session on an owner-only route**, and
   **404 for another store's row** (positions, patterns, requirements,
@@ -400,11 +417,24 @@ Following `docs/reference/implementation-loop.md`; one slice = one commit.
   (`vi.spyOn(URL, "createObjectURL"/"revokeObjectURL")` plus a stubbed
   `HTMLAnchorElement.prototype.click`, as in the sales-report tests).
 
-**Deliberately untested:** the overlap guard's check-then-act race (two
-concurrent `POST /shifts` for the same member and slot). Like the
-last-owner guard in staff accounts, it is defense in depth verified by
-review — a concurrency test here would be flaky and D1 gives no
-range-exclusion constraint to lean on.
+**Deliberately untested:**
+
+- The overlap guard's check-then-act race (two concurrent `POST /shifts`
+  for the same member and slot). Like the last-owner guard in staff
+  accounts, it is defense in depth verified by review — a concurrency
+  test here would be flaky and D1 gives no range-exclusion constraint to
+  lean on.
+- The grandfathering backfill. The Workers harness applies migrations to
+  an empty database, so the `INSERT … SELECT` selects no rows there and
+  any assertion would pass vacuously. Verified instead against local D1
+  by seeding two pre-migration stores (one `active`, one `pending`) and
+  running the statement from the migration file: one row per store,
+  ids 36-char UUID-shaped and distinct, `created_at` 13 digits (ms), and
+  a second run inserting nothing.
+- The registration rollback path (`issueMagicLink` returning null), which
+  now also deletes the subscription. Reaching it needs the hourly cap to
+  trip on a brand-new `member_id`; it was already untested before this
+  item.
 
 **Not needed:** no `apps/e2e` spec in v1. The Playwright suite is not in
 CI yet and its golden path is the order product; add a shift path when

@@ -48,6 +48,57 @@ export const stores = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
+// subscriptions — which products a store has bought
+// ---------------------------------------------------------------------------
+export const subscriptions = sqliteTable(
+  "subscriptions",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    /**
+     * Product the store subscribes to:
+     *   order — mobile ordering and checkout; every store has this
+     *   shift — staff shift scheduling, gated by requireEntitlement("shift")
+     */
+    product: text("product", { enum: ["order", "shift"] }).notNull(),
+    /** Plan name; reserved for per-plan limits, unused today. */
+    plan: text("plan"), // nullable
+    /**
+     * active    — the store may use the product
+     * suspended — kept on file but not usable
+     *
+     * Distinct from stores.status: that disables the account, this one
+     * disables a single product.
+     */
+    status: text("status", { enum: ["active", "suspended"] })
+      .notNull()
+      .default("active"),
+    created_at: integer("created_at")
+      .notNull()
+      .$defaultFn(() => Date.now()), // Unix ms
+  },
+  (table) => [
+    // One row per (store, product) — also the lookup requireEntitlement uses.
+    uniqueIndex("idx_subscriptions_store_product").on(
+      table.store_id,
+      table.product,
+    ),
+    check(
+      "subscriptions_product_chk",
+      sql`${table.product} IN ('order', 'shift')`,
+    ),
+    check(
+      "subscriptions_status_chk",
+      sql`${table.status} IN ('active', 'suspended')`,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // menu_categories
 // ---------------------------------------------------------------------------
 export const menuCategories = sqliteTable(

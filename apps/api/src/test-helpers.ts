@@ -65,6 +65,14 @@ export async function seedStore(
     expires_at: now() + SESSION_TTL_MS,
   });
 
+  // Mirror registration: every store subscribes to the order product.
+  // Tests that need another product insert their own row.
+  await db.insert(schema.subscriptions).values({
+    id: newId(),
+    store_id: id,
+    product: "order",
+  });
+
   return { id, member_id, session_token };
 }
 

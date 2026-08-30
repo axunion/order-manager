@@ -47,6 +47,11 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
           email,
           role: "owner",
         }),
+        db.insert(schema.subscriptions).values({
+          id: newId(),
+          store_id: id,
+          product: "order",
+        }),
       ]);
     } catch {
       // Determine which UNIQUE constraint failed for an accurate error message.
@@ -93,10 +98,16 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
       token = null;
     }
     if (!token) {
-      // Compensate by removing the store + member rows so the user can retry
-      // registration without hitting "email already registered".
+      // Compensate by removing the store + member + subscription rows so the
+      // user can retry registration without hitting "email already
+      // registered". The subscription must go before the store it references,
+      // or the FK aborts the whole batch and leaves the rows it was meant to
+      // clear.
       await db.batch([
         db.delete(schema.members).where(eq(schema.members.id, memberId)),
+        db
+          .delete(schema.subscriptions)
+          .where(eq(schema.subscriptions.store_id, id)),
         db.delete(schema.stores).where(eq(schema.stores.id, id)),
       ]);
       return errorResponse(
@@ -383,7 +394,9 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
    * as a negligible gap given how narrow the window is; not worth the
    * complexity of folding ~25 statements into one db.batch to close it.
    * sessions/magic_link_tokens/seats.qr_token are excluded from the export
-   * (auth/bearer secrets, not business data) but are deleted.
+   * (auth/bearer secrets, not business data) but are deleted. subscriptions
+   * are likewise deleted but not exported — entitlement records, not the
+   * store's own data.
    *
    * Response: 200 { data: { export: { store, members, menu_categories,
    *   menu_items, option_groups, options, menu_item_option_groups, seats,
@@ -536,6 +549,9 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
           .where(eq(schema.magicLinkTokens.store_id, storeId)),
         db.delete(schema.sessions).where(eq(schema.sessions.store_id, storeId)),
         db.delete(schema.members).where(eq(schema.members.store_id, storeId)),
+        db
+          .delete(schema.subscriptions)
+          .where(eq(schema.subscriptions.store_id, storeId)),
         db.delete(schema.stores).where(eq(schema.stores.id, storeId)),
       ]);
 

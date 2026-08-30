@@ -599,6 +599,10 @@ describe("DELETE /api/stores/me", () => {
     expect(body.data.export).not.toHaveProperty("sessions");
     expect(body.data.export).not.toHaveProperty("magic_link_tokens");
 
+    // subscriptions are entitlement records, not the store's own data —
+    // deleted below, but deliberately absent from the export.
+    expect(body.data.export).not.toHaveProperty("subscriptions");
+
     // Every row is actually gone from D1.
     const db = createDb(env.DB);
     const storeRows = await db
@@ -621,6 +625,7 @@ describe("DELETE /api/stores/me", () => {
       schema.orderItemOptions,
       schema.staffCalls,
       schema.payments,
+      schema.subscriptions,
     ];
     for (const table of storeScopedTables) {
       const rows = await db
@@ -665,5 +670,11 @@ describe("DELETE /api/stores/me", () => {
       .from(schema.seats)
       .where(eq(schema.seats.store_id, storeB.id));
     expect(storeBSeats).toHaveLength(1);
+
+    const storeBSubscriptions = await db
+      .select()
+      .from(schema.subscriptions)
+      .where(eq(schema.subscriptions.store_id, storeB.id));
+    expect(storeBSubscriptions).toHaveLength(1);
   });
 });
