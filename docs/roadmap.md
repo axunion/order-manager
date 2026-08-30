@@ -74,8 +74,10 @@ design sketch in `proposals/`.
 ## Next product
 
 - **Shift management** — a second product for the same stores (staff
-  scheduling), sold independently via a new entitlements layer. Feature
-  scope agreed; domain model and API design still open. Proposal:
+  scheduling), sold independently via a new entitlements layer. Ready to
+  implement: v1 covers availability collection → schedule building →
+  publish, in a new `apps/shift` SPA; post-publish changes (absence,
+  swap, open shifts) are a v2 follow-up. Proposal:
   [shift-management](proposals/shift-management.md).
 
 ## Engineering track (parallel, not a phase)
