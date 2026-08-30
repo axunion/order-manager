@@ -71,6 +71,13 @@ design sketch in `proposals/`.
    store count makes SQL-by-hand impractical. Sketch:
    [team-and-scale](proposals/team-and-scale.md).
 
+## Next product
+
+- **Shift management** — a second product for the same stores (staff
+  scheduling), sold independently via a new entitlements layer. Feature
+  scope agreed; domain model and API design still open. Proposal:
+  [shift-management](proposals/shift-management.md).
+
 ## Engineering track (parallel, not a phase)
 
 Remaining items, sequenced against product needs:
