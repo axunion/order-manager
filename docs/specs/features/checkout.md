@@ -133,7 +133,7 @@ renders both so staff can double-check the bill before settling it.
 
 - **No split billing** — one order, one payment. Deferred to backlog;
   revisit only on real demand (see
-  `dev-docs/proposals/payments-expansion.md`).
+  `docs/proposals/payments-expansion.md`).
 - **No true payment-processor integration** — card/QR are recorded, not
   actually charged through a processor. (Backlog; evaluate only if
   pilot restaurants don't already own a terminal.)

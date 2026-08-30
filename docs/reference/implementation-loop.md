@@ -7,7 +7,7 @@ the `/implement-item <proposal>` skill or by following this doc directly.
 
 ## Preconditions
 
-- The item's proposal in `dev-docs/proposals/` has
+- The item's proposal in `docs/proposals/` has
   **Status: ready for implementation**. Design sketches (Phase 4–5) must
   have their open decisions resolved with the user and be promoted to
   "ready" first — never auto-promote; those decisions are the user's.
@@ -84,7 +84,7 @@ An item is shipped only when all of these hold:
 1. Every bullet in the proposal's Testing section is covered by a
    passing test (or explicitly deferred with a dependency note).
 2. `pnpm check` and `pnpm test` are green.
-3. Docs are folded per `dev-docs/README.md`:
+3. Docs are folded per `docs/README.md`:
    - Merge the proposal's shipped behavior into the relevant
      `specs/features/*.md` (remove the resolved line from Known
      limitations) and `specs/domain-model.md` (state machines,

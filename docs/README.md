@@ -1,10 +1,7 @@
 # Developer Documentation
 
-Internal docs — product specs, roadmap, architecture, auth design, deploy
-runbooks, monorepo operations. Not part of any public-facing site: this
-directory is kept separate from a planned GitHub Pages deployment
-(product/marketing content will live elsewhere, e.g. `site/` or a dedicated
-branch, decided later).
+Developer docs — product specs, roadmap, architecture, auth design, deploy
+runbooks, monorepo operations.
 
 ## Structure
 

@@ -17,11 +17,11 @@ packages/
   ui/      Shared Solid components + design tokens — frontend only
 ```
 
-See [dev-docs/roadmap.md](./dev-docs/roadmap.md) for the product roadmap,
-[dev-docs/specs/](./dev-docs/specs/) for product specs,
-[dev-docs/reference/auth.md](./dev-docs/reference/auth.md) for the authentication design,
-[dev-docs/reference/deploy.md](./dev-docs/reference/deploy.md) for deployment, and
-[dev-docs/reference/monorepo.md](./dev-docs/reference/monorepo.md) for monorepo operations.
+See [docs/roadmap.md](./docs/roadmap.md) for the product roadmap,
+[docs/specs/](./docs/specs/) for product specs,
+[docs/reference/auth.md](./docs/reference/auth.md) for the authentication design,
+[docs/reference/deploy.md](./docs/reference/deploy.md) for deployment, and
+[docs/reference/monorepo.md](./docs/reference/monorepo.md) for monorepo operations.
 
 ## Prerequisites
 

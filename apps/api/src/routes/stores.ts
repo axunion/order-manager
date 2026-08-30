@@ -372,7 +372,7 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
    * confirmation UI exists.
    *
    * Hard delete, not soft: no accounting/audit retention requirement
-   * exists for this project (see dev-docs/proposals/account-lifecycle.md).
+   * exists for this project (see docs/specs/features/authentication.md).
    * The response body IS the export — read from the same pre-delete
    * snapshot the delete batch below acts on, not a separate endpoint, so
    * the frontend can offer it as a download in the same action. The

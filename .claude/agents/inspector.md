@@ -38,7 +38,7 @@ multi-hundred-MB download, so only run it if launching chromium fails with a
    for i in $(seq 1 30); do curl -sf http://localhost:<port> >/dev/null && break; sleep 1; done
    ```
    If the flow you're checking needs backend state (a seat/QR link, a magic-link
-   sign-in), read `dev-docs/reference/manual-smoke-test.md` for how to reach it — the
+   sign-in), read `docs/reference/manual-smoke-test.md` for how to reach it — the
    `[DEV]` magic-link shortcut (`ENVIRONMENT=development` in `apps/api/.dev.vars`)
    avoids needing a real email step.
 
@@ -52,7 +52,7 @@ multi-hundred-MB download, so only run it if launching chromium fails with a
 3. **Run it with `node <script>.mjs`** from the repo root — a throwaway script driving
    `chromium` directly via `@playwright/test`'s `chromium.launch()`, not a configured
    e2e runner (`apps/e2e` has the project's Playwright config, but that persistent
-   golden-path suite — see `dev-docs/reference/browser-e2e.md` — is a different
+   golden-path suite — see `docs/reference/browser-e2e.md` — is a different
    concern from this per-change check; don't run or extend it from here).
 
 4. **Kobalte dialogs mount through a Portal** (`ConfirmDialog`, `AlertDialog`,

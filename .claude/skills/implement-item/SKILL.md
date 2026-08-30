@@ -5,16 +5,16 @@ disable-model-invocation: true
 ---
 
 Implement a single roadmap item by running the loop defined in
-`dev-docs/reference/implementation-loop.md`. That doc is the procedure
+`docs/reference/implementation-loop.md`. That doc is the procedure
 of record — read it first and follow it exactly; this skill only
 resolves the argument and states the ground rules.
 
 ## Resolve the argument
 
-The argument names a proposal: `dev-docs/proposals/<argument>.md`.
+The argument names a proposal: `docs/proposals/<argument>.md`.
 
 - No argument, or the file doesn't exist → list the files in
-  `dev-docs/proposals/` alongside the roadmap's current phase ordering
+  `docs/proposals/` alongside the roadmap's current phase ordering
   and ask which item to implement. Do not guess.
 - Proposal exists but its Status is a design sketch (not "ready for
   implementation") → stop and tell the user which open decisions must
@@ -24,7 +24,7 @@ The argument names a proposal: `dev-docs/proposals/<argument>.md`.
 ## Ground rules
 
 - Read the proposal, its linked spec(s), and
-  `dev-docs/reference/implementation-loop.md` before writing anything.
+  `docs/reference/implementation-loop.md` before writing anything.
 - Committing at each green slice is authorized as part of this skill's
   invocation — the usual "don't commit without an explicit request"
   rule is satisfied by the user invoking `/implement-item`.

@@ -6,7 +6,7 @@ and are now documented in
 [checkout.md](../specs/features/checkout.md#completing-payment-post-apipayments)
 and [domain-model.md](../specs/domain-model.md). Only split billing (the
 original item 3) remains — deferred, not implemented, revisit only on
-real pilot demand. See [roadmap.md](../roadmap.md) Phase 4 item 4.
+real pilot demand. See [roadmap.md](../roadmap.md) Backlog.
 
 ## Split billing
 

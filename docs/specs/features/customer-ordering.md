@@ -142,7 +142,7 @@ receipt above remains reachable.
 
 - **No customer self-cancel** — once an order reaches the kitchen,
   voiding an item or the whole order is staff-mediated only
-  (`dev-docs/specs/features/order-fulfillment.md`); a "call staff"
+  (`docs/specs/features/order-fulfillment.md`); a "call staff"
   button is the intended UX for customer-initiated corrections.
   (Deliberate v1 decision — revisit with pilot feedback)
 - **Japanese only.** (Backlog)

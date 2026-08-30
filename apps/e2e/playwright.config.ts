@@ -7,7 +7,7 @@ import {
 } from "./origins";
 
 /**
- * Browser E2E config — see dev-docs/reference/browser-e2e.md.
+ * Browser E2E config — see docs/reference/browser-e2e.md.
  *
  * Boots the four processes the golden path needs (API Worker + the three Vite
  * dev servers) and runs the specs against them. Requires apps/api/.dev.vars

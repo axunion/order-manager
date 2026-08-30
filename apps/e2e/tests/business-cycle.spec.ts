@@ -2,7 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { ADMIN_ORIGIN, ORDER_ORIGIN, SIGNUP_ORIGIN } from "../origins";
 
 /**
- * The golden path from dev-docs/reference/manual-smoke-test.md, driven through
+ * The golden path from docs/reference/manual-smoke-test.md, driven through
  * the three SPAs in a real browser.
  *
  * apps/api/src/routes/business-cycle.test.ts already covers this same cycle at

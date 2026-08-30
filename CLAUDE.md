@@ -30,7 +30,7 @@ Bias toward caution over speed; on trivial tasks, use judgment.
   as `"catalog:"`. Add new shared deps to the catalog, not per-workspace.
 - **CI/deploy:** GitHub Actions (`.github/workflows/ci.yml`) runs
   `check`/`test`/`build` on pushes and PRs. Deployment is manual — see
-  `dev-docs/reference/deploy.md`.
+  `docs/reference/deploy.md`.
 - **TypeScript:** every workspace extends `tsconfig.base.json` (strict,
   `noUncheckedIndexedAccess`, `verbatimModuleSyntax`). Use `@order/*` path
   aliases for cross-package imports.
@@ -50,7 +50,7 @@ Run `pnpm check` before committing.
   behavior) belongs in the automated suite and runs via `pnpm check` / `pnpm test`.
   **Visual/subjective judgment** ("does this look right", spacing, color) is not
   something a script can reliably judge — that's a human-in-the-loop check: use
-  `dev-docs/reference/manual-smoke-test.md` for the full cross-app walkthrough, or
+  `docs/reference/manual-smoke-test.md` for the full cross-app walkthrough, or
   the `inspector` agent (see Subagents below) for an isolated change. Persist a new
   automated regression test only for a durable flow worth protecting, ideally one
   with evidence it can break — not for a one-off "let me verify this" check.
@@ -69,7 +69,7 @@ makes it safe to spawn without asking first.
   Workers, Drizzle/D1, SolidJS, Kobalte). Afterward, **without asking first**, run
   `reviewer` and `tester` in parallel, plus `tenant-security-reviewer` or `ui-reviewer`
   if their surface was touched (see the trigger table in
-  `dev-docs/reference/implementation-loop.md`). `reviewer` always runs — it covers
+  `docs/reference/implementation-loop.md`). `reviewer` always runs — it covers
   scope, simplicity, and general correctness that the surface-specific reviewers don't;
   they add a deeper, surface-specific pass on top when applicable. All of these agents
   are read-only or test-only, so running them costs little and they exist specifically
@@ -77,7 +77,7 @@ makes it safe to spawn without asking first.
 - **Large, ambiguous, or high-risk** (spans many files, touches `packages/core`,
   `apps/api` auth/payment/tenant logic substantially, or the task itself is genuinely
   ambiguous):
-  - If it's a roadmap item, use `/implement-item` — `dev-docs/reference/implementation-loop.md`
+  - If it's a roadmap item, use `/implement-item` — `docs/reference/implementation-loop.md`
     is the procedure of record and already wires in the matching reviewers per slice;
     this section doesn't change or duplicate that gate list.
   - Otherwise, propose the built-in `/goal` command to the user rather than assuming
@@ -104,9 +104,9 @@ multiple components sharing styles, or chasing a reported visual bug → run the
 `inspector` agent. This needs no confirmation to run, but isn't automatic for every UI
 change either — it costs real time (dev servers + browser), so invoking it is a
 judgment call each time. `inspector` is a per-change, throwaway check; it doesn't
-overlap with `dev-docs/reference/manual-smoke-test.md` (the full manual cross-app
+overlap with `docs/reference/manual-smoke-test.md` (the full manual cross-app
 walkthrough) or the `apps/e2e` Playwright suite (`pnpm e2e`, see
-`dev-docs/reference/browser-e2e.md` — a persistent regression suite that
+`docs/reference/browser-e2e.md` — a persistent regression suite that
 explicitly excludes visual regression checking from its scope).
 
 ## Language
@@ -147,8 +147,7 @@ Format — plain prose, no prefixes or labels (`feat:`, `fix:`, and the like):
   Each app owns its domain components; move to `@order/ui` only when 3+ apps
   need identical logic. See `apps/order/DESIGN.md § Component Ownership Policy`
   and `apps/admin/DESIGN.md § Component Ownership Policy`.
-- `dev-docs/` — internal docs, kept separate from any future public GitHub
-  Pages site. `roadmap.md` is the phased product plan; `specs/` holds product
+- `docs/` — developer docs. `roadmap.md` is the phased product plan; `specs/` holds product
   specs (shipped behavior + known limitations); `reference/` holds technical
   specs (auth, deploy, monorepo ops); `proposals/` holds
-  in-progress/under-discussion designs. See `dev-docs/README.md`.
+  in-progress/under-discussion designs. See `docs/README.md`.
