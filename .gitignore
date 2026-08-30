@@ -8,6 +8,10 @@ dist/
 # dependencies
 node_modules/
 
+# Playwright (apps/e2e) run output
+test-results/
+playwright-report/
+
 # logs
 npm-debug.log*
 yarn-debug.log*

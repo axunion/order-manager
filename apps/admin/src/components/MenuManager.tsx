@@ -403,6 +403,7 @@ export default function MenuManager() {
             <label for="item-category">カテゴリ</label>
             <Select
               id="item-category"
+              aria-label="カテゴリ"
               options={categories().map((c) => ({
                 value: c.id,
                 label: c.name,
