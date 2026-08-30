@@ -11,9 +11,11 @@ import { ADMIN_ORIGIN, ORDER_ORIGIN, SIGNUP_ORIGIN } from "../origins";
  * don't submit, and the cross-app polling that carries one app's write into
  * another app's screen.
  *
- * Two pages stay open on one browser context for exactly that reason — the
- * customer screen must still be mounted when staff act in admin, or the polling
- * assertions would only be re-reading a fresh page load.
+ * Two pages stay open on one browser context for that last part, and each
+ * screen is opened *before* the other app writes the state it should pick up —
+ * otherwise the data would arrive on the component's own onMount load and the
+ * assertion would prove nothing about polling. The "still empty" assertions
+ * before each hand-off are what keep that honest.
  *
  * It runs as one spec, matching the API test's scope choice; the test.step
  * names are what localize a failure to a stage of the cycle.
@@ -123,9 +125,17 @@ test("a store can be registered and taken through order to payment", async ({
     orderUrl = href ?? "";
   });
 
+  await test.step("5. staff open the order board, still empty", async () => {
+    await admin.getByRole("link", { name: "← 管理トップ" }).click();
+    await admin.getByRole("link", { name: "注文確認・提供管理" }).click();
+    // Opened before the customer orders, so what appears in step 7 can only
+    // have arrived on the board's own 5s poll.
+    await expect(admin.getByText("アクティブな注文はありません")).toBeVisible();
+  });
+
   const customer = await context.newPage();
 
-  await test.step("5. the customer orders from the seat link", async () => {
+  await test.step("6. the customer orders from the seat link", async () => {
     await customer.goto(orderUrl);
     await expect(
       customer.getByRole("heading", { name: "テーブル1" }),
@@ -153,11 +163,9 @@ test("a store can be registered and taken through order to payment", async ({
     await expect(summary).toContainText(`¥${ORDER_TOTAL.toLocaleString()}`);
   });
 
-  await test.step("6. the order reaches the admin board and is served", async () => {
-    await admin.getByRole("link", { name: "← 管理トップ" }).click();
-    await admin.getByRole("link", { name: "注文確認・提供管理" }).click();
-
-    // Arrives on the board's own 5s poll, not on a reload.
+  await test.step("7. the order reaches the board on its poll, and is served", async () => {
+    // This page has sat on the board since step 5 — never navigated, never
+    // reloaded — so the card can only come from loadOrders' 5s interval.
     const orderCard = admin.locator("article").filter({ hasText: "テーブル1" });
     await expect(orderCard).toBeVisible();
     await expect(orderCard.getByText("新規注文")).toBeVisible();
@@ -176,25 +184,29 @@ test("a store can be registered and taken through order to payment", async ({
     ).toHaveCount(2);
   });
 
-  await test.step("7. the customer screen picks up the served status", async () => {
-    // The whole point of the cross-app check: this page was never reloaded.
+  await test.step("8. the customer screen picks up the served status", async () => {
+    // Likewise never reloaded since step 6 — this is pollOrder's 10s interval.
     const summary = customer
       .locator("section")
       .filter({ hasText: "ご注文内容" });
     await expect(summary.getByText("提供済み")).toHaveCount(2);
   });
 
-  await test.step("8. the customer requests the bill", async () => {
+  await test.step("9. staff open the register, still empty", async () => {
+    await admin.getByRole("link", { name: "← 管理トップ" }).click();
+    await admin.getByRole("link", { name: "会計・レジ" }).click();
+    // Same trick as step 5, for CheckoutPanel's own 5s poll.
+    await expect(admin.getByText("会計待ちの伝票はありません")).toBeVisible();
+  });
+
+  await test.step("10. the customer requests the bill", async () => {
     await customer.getByRole("button", { name: "会計をお願いする" }).click();
     await expect(
       customer.getByText("会計をお待ちください。スタッフが参ります。"),
     ).toBeVisible();
   });
 
-  await test.step("9. staff take a cash payment", async () => {
-    await admin.getByRole("link", { name: "← 管理トップ" }).click();
-    await admin.getByRole("link", { name: "会計・レジ" }).click();
-
+  await test.step("11. the slip reaches the register on its poll, and is paid", async () => {
     const checkoutCard = admin
       .locator("article")
       .filter({ hasText: "テーブル1" });
@@ -209,7 +221,7 @@ test("a store can be registered and taken through order to payment", async ({
     await expect(admin.getByText("会計待ちの伝票はありません")).toBeVisible();
   });
 
-  await test.step("10. the customer sees the paid confirmation", async () => {
+  await test.step("12. the customer sees the paid confirmation", async () => {
     await expect(
       customer.getByText("お支払いが完了しました。ありがとうございました。"),
     ).toBeVisible();
@@ -218,7 +230,7 @@ test("a store can be registered and taken through order to payment", async ({
     ).toBeVisible();
   });
 
-  await test.step("11. the sale lands in the report", async () => {
+  await test.step("13. the sale lands in the report", async () => {
     await admin.getByRole("link", { name: "← 管理トップ" }).click();
     await admin.getByRole("link", { name: "レポート" }).click();
 
