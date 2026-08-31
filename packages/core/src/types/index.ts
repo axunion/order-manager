@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+// Shift management lives in its own file; re-exported so `@order/core/types`
+// stays one import for callers.
+export * from "./shift";
+
 // ---------------------------------------------------------------------------
 // Shared primitive schemas
 // ---------------------------------------------------------------------------
