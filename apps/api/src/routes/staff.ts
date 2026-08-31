@@ -8,7 +8,7 @@ import {
   sendMagicLinkEmail,
 } from "@order/core";
 import { createDb, schema } from "@order/db";
-import { and, eq, gt, ne } from "drizzle-orm";
+import { and, eq, gt, inArray, ne } from "drizzle-orm";
 import { Hono } from "hono";
 import { issueMagicLink } from "../auth";
 import { type AuthEnv, requireOwner, requireStore } from "../middleware";
@@ -163,7 +163,9 @@ export const staffRouter = new Hono<AuthEnv>()
 
   /**
    * DELETE /api/staff/:id
-   * Revokes a member's access: deletes the member row and their sessions.
+   * Revokes a member's access: deletes the member row, their sessions, and
+   * the shift-management rows that reference them (availability, shifts,
+   * position assignments, work profile).
    * Rejects 400 for self-removal (use logout instead) and 400 if the
    * target is the store's last remaining owner. Self-removal alone isn't
    * a sufficient guarantee: two distinct owner sessions could otherwise
@@ -221,11 +223,39 @@ export const staffRouter = new Hono<AuthEnv>()
       }
     }
 
+    // The member's shift-management rows go with them, children first: every
+    // one of these references members, so leaving any behind aborts the
+    // member delete on its foreign key. The store's own positions, patterns
+    // and periods stay — they outlive the people assigned to them.
+    // availability_entries uses a live subquery rather than a snapshot of
+    // submission ids, so a row written between the read and this batch is
+    // still caught, matching the account-deletion batch in stores.ts.
     await db.batch([
       db.delete(schema.sessions).where(eq(schema.sessions.member_id, targetId)),
       db
         .delete(schema.magicLinkTokens)
         .where(eq(schema.magicLinkTokens.member_id, targetId)),
+      db
+        .delete(schema.availabilityEntries)
+        .where(
+          inArray(
+            schema.availabilityEntries.submission_id,
+            db
+              .select({ id: schema.availabilitySubmissions.id })
+              .from(schema.availabilitySubmissions)
+              .where(eq(schema.availabilitySubmissions.member_id, targetId)),
+          ),
+        ),
+      db
+        .delete(schema.availabilitySubmissions)
+        .where(eq(schema.availabilitySubmissions.member_id, targetId)),
+      db.delete(schema.shifts).where(eq(schema.shifts.member_id, targetId)),
+      db
+        .delete(schema.memberPositions)
+        .where(eq(schema.memberPositions.member_id, targetId)),
+      db
+        .delete(schema.memberWorkProfiles)
+        .where(eq(schema.memberWorkProfiles.member_id, targetId)),
       db.delete(schema.members).where(eq(schema.members.id, targetId)),
     ]);
 

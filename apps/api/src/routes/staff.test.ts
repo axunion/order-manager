@@ -486,6 +486,120 @@ describe("DELETE /api/staff/:id", () => {
     expect(meRes.status).toBe(401);
   });
 
+  it("removes a member who already holds shift-management rows", async () => {
+    const { id: storeId, session_token: ownerToken } = await seedStore(
+      `Staff Remove With Shifts ${crypto.randomUUID()}`,
+    );
+    const inviteRes = await app.request(
+      "/api/staff",
+      withAuth(
+        ownerToken,
+        jsonInit("POST", {
+          email: `shift-staff-${crypto.randomUUID()}@test.internal`,
+        }),
+      ),
+      env,
+    );
+    const inviteBody = (await inviteRes.json()) as { data: { id: string } };
+    const staffMemberId = inviteBody.data.id;
+
+    // Everything in the shift domain that points at a member. Without these
+    // rows the delete succeeds trivially; with them it must still succeed.
+    const db = createDb(env.DB);
+    const positionId = crypto.randomUUID();
+    const periodId = crypto.randomUUID();
+    const submissionId = crypto.randomUUID();
+    await db
+      .insert(schema.positions)
+      .values({ id: positionId, store_id: storeId, name: "キッチン" });
+    await db.insert(schema.memberPositions).values({
+      id: crypto.randomUUID(),
+      store_id: storeId,
+      member_id: staffMemberId,
+      position_id: positionId,
+    });
+    await db.insert(schema.memberWorkProfiles).values({
+      id: crypto.randomUUID(),
+      store_id: storeId,
+      member_id: staffMemberId,
+      hourly_wage: 1050,
+    });
+    await db.insert(schema.schedulePeriods).values({
+      id: periodId,
+      store_id: storeId,
+      start_date: "2026-11-01",
+      end_date: "2026-11-15",
+      submission_deadline: Date.now(),
+    });
+    await db.insert(schema.availabilitySubmissions).values({
+      id: submissionId,
+      store_id: storeId,
+      period_id: periodId,
+      member_id: staffMemberId,
+    });
+    await db.insert(schema.availabilityEntries).values({
+      id: crypto.randomUUID(),
+      store_id: storeId,
+      submission_id: submissionId,
+      work_date: "2026-11-02",
+      kind: "day_off",
+    });
+    await db.insert(schema.shifts).values({
+      id: crypto.randomUUID(),
+      store_id: storeId,
+      period_id: periodId,
+      member_id: staffMemberId,
+      work_date: "2026-11-03",
+      start_minutes: 540,
+      end_minutes: 1020,
+      break_minutes: 60,
+    });
+
+    const res = await app.request(
+      `/api/staff/${staffMemberId}`,
+      { method: "DELETE", ...withAuth(ownerToken) },
+      env,
+    );
+    expect(res.status).toBe(200);
+
+    // The member's shift rows go with them; the store's own position stays.
+    const shiftRows = await db
+      .select()
+      .from(schema.shifts)
+      .where(eq(schema.shifts.member_id, staffMemberId));
+    expect(shiftRows).toHaveLength(0);
+
+    const submissionRows = await db
+      .select()
+      .from(schema.availabilitySubmissions)
+      .where(eq(schema.availabilitySubmissions.member_id, staffMemberId));
+    expect(submissionRows).toHaveLength(0);
+
+    const entryRows = await db
+      .select()
+      .from(schema.availabilityEntries)
+      .where(eq(schema.availabilityEntries.submission_id, submissionId));
+    expect(entryRows).toHaveLength(0);
+
+    const positionLinkRows = await db
+      .select()
+      .from(schema.memberPositions)
+      .where(eq(schema.memberPositions.member_id, staffMemberId));
+    expect(positionLinkRows).toHaveLength(0);
+
+    const profileRows = await db
+      .select()
+      .from(schema.memberWorkProfiles)
+      .where(eq(schema.memberWorkProfiles.member_id, staffMemberId));
+    expect(profileRows).toHaveLength(0);
+
+    const positionRows = await db
+      .select()
+      .from(schema.positions)
+      .where(eq(schema.positions.id, positionId));
+    expect(positionRows).toHaveLength(1);
+  });
+
   it("returns 400 when removing your own member row", async () => {
     const { member_id: ownerMemberId, session_token: token } = await seedStore(
       `Staff Self Remove Test ${crypto.randomUUID()}`,

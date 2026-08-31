@@ -158,11 +158,23 @@ immediately and are visible to staff on their next poll — there is no
 versioning and no republish notification; that belongs with the deferred
 post-publish flows.
 
-**API-enforced invariant (not a DB constraint):** a member has no two
-overlapping shifts. SQLite cannot express range non-overlap in a partial
-unique index, so this is a check-then-act guard in the route, in the
-same category as "a store always has at least one owner" — record it in
+**API-enforced invariants (not DB constraints).** SQLite cannot express
+any of these, so each is a check-then-act guard in the route, in the same
+category as "a store always has at least one owner". Record them in
 `docs/specs/domain-model.md § Invariants (API-enforced)` when folding.
+
+- A member has no two overlapping shifts (compare on `absoluteRange`, so
+  an overnight shift is checked against the next morning correctly).
+- One `(submission, work_date)` never mixes a `day_off` row with an
+  `available` row, and its `available` bands never overlap each other —
+  otherwise the schedule builder reads contradictory input.
+- **Every FK id that arrives in a request body** (`period_id`,
+  `member_id`, `position_id`, `submission_id`) belongs to the caller's
+  store. The denormalized `store_id` is the only tenant filter these
+  tables have; a mismatched write would be invisible to every
+  `store_id`-filtered read, and could later abort another store's account
+  deletion. Use the verify-then-operate pattern from
+  `apps/api/src/routes/seats.ts` on body ids, not just path ids.
 
 ## 3. Core (`packages/core`)
 
@@ -230,6 +242,13 @@ errors use `errorResponse` with the established codes only.
 | --- | --- | --- | --- |
 | `shift-positions.ts` | `/api/shift/positions` | `GET`, `POST`, `PATCH /:id`, `DELETE /:id` (soft: `is_active = false`) | owner |
 | `shift-members.ts` | `/api/shift/members` | `GET` (members + positions + work profile), `PUT /:memberId/positions`, `PUT /:memberId/work-profile` | owner |
+
+`shift-members.ts` is owner-only for a reason worth stating: `hourly_wage`
+and `is_minor` are the most sensitive per-person fields in the database, and
+the rest of the platform assumes any valid session may read its store's
+data. A staff session must never read a colleague's wage or minor status;
+if a staff member ever needs their own profile, add a self-only read rather
+than widening this route to `requireStore`.
 | `shift-templates.ts` | `/api/shift/templates` | `GET/POST/PATCH/DELETE /patterns[/:id]`, `GET/POST/PATCH/DELETE /requirements[/:id]` | owner |
 | `shift-periods.ts` | `/api/shift/periods` | `GET`, `GET /:id` (both roles), `POST`, `POST /:id/close-submissions`, `POST /:id/publish` (owner) | mixed |
 | `shift-availability.ts` | `/api/shift/availability` | `GET /:periodId/me`, `PUT /:periodId/me` (own submission, both roles), `GET /:periodId` (all members incl. non-submitters) — owner | mixed |
@@ -370,6 +389,27 @@ Following `docs/reference/implementation-loop.md`; one slice = one commit.
 - Zod: `workDate` rejects `2026-02-30` and `2026-2-3`; `minutesOfDay`
   rejects negatives and > 2880.
 
+**Schema constraints (slice 2, inserted through Drizzle — no route exists yet)**
+
+- Every CHECK, unique index and FK in § 2 rejects the shape it exists to
+  stop, matched on the constraint's own name, and both boundaries of each
+  time check are covered (`>` vs `>=`, and the 1440 / +1440 bounds that
+  keep one wall-clock band to one encoding).
+- Accepted shapes are asserted too, so an over-broad constraint fails: an
+  overnight shift (`end_minutes > 1440`), two availability bands on one
+  day, one member holding two positions, one member submitting for two
+  periods, two stores holding periods with the same `start_date`, and a
+  `required_headcount` of 0.
+- The DB defaults later slices lean on: a new period is `collecting`, a
+  new position is active with sort order 0, a shift's break defaults to 0.
+- The account hard-delete clears all nine tables before the `stores` and
+  `members` rows they reference, and leaves a second store's rows intact;
+  removing a member (`DELETE /api/staff/:id`) clears that member's shift
+  rows and leaves the store's positions alone.
+- The three enum CHECKs are unreachable through Drizzle's typed enums, so
+  they are covered by the TypeScript types rather than by tests —
+  a decision, not an oversight.
+
 **`apps/api` (Workers runtime, `app.request(path, init, env)`)**
 
 - `requireEntitlement`: a store with no `shift` subscription gets 403
@@ -461,6 +501,14 @@ the suite is wired into CI (engineering track).
 - `stores.status = 'suspended'` (account disabled) and
   `subscriptions.status` (product not purchased) are different switches;
   document both in `docs/specs/domain-model.md` when folding.
+- Every new table references `stores` or `members`, so the account
+  hard-delete in `apps/api/src/routes/stores.ts` must clear them before the
+  rows they point at — children first, `availability_entries` through
+  `positions`. They are deleted but **not** in the returned export; decide
+  whether a published schedule belongs in a store's data export when the
+  product ships, and record the answer in
+  `docs/specs/features/authentication.md` alongside the existing export
+  contract.
 - When this ships, fold it per `docs/README.md`: a new
   `docs/specs/features/shift-management.md`, the state machine and the
   API-enforced overlap invariant into `docs/specs/domain-model.md`, the

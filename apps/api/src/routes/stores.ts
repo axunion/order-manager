@@ -396,7 +396,9 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
    * sessions/magic_link_tokens/seats.qr_token are excluded from the export
    * (auth/bearer secrets, not business data) but are deleted. subscriptions
    * are likewise deleted but not exported — entitlement records, not the
-   * store's own data.
+   * store's own data. The shift-management tables are deleted too; whether a
+   * published schedule belongs in the export is settled when that product
+   * ships (docs/proposals/shift-management.md).
    *
    * Response: 200 { data: { export: { store, members, menu_categories,
    *   menu_items, option_groups, options, menu_item_option_groups, seats,
@@ -511,6 +513,34 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
       // orphaned join row (or, if D1 enforces the FK, abort the whole
       // batch when the referenced menu_item is deleted next).
       await db.batch([
+        // Shift-management rows first: availability_entries hangs off
+        // availability_submissions, and shifts/staffing_requirements hang off
+        // schedule_periods and positions, all of which reference members.
+        db
+          .delete(schema.availabilityEntries)
+          .where(eq(schema.availabilityEntries.store_id, storeId)),
+        db
+          .delete(schema.availabilitySubmissions)
+          .where(eq(schema.availabilitySubmissions.store_id, storeId)),
+        db.delete(schema.shifts).where(eq(schema.shifts.store_id, storeId)),
+        db
+          .delete(schema.staffingRequirements)
+          .where(eq(schema.staffingRequirements.store_id, storeId)),
+        db
+          .delete(schema.memberPositions)
+          .where(eq(schema.memberPositions.store_id, storeId)),
+        db
+          .delete(schema.memberWorkProfiles)
+          .where(eq(schema.memberWorkProfiles.store_id, storeId)),
+        db
+          .delete(schema.shiftPatterns)
+          .where(eq(schema.shiftPatterns.store_id, storeId)),
+        db
+          .delete(schema.schedulePeriods)
+          .where(eq(schema.schedulePeriods.store_id, storeId)),
+        db
+          .delete(schema.positions)
+          .where(eq(schema.positions.store_id, storeId)),
         db
           .delete(schema.orderItemOptions)
           .where(eq(schema.orderItemOptions.store_id, storeId)),
