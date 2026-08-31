@@ -72,7 +72,12 @@ has to defend against CSRF:
 
 ```ts
 // apps/api/src/app.ts (shape, not verbatim)
-const allowed = [env.ADMIN_ORIGIN, env.ORDER_ORIGIN, env.SIGNUP_ORIGIN];
+const allowed = [
+  env.ADMIN_ORIGIN,
+  env.ORDER_ORIGIN,
+  env.SIGNUP_ORIGIN,
+  env.SHIFT_ORIGIN,
+];
 const origin = c.req.header("Origin") ?? "";
 const isAllowedOrigin = allowed.includes(origin);
 
@@ -314,9 +319,10 @@ for `/api/order/*` routes — they use `requireSeat` not `requireStore`.
 
 | Variable | Example | Purpose |
 |---|---|---|
-| `ADMIN_ORIGIN` | `https://admin.example.com` | `verify` redirect target; CORS allowlist |
+| `ADMIN_ORIGIN` | `https://admin.example.com` | Default `verify`/`logout` redirect target; CORS allowlist |
 | `ORDER_ORIGIN` | `https://order.example.com` | CORS allowlist |
-| `SIGNUP_ORIGIN` | `https://signup.example.com` | `logout` redirect target; CORS allowlist |
+| `SIGNUP_ORIGIN` | `https://signup.example.com` | CORS allowlist |
+| `SHIFT_ORIGIN` | `https://shift.example.com` | `verify`/`logout` redirect target when the login carried `app: "shift"`; CORS allowlist |
 | `COOKIE_DOMAIN` | `.example.com` | Cookie `Domain` attribute |
 | `RESEND_API_KEY` | `re_...` | Magic Link email delivery (secret) |
 | `MAIL_FROM` | `noreply@example.com` | Magic Link `From` address |

@@ -1,5 +1,4 @@
 import {
-  type AvailabilityEntryResponse,
   type AvailabilitySubmissionResponse,
   errorResponse,
   newId,
@@ -8,7 +7,7 @@ import {
   SaveAvailabilityInput,
 } from "@order/core";
 import { createDb, schema } from "@order/db";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import {
   type AuthEnv,
@@ -16,15 +15,8 @@ import {
   requireOwner,
   requireStore,
 } from "../middleware";
+import { entriesBySubmission } from "../shift-entries";
 import { bodyValidator } from "../validator";
-
-const entryColumns = {
-  id: schema.availabilityEntries.id,
-  work_date: schema.availabilityEntries.work_date,
-  kind: schema.availabilityEntries.kind,
-  start_minutes: schema.availabilityEntries.start_minutes,
-  end_minutes: schema.availabilityEntries.end_minutes,
-};
 
 async function findPeriod(
   db: ReturnType<typeof createDb>,
@@ -47,41 +39,6 @@ async function findPeriod(
     )
     .limit(1);
   return rows[0] ?? null;
-}
-
-async function entriesFor(
-  db: ReturnType<typeof createDb>,
-  storeId: string,
-  submissionIds: string[],
-): Promise<Map<string, AvailabilityEntryResponse[]>> {
-  const bySubmission = new Map<string, AvailabilityEntryResponse[]>();
-  if (submissionIds.length === 0) return bySubmission;
-
-  const rows = await db
-    .select({
-      ...entryColumns,
-      submission_id: schema.availabilityEntries.submission_id,
-    })
-    .from(schema.availabilityEntries)
-    // store_id is denormalized onto entries precisely so it can be filtered
-    // here too, even though submission_id already implies the store.
-    .where(
-      and(
-        eq(schema.availabilityEntries.store_id, storeId),
-        inArray(schema.availabilityEntries.submission_id, submissionIds),
-      ),
-    )
-    .orderBy(
-      asc(schema.availabilityEntries.work_date),
-      asc(schema.availabilityEntries.start_minutes),
-    );
-
-  for (const { submission_id, ...entry } of rows) {
-    const list = bySubmission.get(submission_id);
-    if (list) list.push(entry);
-    else bySubmission.set(submission_id, [entry]);
-  }
-  return bySubmission;
 }
 
 /**
@@ -167,7 +124,7 @@ async function readOwnSubmission(
     };
   }
 
-  const entries = (await entriesFor(db, storeId, [submission.id])).get(
+  const entries = (await entriesBySubmission(db, storeId, [submission.id])).get(
     submission.id,
   );
   return { ...submission, entries: entries ?? [] };
@@ -361,14 +318,14 @@ export const shiftAvailabilityRouter = new Hono<AuthEnv>()
         .where(eq(schema.members.store_id, storeId)),
     ]);
 
-    const entriesBySubmission = await entriesFor(
+    const entriesByRow = await entriesBySubmission(
       db,
       storeId,
       rows.map((r) => r.id),
     );
     const submissions: AvailabilitySubmissionResponse[] = rows.map((row) => ({
       ...row,
-      entries: entriesBySubmission.get(row.id) ?? [],
+      entries: entriesByRow.get(row.id) ?? [],
     }));
 
     // A draft counts as missing: the manager needs to know who is still

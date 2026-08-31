@@ -278,6 +278,27 @@ describe("GET /api/auth/verify", () => {
 // POST /api/auth/login
 // ---------------------------------------------------------------------------
 
+/** Registers a store and returns a usable login token for its owner. */
+async function issueLoginToken(
+  name: string,
+  devEnv: typeof env,
+): Promise<string> {
+  const store = await seedStore(name);
+  const [member] = await createDb(env.DB)
+    .select({ email: schema.members.email })
+    .from(schema.members)
+    .where(eq(schema.members.store_id, store.id))
+    .limit(1);
+
+  const res = await app.request(
+    "/api/auth/login",
+    jsonInit("POST", { email: member?.email }),
+    devEnv,
+  );
+  const body = (await res.json()) as { data: { verify_url?: string } };
+  return new URL(body.data.verify_url ?? "").searchParams.get("token") ?? "";
+}
+
 describe("Magic Link landing app", () => {
   it("sends a shift login back to the shift SPA", async () => {
     const store = await seedStore(`Login App Shift ${crypto.randomUUID()}`);
@@ -303,32 +324,53 @@ describe("Magic Link landing app", () => {
       devEnv,
     );
     expect(verified.status).toBe(302);
-    expect(verified.headers.get("Location")).toBe(devEnv.SHIFT_ORIGIN);
+    expect(verified.headers.get("Location")).toBe("http://shift.localhost");
   });
 
-  it("lands on admin when app is absent or unknown", async () => {
-    const store = await seedStore(`Login App Default ${crypto.randomUUID()}`);
-    const [member] = await createDb(env.DB)
-      .select({ email: schema.members.email })
-      .from(schema.members)
-      .where(eq(schema.members.store_id, store.id))
-      .limit(1);
+  it("lands on admin when the verify link carries no app at all", async () => {
     const devEnv = { ...env, ENVIRONMENT: "development" };
-
-    const res = await app.request(
-      "/api/auth/login",
-      jsonInit("POST", { email: member?.email }),
+    const token = await issueLoginToken(
+      `Login App Missing ${crypto.randomUUID()}`,
       devEnv,
     );
-    const body = (await res.json()) as { data: { verify_url?: string } };
-    const verifyUrl = body.data.verify_url ?? "";
 
+    // Strip the parameter entirely rather than appending a second one: Hono
+    // reads the first occurrence, so an appended value proves nothing.
     const verified = await app.request(
-      `${verifyUrl.replace(new URL(verifyUrl).origin, "")}&app=nonsense`,
+      `/api/auth/verify?token=${token}`,
       {},
       devEnv,
     );
-    expect(verified.headers.get("Location")).toBe(devEnv.ADMIN_ORIGIN);
+
+    expect(verified.headers.get("Location")).toBe("http://admin.localhost");
+  });
+
+  it("lands on admin when the app is one it does not know", async () => {
+    const devEnv = { ...env, ENVIRONMENT: "development" };
+    const token = await issueLoginToken(
+      `Login App Unknown ${crypto.randomUUID()}`,
+      devEnv,
+    );
+
+    const verified = await app.request(
+      `/api/auth/verify?token=${token}&app=https://evil.example.com`,
+      {},
+      devEnv,
+    );
+
+    expect(verified.headers.get("Location")).toBe("http://admin.localhost");
+  });
+
+  it("sends a logout back to the SPA it came from", async () => {
+    const store = await seedStore(`Logout App ${crypto.randomUUID()}`);
+
+    const res = await app.request(
+      "/api/auth/logout?app=shift",
+      withAuth(store.session_token, { method: "POST" }),
+      env,
+    );
+
+    expect(res.headers.get("Location")).toBe("http://shift.localhost/login");
   });
 
   it("rejects an app value outside the enum", async () => {

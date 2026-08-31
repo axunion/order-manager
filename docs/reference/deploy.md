@@ -25,8 +25,10 @@ All four apps deploy to Cloudflare Workers with `wrangler deploy`. Deployment is
    chose a different name. No `database_id`-style opaque ID to copy — R2
    buckets are addressed by name.
 4. Set production values in `apps/api/wrangler.jsonc` `vars`:
-   - `ADMIN_ORIGIN` / `ORDER_ORIGIN` / `SIGNUP_ORIGIN` — the deployed SPA URLs
-     (currently localhost placeholders).
+   - `ADMIN_ORIGIN` / `ORDER_ORIGIN` / `SIGNUP_ORIGIN` / `SHIFT_ORIGIN` — the
+     deployed SPA URLs (currently localhost placeholders). Replace **all four**:
+     each is in the credentialed CORS allowlist, so a leftover `localhost`
+     value stays allowed in production.
    - `COOKIE_DOMAIN` — e.g. `.example.com` for cross-subdomain cookie sharing.
    - `ENVIRONMENT` — must stay `"production"` (gates dev-only auth conveniences,
      see [auth.md](./auth.md)).

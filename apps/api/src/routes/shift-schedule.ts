@@ -2,6 +2,7 @@ import {
   type AvailabilitySubmissionResponse,
   CreateShiftInput,
   errorResponse,
+  jstDayRange,
   newId,
   overlaps,
   periodDates,
@@ -9,6 +10,7 @@ import {
   type ScheduleResponse,
   type ShiftResponse,
   type StaffingRequirementResponse,
+  toJstDateString,
   UpdateShiftInput,
 } from "@order/core";
 import { createDb, schema } from "@order/db";
@@ -99,6 +101,16 @@ async function resolveShiftRefs(
   return { period };
 }
 
+/** The day before and the day after a business date, as "YYYY-MM-DD". */
+function neighbouringDates(work_date: string): [string, string] {
+  const day = 24 * 60 * 60 * 1000;
+  const midnight = jstDayRange(work_date).from;
+  return [
+    toJstDateString(midnight - day + 1),
+    toJstDateString(midnight + day + 1),
+  ];
+}
+
 /**
  * True when the member already has a shift sharing any minute with this one.
  * Compared on the absolute range so an overnight shift is checked against the
@@ -116,6 +128,11 @@ async function hasOverlap(
   },
   excludeShiftId?: string,
 ): Promise<boolean> {
+  // Only three dates can possibly overlap: a shift starting on D can run into
+  // D+1, and one starting on D-1 can reach into D. Bounding the read this way
+  // lets idx_shifts_member_date do the work instead of scanning the member's
+  // whole history on every write, without changing the overnight semantics.
+  const [before = "", after = ""] = neighbouringDates(candidate.work_date);
   const existing = await db
     .select({
       member_id: schema.shifts.member_id,
@@ -128,6 +145,7 @@ async function hasOverlap(
       and(
         eq(schema.shifts.store_id, storeId),
         eq(schema.shifts.member_id, candidate.member_id),
+        inArray(schema.shifts.work_date, [before, candidate.work_date, after]),
         excludeShiftId ? ne(schema.shifts.id, excludeShiftId) : undefined,
       ),
     );
@@ -322,6 +340,20 @@ export const shiftsRouter = new Hono<AuthEnv>()
     const shiftId = c.req.param("id");
     const input = c.req.valid("json");
     const db = createDb(c.env.DB);
+
+    // Resolve the target first: otherwise an unknown or foreign id whose body
+    // happens to collide with the caller's own schedule answers 409, which
+    // says nothing true about the shift they asked to change.
+    const target = await db
+      .select({ id: schema.shifts.id })
+      .from(schema.shifts)
+      .where(
+        and(eq(schema.shifts.id, shiftId), eq(schema.shifts.store_id, storeId)),
+      )
+      .limit(1);
+    if (target.length === 0) {
+      return errorResponse("NOT_FOUND", "Shift not found", 404);
+    }
 
     const refs = await resolveShiftRefs(db, storeId, input);
     if (!refs) {

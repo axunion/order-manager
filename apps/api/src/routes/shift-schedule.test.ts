@@ -82,14 +82,35 @@ describe("POST /api/shift/shifts", () => {
       period_id: periodId,
       member_id: store.member_id,
       ...dayShift,
+      note: "遅れて入る",
     });
 
     expect(res.status).toBe(201);
-    const body = (await res.json()) as {
-      data: { work_date: string; break_minutes: number };
+
+    // The response echoes the request, so read it back: this is what proves
+    // the columns were actually stored rather than defaulted.
+    const schedule = await app.request(
+      `/api/shift/schedule/${periodId}`,
+      withAuth(store.session_token),
+      env,
+    );
+    const body = (await schedule.json()) as {
+      data: {
+        shifts: {
+          work_date: string;
+          break_minutes: number;
+          note: string | null;
+        }[];
+      };
     };
-    expect(body.data.work_date).toBe("2026-09-01");
-    expect(body.data.break_minutes).toBe(60);
+    expect(body.data.shifts).toHaveLength(1);
+    expect(body.data.shifts[0]).toMatchObject({
+      work_date: "2026-09-01",
+      start_minutes: 540,
+      end_minutes: 1020,
+      break_minutes: 60,
+      note: "遅れて入る",
+    });
   });
 
   it("returns 400 for a date outside the period", async () => {
@@ -248,6 +269,15 @@ describe("POST /api/shift/shifts", () => {
     expect(res.status).toBe(403);
   });
 
+  it("returns 401 without a session", async () => {
+    const res = await app.request(
+      "/api/shift/shifts",
+      jsonInit("POST", { period_id: crypto.randomUUID() }),
+      env,
+    );
+    expect(res.status).toBe(401);
+  });
+
   it("returns 403 for a store without the shift product", async () => {
     const store = await seedStore(`Shift No Product ${crypto.randomUUID()}`);
 
@@ -330,6 +360,76 @@ describe("PATCH and DELETE /api/shift/shifts/:id", () => {
     );
 
     expect(res.status).toBe(409);
+  });
+
+  it("returns 404 updating another store's shift, and leaves it untouched", async () => {
+    // Store B sends its own period and member, so the only guard left is the
+    // store_id clause on the update itself.
+    const storeA = await seedShiftStore(`Shift Patch A ${crypto.randomUUID()}`);
+    const storeB = await seedShiftStore(`Shift Patch B ${crypto.randomUUID()}`);
+    const periodA = await createPeriod(storeA.session_token);
+    const periodB = await createPeriod(storeB.session_token);
+    const victim = await createShiftId(storeA.session_token, {
+      period_id: periodA,
+      member_id: storeA.member_id,
+      ...dayShift,
+    });
+
+    const res = await app.request(
+      `/api/shift/shifts/${victim}`,
+      withAuth(
+        storeB.session_token,
+        jsonInit("PATCH", {
+          period_id: periodB,
+          member_id: storeB.member_id,
+          ...dayShift,
+          end_minutes: 1200,
+        }),
+      ),
+      env,
+    );
+    expect(res.status).toBe(404);
+
+    const schedule = await app.request(
+      `/api/shift/schedule/${periodA}`,
+      withAuth(storeA.session_token),
+      env,
+    );
+    const body = (await schedule.json()) as {
+      data: { shifts: { member_id: string; end_minutes: number }[] };
+    };
+    expect(body.data.shifts).toHaveLength(1);
+    expect(body.data.shifts[0]?.member_id).toBe(storeA.member_id);
+    expect(body.data.shifts[0]?.end_minutes).toBe(1020);
+  });
+
+  it("returns 404 updating a shift that does not exist", async () => {
+    const store = await seedShiftStore(
+      `Shift Patch Ghost ${crypto.randomUUID()}`,
+    );
+    const periodId = await createPeriod(store.session_token);
+    await createShiftId(store.session_token, {
+      period_id: periodId,
+      member_id: store.member_id,
+      ...dayShift,
+    });
+
+    // A body that would collide with the caller's own shift: the answer is
+    // still "no such shift", not a conflict report about a different one.
+    const res = await app.request(
+      `/api/shift/shifts/${crypto.randomUUID()}`,
+      withAuth(
+        store.session_token,
+        jsonInit("PATCH", {
+          period_id: periodId,
+          member_id: store.member_id,
+          ...dayShift,
+        }),
+      ),
+      env,
+    );
+
+    expect(res.status).toBe(404);
   });
 
   it("deletes a shift and 404s on another store's", async () => {
@@ -420,6 +520,100 @@ describe("GET /api/shift/schedule/:periodId", () => {
     expect(body.data.submissions).toHaveLength(1);
     expect(body.data.submissions[0]?.entries).toHaveLength(1);
     expect(body.data.requirements).toEqual([]);
+  });
+
+  it("scopes requirements and shifts to this store and this period", async () => {
+    const storeA = await seedShiftStore(
+      `Schedule Scope A ${crypto.randomUUID()}`,
+    );
+    const storeB = await seedShiftStore(
+      `Schedule Scope B ${crypto.randomUUID()}`,
+    );
+    const firstPeriod = await createPeriod(storeA.session_token);
+
+    const secondRes = await app.request(
+      "/api/shift/periods",
+      withAuth(
+        storeA.session_token,
+        jsonInit("POST", {
+          ...period,
+          start_date: "2026-09-16",
+          end_date: "2026-09-30",
+        }),
+      ),
+      env,
+    );
+    const { data: second } = (await secondRes.json()) as {
+      data: { id: string };
+    };
+
+    await createShift(storeA.session_token, {
+      period_id: firstPeriod,
+      member_id: storeA.member_id,
+      ...dayShift,
+    });
+    await createShift(storeA.session_token, {
+      period_id: second.id,
+      member_id: storeA.member_id,
+      ...dayShift,
+      work_date: "2026-09-16",
+    });
+
+    for (const store of [storeA, storeB]) {
+      const positionRes = await app.request(
+        "/api/shift/positions",
+        withAuth(store.session_token, jsonInit("POST", { name: "ホール" })),
+        env,
+      );
+      const { data: position } = (await positionRes.json()) as {
+        data: { id: string };
+      };
+      await app.request(
+        "/api/shift/templates/requirements",
+        withAuth(
+          store.session_token,
+          jsonInit("POST", {
+            weekday: 2,
+            position_id: position.id,
+            start_minutes: 1020,
+            end_minutes: 1320,
+            required_headcount: store === storeA ? 2 : 9,
+          }),
+        ),
+        env,
+      );
+    }
+
+    const res = await app.request(
+      `/api/shift/schedule/${firstPeriod}`,
+      withAuth(storeA.session_token),
+      env,
+    );
+    const body = (await res.json()) as {
+      data: {
+        shifts: { work_date: string }[];
+        requirements: { required_headcount: number }[];
+      };
+    };
+    // Only the first period's shift, and only this store's requirement.
+    expect(body.data.shifts.map((s) => s.work_date)).toEqual(["2026-09-01"]);
+    expect(body.data.requirements).toHaveLength(1);
+    expect(body.data.requirements[0]?.required_headcount).toBe(2);
+  });
+
+  it("returns 403 for a store without the shift product", async () => {
+    // The schedule router carries its own entitlement gate.
+    const store = await seedStore(`Schedule No Product ${crypto.randomUUID()}`);
+
+    const res = await app.request(
+      `/api/shift/schedule/${crypto.randomUUID()}`,
+      withAuth(store.session_token),
+      env,
+    );
+
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("FORBIDDEN");
   });
 
   it("hides an unpublished schedule from staff without erroring", async () => {
