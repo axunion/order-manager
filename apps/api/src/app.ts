@@ -8,6 +8,9 @@ import { menuOptionsRouter } from "./routes/menu-options";
 import { orderRouter } from "./routes/order";
 import { paymentsRouter } from "./routes/payments";
 import { seatsRouter } from "./routes/seats";
+import { shiftMembersRouter } from "./routes/shift-members";
+import { shiftPositionsRouter } from "./routes/shift-positions";
+import { shiftTemplatesRouter } from "./routes/shift-templates";
 import { staffRouter } from "./routes/staff";
 import { staffCallsRouter } from "./routes/staff-calls";
 import { storesRouter } from "./routes/stores";
@@ -87,6 +90,12 @@ app.route("/api/admin/orders", adminOrdersRouter);
 app.route("/api/admin/calls", staffCallsRouter);
 app.route("/api/payments", paymentsRouter);
 app.route("/api/staff", staffRouter);
+
+// Shift management — same session cookie, additionally gated by
+// requireEntitlement("shift") inside each router.
+app.route("/api/shift/members", shiftMembersRouter);
+app.route("/api/shift/positions", shiftPositionsRouter);
+app.route("/api/shift/templates", shiftTemplatesRouter);
 
 // Customer-facing order API — authenticated via qr_token URL parameter
 app.route("/api/order", orderRouter);

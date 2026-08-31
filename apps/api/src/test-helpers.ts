@@ -76,6 +76,30 @@ export async function seedStore(
   return { id, member_id, session_token };
 }
 
+/**
+ * Subscribes a store to a product. seedStore grants "order" only, mirroring
+ * registration, so a test that exercises a shift route grants "shift" itself.
+ */
+export async function grantProduct(
+  store_id: string,
+  product: "order" | "shift",
+  status: "active" | "suspended" = "active",
+): Promise<void> {
+  await createDb(env.DB)
+    .insert(schema.subscriptions)
+    .values({ id: newId(), store_id, product, status });
+}
+
+/** Seeds a store that already subscribes to shift management. */
+export async function seedShiftStore(
+  name: string,
+  role: "owner" | "staff" = "owner",
+): Promise<SeedStore> {
+  const store = await seedStore(name, role);
+  await grantProduct(store.id, "shift");
+  return store;
+}
+
 // ---------------------------------------------------------------------------
 // HTTP helpers
 // ---------------------------------------------------------------------------
