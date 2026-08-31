@@ -181,12 +181,17 @@ category as "a store always has at least one owner". Record them in
 - `src/types/index.ts` — Zod input schemas and response interfaces for
   everything below, following the existing `export const X = z.object(…)`
   + same-named `z.infer` convention. New shared primitives at the top:
-  `workDate` (`/^\d{4}-\d{2}-\d{2}$/` plus a real-calendar check),
-  `minutesOfDay` (`int, 0…2880`), `headcount` (`int, 0…999`). The
-  calendar check already exists as a private parse helper in
-  `packages/core/src/domain/time.ts` (it rejects `2024-02-30` instead of
-  rolling over) — export it and reuse it rather than writing a second
-  one.
+  `workDate` (`/^\d{4}-\d{2}-\d{2}$/` plus a real-calendar check, done by
+  running the date through `jstDayRange`, which already rejects
+  `2024-02-30` instead of rolling it over), `headcount` (`int, 0…999`),
+  and a deliberate split for times: `timeOfDay` (`0…1439`) for a start,
+  `endOfBand` for an end that may cross midnight. One `minutesOfDay`
+  covering both would have let a start time of 1500 through, which the
+  DB's canonical-encoding CHECK then rejects as a 500.
+
+  Shipped as `packages/core/src/types/shift.ts` rather than appended to
+  `types/index.ts`, which re-exports it: that file is already ~500 lines,
+  and this is a separate product.
 - **New `src/domain/shift.ts` + `shift.test.ts`** — pure functions, no
   I/O, used by both the SPA and the API:
   - `halfMonthPeriod(dateStr)` → `{ start_date, end_date }` for the

@@ -200,6 +200,20 @@ describe("lateNightMinutes", () => {
     ).toBe(420);
   });
 
+  it("counts both ends of the day for a shift spanning them", () => {
+    // 04:00 -> 23:00 touches the early band (60) and the late one (60).
+    expect(
+      lateNightMinutes(shift({ start_minutes: 240, end_minutes: 1380 })),
+    ).toBe(120);
+  });
+
+  it("counts the second night of a shift that runs a full 24 hours", () => {
+    // 23:00 -> 23:00 the next day: 23:00-05:00 (360) plus 22:00-23:00 (60).
+    expect(
+      lateNightMinutes(shift({ start_minutes: 1380, end_minutes: 2820 })),
+    ).toBe(420);
+  });
+
   it("counts nothing for a shift ending exactly at 22:00", () => {
     expect(
       lateNightMinutes(shift({ start_minutes: 1080, end_minutes: 1320 })),
@@ -271,6 +285,32 @@ describe("laborWarnings", () => {
     expect(codes([justOver])).toContain("BREAK_REQUIRED_45");
   });
 
+  it("stays silent when the required break is exactly met", () => {
+    const sixPlus = shift({
+      start_minutes: 540,
+      end_minutes: 946,
+      break_minutes: 45,
+    }); // 361 worked
+    const eightPlus = shift({
+      start_minutes: 540,
+      end_minutes: 1141,
+      break_minutes: 60,
+    }); // 541 worked
+
+    expect(codes([sixPlus])).not.toContain("BREAK_REQUIRED_45");
+    expect(codes([eightPlus])).not.toContain("BREAK_REQUIRED_60");
+  });
+
+  it("does not require the 60-minute break at exactly 8 hours worked", () => {
+    const exactly = shift({
+      start_minutes: 540,
+      end_minutes: 1079,
+      break_minutes: 59,
+    }); // 480 worked, the proposal's 8h00-with-59-minutes case
+
+    expect(codes([exactly])).not.toContain("BREAK_REQUIRED_60");
+  });
+
   it("requires a 60-minute break past 8 hours", () => {
     const justOver = shift({
       start_minutes: 540,
@@ -305,6 +345,28 @@ describe("laborWarnings", () => {
     expect(codes(week)).toContain("WEEKLY_OVER_40H");
   });
 
+  it("warns past 40 hours in a week, not at exactly 40", () => {
+    // Five days of exactly 8 hours = 2400 minutes, then one minute more.
+    const week = (extra: number) =>
+      [
+        "2026-08-31",
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+      ].map((work_date, index) =>
+        shift({
+          work_date,
+          start_minutes: 540,
+          end_minutes: 1020 + (index === 0 ? extra : 0),
+          break_minutes: 0,
+        }),
+      );
+
+    expect(codes(week(0))).not.toContain("WEEKLY_OVER_40H");
+    expect(codes(week(1))).toContain("WEEKLY_OVER_40H");
+  });
+
   it("splits weeks at Monday, so the same days across a boundary do not add up", () => {
     // Sunday 2026-08-30 and Monday 2026-08-31 fall in different weeks.
     const longDay = (work_date: string) =>
@@ -337,18 +399,24 @@ describe("laborWarnings", () => {
     expect(codes(week.slice(0, 6))).not.toContain("NO_REST_DAY");
   });
 
-  it("warns at, but not below, a member's weekly cap", () => {
+  it("warns over, but not at, a member's weekly cap", () => {
     const capped = [profile({ weekly_cap_minutes: 600 })];
-    const day = (work_date: string) =>
+    const minutes = (work_date: string, worked: number) =>
       shift({
         work_date,
         start_minutes: 540,
-        end_minutes: 900,
+        end_minutes: 540 + worked,
         break_minutes: 0,
-      }); // 6h
+      });
 
-    expect(codes([day("2026-08-31")], capped)).not.toContain("OVER_WEEKLY_CAP");
-    expect(codes([day("2026-08-31"), day("2026-09-01")], capped)).toContain(
+    expect(codes([minutes("2026-08-31", 360)], capped)).not.toContain(
+      "OVER_WEEKLY_CAP",
+    );
+    // Exactly at the cap is allowed; one minute past it is not.
+    expect(codes([minutes("2026-08-31", 600)], capped)).not.toContain(
+      "OVER_WEEKLY_CAP",
+    );
+    expect(codes([minutes("2026-08-31", 601)], capped)).toContain(
       "OVER_WEEKLY_CAP",
     );
   });
@@ -383,10 +451,40 @@ describe("laborWarnings", () => {
     expect(warnings.map((w) => w.member_id)).toEqual(["m1"]);
   });
 
-  it("returns warnings rather than throwing on a member with no profile", () => {
-    expect(() =>
-      laborWarnings([shift({ member_id: "unknown" })], []),
-    ).not.toThrow();
+  it("still judges a member who has no work profile", () => {
+    // A profile carries the wage, cap and minor flag; its absence must not
+    // silence the limits that apply to everyone.
+    const long = shift({
+      member_id: "unknown",
+      start_minutes: 540,
+      end_minutes: 1200,
+      break_minutes: 60,
+    }); // 600 worked, in the late-night band from 22:00
+
+    const result = laborWarnings([long], []);
+
+    expect(result.map((w) => w.code)).toContain("DAILY_OVER_8H");
+    expect(result.map((w) => w.code)).not.toContain("MINOR_LATE_NIGHT");
+  });
+
+  it("omits work_date on warnings that span a whole week", () => {
+    const week = [
+      "2026-08-31",
+      "2026-09-01",
+      "2026-09-02",
+      "2026-09-03",
+      "2026-09-04",
+      "2026-09-05",
+      "2026-09-06",
+    ].map((work_date) =>
+      shift({ work_date, start_minutes: 540, end_minutes: 780 }),
+    );
+
+    for (const warning of laborWarnings(week, [profile()])) {
+      if (warning.code === "NO_REST_DAY") {
+        expect(warning.work_date).toBeUndefined();
+      }
+    }
   });
 });
 
@@ -470,6 +568,20 @@ describe("coverage", () => {
     );
   });
 
+  it("counts a shift that only partly covers the band", () => {
+    const partial = shift({
+      position_id: "hall",
+      start_minutes: 960, // 16:00, before the band opens
+      end_minutes: 1080, // 18:00, one hour into it
+    });
+
+    const rows = coverage([partial], [requirement], ["2026-09-01"]);
+    expect(rows[0]?.assigned).toBe(1);
+    // The row describes the requirement's band, not the shift's.
+    expect(rows[0]?.start_minutes).toBe(1020);
+    expect(rows[0]?.end_minutes).toBe(1320);
+  });
+
   it("applies a requirement only to its own weekday", () => {
     const rows = coverage(
       [
@@ -546,6 +658,26 @@ describe("estimatedLaborCost", () => {
       [profile({ hourly_wage: 1001 })],
     );
 
-    expect(Number.isInteger(result.total)).toBe(true);
+    expect(result.total).toBe(834); // 1001 x 50 / 60 = 834.166…, rounded
+  });
+
+  it("accumulates per_date across days and lists an unpriced member once", () => {
+    const result = estimatedLaborCost(
+      [
+        shift({ member_id: "m1", work_date: "2026-09-01" }),
+        shift({ member_id: "m1", work_date: "2026-09-02" }),
+        shift({ member_id: "m2", work_date: "2026-09-01" }),
+        shift({ member_id: "m2", work_date: "2026-09-02" }),
+      ],
+      [
+        profile({ member_id: "m1", hourly_wage: 1200 }),
+        profile({ member_id: "m2", hourly_wage: null }),
+      ],
+    );
+
+    expect(result.per_date["2026-09-01"]).toBe(8400);
+    expect(result.per_date["2026-09-02"]).toBe(8400);
+    expect(result.per_member.m1).toBe(16800);
+    expect(result.unpriced_member_ids).toEqual(["m2"]);
   });
 });

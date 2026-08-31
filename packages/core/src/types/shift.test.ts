@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CreatePositionInput,
   CreateSchedulePeriodInput,
   CreateShiftInput,
   CreateShiftPatternInput,
@@ -7,6 +8,7 @@ import {
   SaveAvailabilityInput,
   UpdateMemberPositionsInput,
   UpdateMemberWorkProfileInput,
+  UpdatePositionInput,
 } from "./shift";
 
 const baseShift = {
@@ -37,6 +39,34 @@ describe("work_date validation", () => {
       work_date: "2026-9-1",
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("CreatePositionInput", () => {
+  it("defaults sort_order to 0 and trims the name", () => {
+    const result = CreatePositionInput.parse({ name: "  ホール  " });
+    expect(result.name).toBe("ホール");
+    expect(result.sort_order).toBe(0);
+  });
+
+  it("rejects an empty name and a negative sort order", () => {
+    expect(CreatePositionInput.safeParse({ name: "   " }).success).toBe(false);
+    expect(
+      CreatePositionInput.safeParse({ name: "ホール", sort_order: -1 }).success,
+    ).toBe(false);
+  });
+
+  it("requires every field on update, including is_active", () => {
+    expect(
+      UpdatePositionInput.safeParse({
+        name: "ホール",
+        sort_order: 1,
+        is_active: false,
+      }).success,
+    ).toBe(true);
+    expect(
+      UpdatePositionInput.safeParse({ name: "ホール", sort_order: 1 }).success,
+    ).toBe(false);
   });
 });
 
@@ -77,6 +107,34 @@ describe("CreateShiftInput times", () => {
         break_minutes: 0,
       }).success,
     ).toBe(false);
+  });
+
+  it("rejects a negative start time", () => {
+    expect(
+      CreateShiftInput.safeParse({ ...baseShift, start_minutes: -60 }).success,
+    ).toBe(false);
+  });
+
+  it("accepts a shift spanning exactly 24 hours", () => {
+    expect(
+      CreateShiftInput.safeParse({
+        ...baseShift,
+        start_minutes: 60,
+        end_minutes: 1500,
+        break_minutes: 0,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("accepts a break one minute shorter than the shift", () => {
+    expect(
+      CreateShiftInput.safeParse({
+        ...baseShift,
+        start_minutes: 540,
+        end_minutes: 1020,
+        break_minutes: 479,
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects a break that leaves no worked time", () => {
@@ -130,6 +188,17 @@ describe("CreateSchedulePeriodInput", () => {
         submission_deadline: deadline,
       }).success,
     ).toBe(true);
+  });
+
+  it("reports a calendar-invalid start date instead of throwing", () => {
+    // The half-month refinement calls halfMonthPeriod, which throws on a bad
+    // date; safeParse must still return a result the route can turn into 400.
+    const result = CreateSchedulePeriodInput.safeParse({
+      start_date: "2026-02-30",
+      end_date: "2026-02-28",
+      submission_deadline: deadline,
+    });
+    expect(result.success).toBe(false);
   });
 
   it("rejects a range that is not a whole half-month", () => {

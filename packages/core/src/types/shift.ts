@@ -175,8 +175,15 @@ export const CreateSchedulePeriodInput = z
   })
   .refine(
     (v) => {
-      const half = halfMonthPeriod(v.start_date);
-      return half.start_date === v.start_date && half.end_date === v.end_date;
+      // halfMonthPeriod throws on a calendar-invalid date, and this object
+      // refinement still runs when start_date failed its own check — letting
+      // it throw would surface as a 500 instead of a validation error.
+      try {
+        const half = halfMonthPeriod(v.start_date);
+        return half.start_date === v.start_date && half.end_date === v.end_date;
+      } catch {
+        return false;
+      }
     },
     {
       message:
