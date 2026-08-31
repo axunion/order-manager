@@ -22,6 +22,18 @@ async function createPosition(token: string, name = "ホール"): Promise<string
   return body.data.id;
 }
 
+/** Reads a member's assignments back through the roster endpoint. */
+async function assignedPositions(
+  token: string,
+  memberId: string,
+): Promise<string[]> {
+  const res = await app.request("/api/shift/members", withAuth(token), env);
+  const body = (await res.json()) as {
+    data: { id: string; position_ids: string[] }[];
+  };
+  return body.data.find((m) => m.id === memberId)?.position_ids ?? [];
+}
+
 const profileBody = {
   hourly_wage: 1100,
   weekly_cap_minutes: 1200,
@@ -29,6 +41,11 @@ const profileBody = {
 };
 
 describe("GET /api/shift/members", () => {
+  it("returns 401 without a session", async () => {
+    const res = await app.request("/api/shift/members", {}, env);
+    expect(res.status).toBe(401);
+  });
+
   it("lists the store's members with their positions and profile", async () => {
     const store = await seedShiftStore(`Roster List ${crypto.randomUUID()}`);
     const position = await createPosition(store.session_token);
@@ -118,6 +135,8 @@ describe("GET /api/shift/members", () => {
     );
 
     expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: { message: string } };
+    expect(body.error.message).toContain("Owner");
   });
 
   it("returns 403 for a store without the shift product", async () => {
@@ -152,10 +171,13 @@ describe("PUT /api/shift/members/:memberId/positions", () => {
       withAuth(store.session_token, jsonInit("PUT", { position_ids: [hall] })),
       env,
     );
-
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { data: { position_ids: string[] } };
-    expect(body.data.position_ids).toEqual([hall]);
+
+    // Read it back: the response echoes the request, so only a fresh read
+    // proves the kitchen assignment is gone rather than added to.
+    expect(
+      await assignedPositions(store.session_token, store.member_id),
+    ).toEqual([hall]);
   });
 
   it("accepts an empty list, which clears the assignments", async () => {
@@ -172,9 +194,11 @@ describe("PUT /api/shift/members/:memberId/positions", () => {
       withAuth(store.session_token, jsonInit("PUT", { position_ids: [] })),
       env,
     );
+    expect(res.status).toBe(200);
 
-    const body = (await res.json()) as { data: { position_ids: string[] } };
-    expect(body.data.position_ids).toEqual([]);
+    expect(
+      await assignedPositions(store.session_token, store.member_id),
+    ).toEqual([]);
   });
 
   it("returns 400 for a repeated position", async () => {

@@ -233,6 +233,24 @@ describe("PATCH /api/shift/positions/:id", () => {
     expect(body.data.sort_order).toBe(3);
   });
 
+  it("returns 400 for an empty name", async () => {
+    const { session_token } = await seedShiftStore(
+      `Patch Validation ${crypto.randomUUID()}`,
+    );
+    const position = await createPosition(session_token, "ホール");
+
+    const res = await app.request(
+      `/api/shift/positions/${position.id}`,
+      withAuth(
+        session_token,
+        jsonInit("PATCH", { name: "  ", sort_order: 0, is_active: true }),
+      ),
+      env,
+    );
+
+    expect(res.status).toBe(400);
+  });
+
   it("returns 404 for another store's position", async () => {
     const storeA = await seedShiftStore(`Patch A ${crypto.randomUUID()}`);
     const storeB = await seedShiftStore(`Patch B ${crypto.randomUUID()}`);

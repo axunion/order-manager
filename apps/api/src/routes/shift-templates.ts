@@ -116,7 +116,7 @@ export const shiftTemplatesRouter = new Hono<AuthEnv>()
     const id = newId();
     await db
       .insert(schema.shiftPatterns)
-      .values({ id, store_id: storeId, ...input });
+      .values({ id, ...input, store_id: storeId });
 
     return c.json(
       {
@@ -224,7 +224,7 @@ export const shiftTemplatesRouter = new Hono<AuthEnv>()
       const id = newId();
       await db
         .insert(schema.staffingRequirements)
-        .values({ id, store_id: storeId, ...input });
+        .values({ id, ...input, store_id: storeId });
 
       return c.json(
         { data: { id, ...input } satisfies StaffingRequirementResponse },

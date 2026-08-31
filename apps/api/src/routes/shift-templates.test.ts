@@ -6,7 +6,13 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { app } from "../app";
-import { jsonInit, seedShiftStore, withAuth } from "../test-helpers";
+import {
+  grantProduct,
+  jsonInit,
+  seedShiftStore,
+  seedStore,
+  withAuth,
+} from "../test-helpers";
 
 async function createPosition(token: string, name = "ホール"): Promise<string> {
   const res = await app.request(
@@ -26,6 +32,63 @@ const requirement = (position_id: string) => ({
   start_minutes: 1020,
   end_minutes: 1320,
   required_headcount: 2,
+});
+
+// ---------------------------------------------------------------------------
+// Access control — this router carries its own gates, so it needs its own
+// proof that they are applied. Every other test here holds an entitled owner
+// session, which would keep passing if a gate were dropped from the router.
+// ---------------------------------------------------------------------------
+
+describe("templates route access control", () => {
+  it("returns 401 without a session", async () => {
+    const res = await app.request("/api/shift/templates/patterns", {}, env);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 403 for a store that does not subscribe to shift", async () => {
+    const { session_token } = await seedStore(
+      `Templates No Product ${crypto.randomUUID()}`,
+    );
+
+    const res = await app.request(
+      "/api/shift/templates/patterns",
+      withAuth(session_token),
+      env,
+    );
+
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("FORBIDDEN");
+  });
+
+  it("returns 403 when the shift subscription is suspended", async () => {
+    const store = await seedStore(`Templates Suspended ${crypto.randomUUID()}`);
+    await grantProduct(store.id, "shift", "suspended");
+
+    const res = await app.request(
+      "/api/shift/templates/requirements",
+      withAuth(store.session_token),
+      env,
+    );
+
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 403 for a staff-role session (owner-only)", async () => {
+    const store = await seedShiftStore(
+      `Templates Staff ${crypto.randomUUID()}`,
+      "staff",
+    );
+
+    const res = await app.request(
+      "/api/shift/templates/patterns",
+      withAuth(store.session_token),
+      env,
+    );
+
+    expect(res.status).toBe(403);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -145,6 +208,88 @@ describe("/api/shift/templates/patterns", () => {
     expect(allList).toHaveLength(1);
   });
 
+  it("does not list another store's patterns", async () => {
+    const storeA = await seedShiftStore(
+      `Pattern List A ${crypto.randomUUID()}`,
+    );
+    const storeB = await seedShiftStore(
+      `Pattern List B ${crypto.randomUUID()}`,
+    );
+    await app.request(
+      "/api/shift/templates/patterns",
+      withAuth(storeA.session_token, jsonInit("POST", pattern)),
+      env,
+    );
+
+    const res = await app.request(
+      "/api/shift/templates/patterns",
+      withAuth(storeB.session_token),
+      env,
+    );
+    const { data: list } = (await res.json()) as { data: unknown[] };
+    expect(list).toEqual([]);
+  });
+
+  it("returns 400 for an update whose band runs backwards", async () => {
+    const { session_token } = await seedShiftStore(
+      `Pattern Patch Invalid ${crypto.randomUUID()}`,
+    );
+    const created = await app.request(
+      "/api/shift/templates/patterns",
+      withAuth(session_token, jsonInit("POST", pattern)),
+      env,
+    );
+    const { data: made } = (await created.json()) as { data: { id: string } };
+
+    const res = await app.request(
+      `/api/shift/templates/patterns/${made.id}`,
+      withAuth(
+        session_token,
+        jsonInit("PATCH", {
+          name: "逆",
+          start_minutes: 1260,
+          end_minutes: 600,
+          sort_order: 0,
+          is_active: true,
+        }),
+      ),
+      env,
+    );
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 404 when updating another store's pattern", async () => {
+    const storeA = await seedShiftStore(
+      `Pattern Patch A ${crypto.randomUUID()}`,
+    );
+    const storeB = await seedShiftStore(
+      `Pattern Patch B ${crypto.randomUUID()}`,
+    );
+    const created = await app.request(
+      "/api/shift/templates/patterns",
+      withAuth(storeA.session_token, jsonInit("POST", pattern)),
+      env,
+    );
+    const { data: made } = (await created.json()) as { data: { id: string } };
+
+    const res = await app.request(
+      `/api/shift/templates/patterns/${made.id}`,
+      withAuth(
+        storeB.session_token,
+        jsonInit("PATCH", {
+          ...pattern,
+          name: "乗っ取り",
+          sort_order: 0,
+          is_active: true,
+        }),
+      ),
+      env,
+    );
+
+    expect(res.status).toBe(404);
+  });
+
   it("returns 404 for another store's pattern", async () => {
     const storeA = await seedShiftStore(`Pattern A ${crypto.randomUUID()}`);
     const storeB = await seedShiftStore(`Pattern B ${crypto.randomUUID()}`);
@@ -229,6 +374,114 @@ describe("/api/shift/templates/requirements", () => {
         storeB.session_token,
         jsonInit("POST", requirement(foreignPosition)),
       ),
+      env,
+    );
+
+    expect(res.status).toBe(404);
+  });
+
+  it("updates a requirement", async () => {
+    const { session_token } = await seedShiftStore(
+      `Requirement Patch ${crypto.randomUUID()}`,
+    );
+    const position = await createPosition(session_token);
+    const created = await app.request(
+      "/api/shift/templates/requirements",
+      withAuth(session_token, jsonInit("POST", requirement(position))),
+      env,
+    );
+    const { data: made } = (await created.json()) as { data: { id: string } };
+
+    const res = await app.request(
+      `/api/shift/templates/requirements/${made.id}`,
+      withAuth(
+        session_token,
+        jsonInit("PATCH", {
+          ...requirement(position),
+          required_headcount: 4,
+        }),
+      ),
+      env,
+    );
+
+    expect(res.status).toBe(200);
+    const listed = await app.request(
+      "/api/shift/templates/requirements",
+      withAuth(session_token),
+      env,
+    );
+    const { data: list } = (await listed.json()) as {
+      data: { required_headcount: number }[];
+    };
+    expect(list[0]?.required_headcount).toBe(4);
+  });
+
+  it("returns 400 when updating with a weekday outside 0-6", async () => {
+    const { session_token } = await seedShiftStore(
+      `Requirement Patch Invalid ${crypto.randomUUID()}`,
+    );
+    const position = await createPosition(session_token);
+    const created = await app.request(
+      "/api/shift/templates/requirements",
+      withAuth(session_token, jsonInit("POST", requirement(position))),
+      env,
+    );
+    const { data: made } = (await created.json()) as { data: { id: string } };
+
+    const res = await app.request(
+      `/api/shift/templates/requirements/${made.id}`,
+      withAuth(
+        session_token,
+        jsonInit("PATCH", { ...requirement(position), weekday: -1 }),
+      ),
+      env,
+    );
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 404 when updating another store's requirement", async () => {
+    const storeA = await seedShiftStore(`Req Patch A ${crypto.randomUUID()}`);
+    const storeB = await seedShiftStore(`Req Patch B ${crypto.randomUUID()}`);
+    const positionA = await createPosition(storeA.session_token);
+    const positionB = await createPosition(storeB.session_token);
+    const created = await app.request(
+      "/api/shift/templates/requirements",
+      withAuth(storeA.session_token, jsonInit("POST", requirement(positionA))),
+      env,
+    );
+    const { data: made } = (await created.json()) as { data: { id: string } };
+
+    const res = await app.request(
+      `/api/shift/templates/requirements/${made.id}`,
+      // A position of store B's own, so the ownership check that fails is
+      // the one on the requirement id, not the one on the body.
+      withAuth(storeB.session_token, jsonInit("PATCH", requirement(positionB))),
+      env,
+    );
+
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 when an update points the requirement at another store's position", async () => {
+    const storeA = await seedShiftStore(
+      `Req Patch Pos A ${crypto.randomUUID()}`,
+    );
+    const storeB = await seedShiftStore(
+      `Req Patch Pos B ${crypto.randomUUID()}`,
+    );
+    const foreign = await createPosition(storeA.session_token);
+    const own = await createPosition(storeB.session_token);
+    const created = await app.request(
+      "/api/shift/templates/requirements",
+      withAuth(storeB.session_token, jsonInit("POST", requirement(own))),
+      env,
+    );
+    const { data: made } = (await created.json()) as { data: { id: string } };
+
+    const res = await app.request(
+      `/api/shift/templates/requirements/${made.id}`,
+      withAuth(storeB.session_token, jsonInit("PATCH", requirement(foreign))),
       env,
     );
 

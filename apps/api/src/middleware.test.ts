@@ -9,28 +9,17 @@
  * shift route slice owes at least one 403 asserted through a real endpoint.
  */
 import { env } from "cloudflare:workers";
-import { newId } from "@order/core";
 import { createDb, schema } from "@order/db";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
 import { type AuthEnv, requireEntitlement, requireStore } from "./middleware";
-import { seedStore, withAuth } from "./test-helpers";
+import { grantProduct, seedStore, withAuth } from "./test-helpers";
 
 const gatedApp = new Hono<AuthEnv>()
   .use(requireStore)
   .use(requireEntitlement("shift"))
   .get("/", (c) => c.json({ data: { ok: true } }));
-
-async function grant(
-  store_id: string,
-  product: "order" | "shift",
-  status: "active" | "suspended" = "active",
-): Promise<void> {
-  await createDb(env.DB)
-    .insert(schema.subscriptions)
-    .values({ id: newId(), store_id, product, status });
-}
 
 async function subscribedProducts(store_id: string): Promise<string[]> {
   const rows = await createDb(env.DB)
@@ -45,7 +34,7 @@ describe("requireEntitlement", () => {
     const { id, session_token } = await seedStore(
       `Entitled ${crypto.randomUUID()}`,
     );
-    await grant(id, "shift");
+    await grantProduct(id, "shift");
 
     const res = await gatedApp.request("/", withAuth(session_token), env);
 
@@ -71,7 +60,7 @@ describe("requireEntitlement", () => {
     const { id, session_token } = await seedStore(
       `Suspended Product ${crypto.randomUUID()}`,
     );
-    await grant(id, "shift", "suspended");
+    await grantProduct(id, "shift", "suspended");
 
     const res = await gatedApp.request("/", withAuth(session_token), env);
 
@@ -83,7 +72,7 @@ describe("requireEntitlement", () => {
   it("does not let one store ride on another store's subscription", async () => {
     const entitled = await seedStore(`Store A ${crypto.randomUUID()}`);
     const other = await seedStore(`Store B ${crypto.randomUUID()}`);
-    await grant(entitled.id, "shift");
+    await grantProduct(entitled.id, "shift");
 
     const res = await gatedApp.request("/", withAuth(other.session_token), env);
 
@@ -116,7 +105,7 @@ describe("requireEntitlement", () => {
     const { id, session_token } = await seedStore(
       `Suspended Store ${crypto.randomUUID()}`,
     );
-    await grant(id, "shift");
+    await grantProduct(id, "shift");
     await createDb(env.DB)
       .update(schema.stores)
       .set({ status: "suspended" })

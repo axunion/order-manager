@@ -204,9 +204,9 @@ export const shiftMembersRouter = new Hono<AuthEnv>()
         .insert(schema.memberWorkProfiles)
         .values({
           id: newId(),
+          ...input,
           store_id: storeId,
           member_id: memberId,
-          ...input,
         })
         .onConflictDoUpdate({
           target: schema.memberWorkProfiles.member_id,
