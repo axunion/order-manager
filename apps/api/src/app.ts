@@ -12,6 +12,7 @@ import { shiftAvailabilityRouter } from "./routes/shift-availability";
 import { shiftMembersRouter } from "./routes/shift-members";
 import { shiftPeriodsRouter } from "./routes/shift-periods";
 import { shiftPositionsRouter } from "./routes/shift-positions";
+import { shiftScheduleRouter, shiftsRouter } from "./routes/shift-schedule";
 import { shiftTemplatesRouter } from "./routes/shift-templates";
 import { staffRouter } from "./routes/staff";
 import { staffCallsRouter } from "./routes/staff-calls";
@@ -44,6 +45,7 @@ const corsMiddleware = createMiddleware<{ Bindings: Env }>(async (c, next) => {
     c.env.ADMIN_ORIGIN,
     c.env.ORDER_ORIGIN,
     c.env.SIGNUP_ORIGIN,
+    c.env.SHIFT_ORIGIN,
   ].filter(Boolean);
 
   const origin = c.req.header("Origin") ?? "";
@@ -99,6 +101,8 @@ app.route("/api/shift/availability", shiftAvailabilityRouter);
 app.route("/api/shift/members", shiftMembersRouter);
 app.route("/api/shift/periods", shiftPeriodsRouter);
 app.route("/api/shift/positions", shiftPositionsRouter);
+app.route("/api/shift/schedule", shiftScheduleRouter);
+app.route("/api/shift/shifts", shiftsRouter);
 app.route("/api/shift/templates", shiftTemplatesRouter);
 
 // Customer-facing order API — authenticated via qr_token URL parameter

@@ -347,9 +347,15 @@ export interface ShiftResponse {
   note: string | null;
 }
 
-/** What the schedule screen needs in one request. */
+/**
+ * What the schedule screen needs in one request. `submissions` and
+ * `requirements` are the owner's grid inputs and are absent from a staff
+ * response, which carries only that member's own shifts.
+ */
 export interface ScheduleResponse {
   period: SchedulePeriodResponse;
   published: boolean;
   shifts: ShiftResponse[];
+  submissions?: AvailabilitySubmissionResponse[];
+  requirements?: StaffingRequirementResponse[];
 }

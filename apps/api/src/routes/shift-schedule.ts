@@ -1,0 +1,388 @@
+import {
+  type AvailabilitySubmissionResponse,
+  CreateShiftInput,
+  errorResponse,
+  newId,
+  overlaps,
+  periodDates,
+  type SchedulePeriodResponse,
+  type ScheduleResponse,
+  type ShiftResponse,
+  type StaffingRequirementResponse,
+  UpdateShiftInput,
+} from "@order/core";
+import { createDb, schema } from "@order/db";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
+import { Hono } from "hono";
+import {
+  type AuthEnv,
+  requireEntitlement,
+  requireOwner,
+  requireStore,
+} from "../middleware";
+import { bodyValidator } from "../validator";
+
+const shiftColumns = {
+  id: schema.shifts.id,
+  period_id: schema.shifts.period_id,
+  member_id: schema.shifts.member_id,
+  position_id: schema.shifts.position_id,
+  work_date: schema.shifts.work_date,
+  start_minutes: schema.shifts.start_minutes,
+  end_minutes: schema.shifts.end_minutes,
+  break_minutes: schema.shifts.break_minutes,
+  note: schema.shifts.note,
+};
+
+const periodColumns = {
+  id: schema.schedulePeriods.id,
+  start_date: schema.schedulePeriods.start_date,
+  end_date: schema.schedulePeriods.end_date,
+  status: schema.schedulePeriods.status,
+  submission_deadline: schema.schedulePeriods.submission_deadline,
+  published_at: schema.schedulePeriods.published_at,
+};
+
+async function findPeriod(
+  db: ReturnType<typeof createDb>,
+  storeId: string,
+  periodId: string,
+): Promise<SchedulePeriodResponse | null> {
+  const rows = await db
+    .select(periodColumns)
+    .from(schema.schedulePeriods)
+    .where(
+      and(
+        eq(schema.schedulePeriods.id, periodId),
+        eq(schema.schedulePeriods.store_id, storeId),
+      ),
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Every id in a shift body must belong to the caller's store. */
+async function resolveShiftRefs(
+  db: ReturnType<typeof createDb>,
+  storeId: string,
+  input: { period_id: string; member_id: string; position_id: string | null },
+): Promise<{ period: SchedulePeriodResponse } | null> {
+  const period = await findPeriod(db, storeId, input.period_id);
+  if (!period) return null;
+
+  const member = await db
+    .select({ id: schema.members.id })
+    .from(schema.members)
+    .where(
+      and(
+        eq(schema.members.id, input.member_id),
+        eq(schema.members.store_id, storeId),
+      ),
+    )
+    .limit(1);
+  if (member.length === 0) return null;
+
+  if (input.position_id) {
+    const position = await db
+      .select({ id: schema.positions.id })
+      .from(schema.positions)
+      .where(
+        and(
+          eq(schema.positions.id, input.position_id),
+          eq(schema.positions.store_id, storeId),
+        ),
+      )
+      .limit(1);
+    if (position.length === 0) return null;
+  }
+
+  return { period };
+}
+
+/**
+ * True when the member already has a shift sharing any minute with this one.
+ * Compared on the absolute range so an overnight shift is checked against the
+ * next morning correctly. SQLite cannot express range non-overlap in an index,
+ * so this is a check-then-act guard — documented as such in the domain model.
+ */
+async function hasOverlap(
+  db: ReturnType<typeof createDb>,
+  storeId: string,
+  candidate: {
+    member_id: string;
+    work_date: string;
+    start_minutes: number;
+    end_minutes: number;
+  },
+  excludeShiftId?: string,
+): Promise<boolean> {
+  const existing = await db
+    .select({
+      member_id: schema.shifts.member_id,
+      work_date: schema.shifts.work_date,
+      start_minutes: schema.shifts.start_minutes,
+      end_minutes: schema.shifts.end_minutes,
+    })
+    .from(schema.shifts)
+    .where(
+      and(
+        eq(schema.shifts.store_id, storeId),
+        eq(schema.shifts.member_id, candidate.member_id),
+        excludeShiftId ? ne(schema.shifts.id, excludeShiftId) : undefined,
+      ),
+    );
+
+  // overlaps() compares on the absolute range, so an overnight shift and the
+  // next morning are judged correctly rather than per calendar date.
+  return existing.some((other) =>
+    overlaps(
+      { ...candidate, break_minutes: 0 },
+      { ...other, break_minutes: 0 },
+    ),
+  );
+}
+
+export const shiftScheduleRouter = new Hono<AuthEnv>()
+  .use(requireStore)
+  .use(requireEntitlement("shift"))
+
+  /**
+   * GET /api/shift/schedule/:periodId
+   *
+   * The owner gets the whole schedule plus the availability and requirements
+   * the grid measures against. A staff member gets only their own shifts, and
+   * only once the period is published — before that they get an empty list
+   * with published: false rather than an error, since the period's existence
+   * is no secret from its own store's staff.
+   *
+   * Response: 200 { data: ScheduleResponse }
+   */
+  .get("/:periodId", async (c) => {
+    const { id: storeId, member_id: memberId, role } = c.var.store;
+    const periodId = c.req.param("periodId");
+    const db = createDb(c.env.DB);
+
+    const period = await findPeriod(db, storeId, periodId);
+    if (!period) {
+      return errorResponse("NOT_FOUND", "Schedule period not found", 404);
+    }
+
+    const published = period.status === "published";
+    if (role !== "owner" && !published) {
+      return c.json({
+        data: { period, published, shifts: [] } satisfies ScheduleResponse,
+      });
+    }
+
+    const shifts = await db
+      .select(shiftColumns)
+      .from(schema.shifts)
+      .where(
+        role === "owner"
+          ? and(
+              eq(schema.shifts.store_id, storeId),
+              eq(schema.shifts.period_id, periodId),
+            )
+          : and(
+              eq(schema.shifts.store_id, storeId),
+              eq(schema.shifts.period_id, periodId),
+              eq(schema.shifts.member_id, memberId),
+            ),
+      )
+      .orderBy(asc(schema.shifts.work_date), asc(schema.shifts.start_minutes));
+
+    if (role !== "owner") {
+      return c.json({
+        data: { period, published, shifts } satisfies ScheduleResponse,
+      });
+    }
+
+    const [submissionRows, requirements] = await Promise.all([
+      db
+        .select({
+          id: schema.availabilitySubmissions.id,
+          member_id: schema.availabilitySubmissions.member_id,
+          status: schema.availabilitySubmissions.status,
+          submitted_at: schema.availabilitySubmissions.submitted_at,
+          note: schema.availabilitySubmissions.note,
+        })
+        .from(schema.availabilitySubmissions)
+        .where(
+          and(
+            eq(schema.availabilitySubmissions.store_id, storeId),
+            eq(schema.availabilitySubmissions.period_id, periodId),
+          ),
+        ),
+      db
+        .select({
+          id: schema.staffingRequirements.id,
+          weekday: schema.staffingRequirements.weekday,
+          position_id: schema.staffingRequirements.position_id,
+          start_minutes: schema.staffingRequirements.start_minutes,
+          end_minutes: schema.staffingRequirements.end_minutes,
+          required_headcount: schema.staffingRequirements.required_headcount,
+        })
+        .from(schema.staffingRequirements)
+        .where(eq(schema.staffingRequirements.store_id, storeId)),
+    ]);
+
+    const entries =
+      submissionRows.length === 0
+        ? []
+        : await db
+            .select({
+              id: schema.availabilityEntries.id,
+              submission_id: schema.availabilityEntries.submission_id,
+              work_date: schema.availabilityEntries.work_date,
+              kind: schema.availabilityEntries.kind,
+              start_minutes: schema.availabilityEntries.start_minutes,
+              end_minutes: schema.availabilityEntries.end_minutes,
+            })
+            .from(schema.availabilityEntries)
+            .where(
+              and(
+                eq(schema.availabilityEntries.store_id, storeId),
+                inArray(
+                  schema.availabilityEntries.submission_id,
+                  submissionRows.map((r) => r.id),
+                ),
+              ),
+            );
+
+    const submissions: AvailabilitySubmissionResponse[] = submissionRows.map(
+      (row) => ({
+        ...row,
+        entries: entries
+          .filter((e) => e.submission_id === row.id)
+          .map(({ submission_id: _submission, ...entry }) => entry),
+      }),
+    );
+
+    return c.json({
+      data: {
+        period,
+        published,
+        shifts,
+        submissions,
+        requirements: requirements satisfies StaffingRequirementResponse[],
+      } satisfies ScheduleResponse,
+    });
+  });
+
+export const shiftsRouter = new Hono<AuthEnv>()
+  .use(requireStore)
+  .use(requireEntitlement("shift"))
+  .use(requireOwner)
+
+  /**
+   * POST /api/shift/shifts
+   * 404 when the period, member or position is another store's; 400 when the
+   * date falls outside the period; 409 when the member is already working.
+   * Response: 201 { data: ShiftResponse }
+   */
+  .post("/", bodyValidator(CreateShiftInput), async (c) => {
+    const { id: storeId } = c.var.store;
+    const input = c.req.valid("json");
+    const db = createDb(c.env.DB);
+
+    const refs = await resolveShiftRefs(db, storeId, input);
+    if (!refs) {
+      return errorResponse("NOT_FOUND", "Shift target not found", 404);
+    }
+
+    const dates = periodDates(refs.period.start_date, refs.period.end_date);
+    if (!dates.includes(input.work_date)) {
+      return errorResponse(
+        "VALIDATION_ERROR",
+        `${input.work_date} はこの期間に含まれていません。`,
+        400,
+      );
+    }
+
+    if (await hasOverlap(db, storeId, input)) {
+      return errorResponse(
+        "CONFLICT",
+        "このスタッフはこの時間帯にすでにシフトが入っています。",
+        409,
+      );
+    }
+
+    const id = newId();
+    await db.insert(schema.shifts).values({ id, ...input, store_id: storeId });
+
+    return c.json({ data: { id, ...input } satisfies ShiftResponse }, 201);
+  })
+
+  /**
+   * PATCH /api/shift/shifts/:id
+   * Response: 200 { data: ShiftResponse }
+   */
+  .patch("/:id", bodyValidator(UpdateShiftInput), async (c) => {
+    const { id: storeId } = c.var.store;
+    const shiftId = c.req.param("id");
+    const input = c.req.valid("json");
+    const db = createDb(c.env.DB);
+
+    const refs = await resolveShiftRefs(db, storeId, input);
+    if (!refs) {
+      return errorResponse("NOT_FOUND", "Shift target not found", 404);
+    }
+
+    const dates = periodDates(refs.period.start_date, refs.period.end_date);
+    if (!dates.includes(input.work_date)) {
+      return errorResponse(
+        "VALIDATION_ERROR",
+        `${input.work_date} はこの期間に含まれていません。`,
+        400,
+      );
+    }
+
+    if (await hasOverlap(db, storeId, input, shiftId)) {
+      return errorResponse(
+        "CONFLICT",
+        "このスタッフはこの時間帯にすでにシフトが入っています。",
+        409,
+      );
+    }
+
+    const updated = await db
+      .update(schema.shifts)
+      .set(input)
+      .where(
+        and(eq(schema.shifts.id, shiftId), eq(schema.shifts.store_id, storeId)),
+      )
+      .returning(shiftColumns);
+
+    const result = updated[0];
+    if (!result) {
+      return errorResponse("NOT_FOUND", "Shift not found", 404);
+    }
+    return c.json({ data: result satisfies ShiftResponse });
+  })
+
+  /**
+   * DELETE /api/shift/shifts/:id
+   * A hard delete: a removed shift has no history worth keeping in v1, and a
+   * retired row would still count towards coverage.
+   * Response: 200 { data: { id } }
+   */
+  .delete("/:id", async (c) => {
+    const { id: storeId } = c.var.store;
+    const db = createDb(c.env.DB);
+
+    const deleted = await db
+      .delete(schema.shifts)
+      .where(
+        and(
+          eq(schema.shifts.id, c.req.param("id")),
+          eq(schema.shifts.store_id, storeId),
+        ),
+      )
+      .returning({ id: schema.shifts.id });
+
+    const result = deleted[0];
+    if (!result) {
+      return errorResponse("NOT_FOUND", "Shift not found", 404);
+    }
+    return c.json({ data: result });
+  });

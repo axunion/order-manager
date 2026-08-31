@@ -26,6 +26,7 @@
     "ADMIN_ORIGIN": "http://localhost:5173",
     "ORDER_ORIGIN": "http://localhost:5174",
     "SIGNUP_ORIGIN": "http://localhost:5175",
+    "SHIFT_ORIGIN": "http://localhost:5176",
     // Set to ".example.com" in production for cross-subdomain cookie sharing.
     // Leave empty in local dev so the cookie is scoped to localhost only.
     "COOKIE_DOMAIN": "",

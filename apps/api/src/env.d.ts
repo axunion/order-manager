@@ -13,6 +13,8 @@ interface Env {
   ORDER_ORIGIN: string;
   /** Origin of the store signup SPA, e.g. "https://signup.example.com" */
   SIGNUP_ORIGIN: string;
+  /** Origin of the shift-management SPA, e.g. "https://shift.example.com" */
+  SHIFT_ORIGIN: string;
   /**
    * Parent domain for cross-subdomain cookie sharing, e.g. ".example.com".
    * Leave empty in local dev so the cookie is scoped to localhost only.
@@ -38,6 +40,7 @@ declare namespace Cloudflare {
     ADMIN_ORIGIN: string;
     ORDER_ORIGIN: string;
     SIGNUP_ORIGIN: string;
+    SHIFT_ORIGIN: string;
     COOKIE_DOMAIN: string;
     RESEND_API_KEY: string;
     MAIL_FROM: string;

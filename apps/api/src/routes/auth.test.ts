@@ -278,6 +278,72 @@ describe("GET /api/auth/verify", () => {
 // POST /api/auth/login
 // ---------------------------------------------------------------------------
 
+describe("Magic Link landing app", () => {
+  it("sends a shift login back to the shift SPA", async () => {
+    const store = await seedStore(`Login App Shift ${crypto.randomUUID()}`);
+    const [member] = await createDb(env.DB)
+      .select({ email: schema.members.email })
+      .from(schema.members)
+      .where(eq(schema.members.store_id, store.id))
+      .limit(1);
+    const devEnv = { ...env, ENVIRONMENT: "development" };
+
+    const res = await app.request(
+      "/api/auth/login",
+      jsonInit("POST", { email: member?.email, app: "shift" }),
+      devEnv,
+    );
+    const body = (await res.json()) as { data: { verify_url?: string } };
+    const verifyUrl = body.data.verify_url ?? "";
+    expect(verifyUrl).toContain("app=shift");
+
+    const verified = await app.request(
+      verifyUrl.replace(new URL(verifyUrl).origin, ""),
+      {},
+      devEnv,
+    );
+    expect(verified.status).toBe(302);
+    expect(verified.headers.get("Location")).toBe(devEnv.SHIFT_ORIGIN);
+  });
+
+  it("lands on admin when app is absent or unknown", async () => {
+    const store = await seedStore(`Login App Default ${crypto.randomUUID()}`);
+    const [member] = await createDb(env.DB)
+      .select({ email: schema.members.email })
+      .from(schema.members)
+      .where(eq(schema.members.store_id, store.id))
+      .limit(1);
+    const devEnv = { ...env, ENVIRONMENT: "development" };
+
+    const res = await app.request(
+      "/api/auth/login",
+      jsonInit("POST", { email: member?.email }),
+      devEnv,
+    );
+    const body = (await res.json()) as { data: { verify_url?: string } };
+    const verifyUrl = body.data.verify_url ?? "";
+
+    const verified = await app.request(
+      `${verifyUrl.replace(new URL(verifyUrl).origin, "")}&app=nonsense`,
+      {},
+      devEnv,
+    );
+    expect(verified.headers.get("Location")).toBe(devEnv.ADMIN_ORIGIN);
+  });
+
+  it("rejects an app value outside the enum", async () => {
+    const res = await app.request(
+      "/api/auth/login",
+      jsonInit("POST", {
+        email: "someone@example.com",
+        app: "evil.example.com",
+      }),
+      env,
+    );
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("POST /api/auth/login", () => {
   it("always returns 200 with { data: { sent: true } }", async () => {
     const res = await app.request(

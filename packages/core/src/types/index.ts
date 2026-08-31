@@ -88,6 +88,12 @@ export interface EmailChangeResponse {
 
 export const LoginInput = z.object({
   email: z.email(),
+  /**
+   * Which SPA the Magic Link should land in. An enum, not a URL: the API maps
+   * it to an origin from its own env, so a caller can never redirect the link
+   * somewhere of its choosing.
+   */
+  app: z.enum(["admin", "shift"]).default("admin"),
 });
 export type LoginInput = z.infer<typeof LoginInput>;
 

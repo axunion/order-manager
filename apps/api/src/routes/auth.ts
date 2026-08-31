@@ -19,6 +19,17 @@ import { deleteSession, isSecureRequest, issueMagicLink } from "../auth";
 import { requireStore } from "../middleware";
 import { bodyValidator } from "../validator";
 
+/**
+ * Maps the `app` query parameter to the SPA origin the Magic Link should land
+ * in. A fixed env-backed allowlist rather than a caller-supplied URL, so this
+ * can never become an open redirect; anything unrecognised lands on admin.
+ */
+function landingOrigin(env: Env, app: string | undefined): string {
+  return app === "shift" && env.SHIFT_ORIGIN
+    ? env.SHIFT_ORIGIN
+    : env.ADMIN_ORIGIN;
+}
+
 export const authRouter = new Hono<{ Bindings: Env }>()
   /**
    * GET /api/auth/me
@@ -157,8 +168,10 @@ export const authRouter = new Hono<{ Bindings: Env }>()
       "Set-Cookie",
       buildSessionCookie(sessionToken, { secure, domain: cookieDomain }),
     );
-    // Redirect to the admin SPA — absolute URL required for cross-origin deploy.
-    return c.redirect(c.env.ADMIN_ORIGIN, 302);
+    // Absolute URL required for cross-origin deploy. The target comes from a
+    // fixed env-backed map, never from a caller-supplied URL, so there is no
+    // open-redirect surface: an unknown or missing value lands on admin.
+    return c.redirect(landingOrigin(c.env, c.req.query("app")), 302);
   })
 
   /**
@@ -180,7 +193,7 @@ export const authRouter = new Hono<{ Bindings: Env }>()
    * also lock down onboarding; only an already-active owner can reactivate.
    */
   .post("/login", bodyValidator(LoginInput), async (c) => {
-    const { email } = c.req.valid("json");
+    const { email, app: targetApp } = c.req.valid("json");
     const db = createDb(c.env.DB);
 
     const rows = await db
@@ -226,7 +239,7 @@ export const authRouter = new Hono<{ Bindings: Env }>()
         if (token) {
           // Magic Link verify URL is always on the API origin.
           const baseUrl = new URL(c.req.url).origin;
-          magicLinkUrl = `${baseUrl}${MAGIC_LINK_VERIFY_PATH}?token=${token}`;
+          magicLinkUrl = `${baseUrl}${MAGIC_LINK_VERIFY_PATH}?token=${token}&app=${targetApp}`;
 
           // Defer email delivery so its latency is not observable to the caller.
           // Without this, response time reveals whether the email address is registered.
@@ -291,8 +304,8 @@ export const authRouter = new Hono<{ Bindings: Env }>()
       "Set-Cookie",
       buildClearSessionCookie({ secure, domain: cookieDomain }),
     );
-    // Redirect to the admin SPA login page.
-    return c.redirect(`${c.env.ADMIN_ORIGIN}/login`, 302);
+    // Back to the login page of whichever SPA the caller logged out from.
+    return c.redirect(`${landingOrigin(c.env, c.req.query("app"))}/login`, 302);
   })
 
   /**
@@ -316,5 +329,5 @@ export const authRouter = new Hono<{ Bindings: Env }>()
       "Set-Cookie",
       buildClearSessionCookie({ secure, domain: cookieDomain }),
     );
-    return c.redirect(`${c.env.ADMIN_ORIGIN}/login`, 302);
+    return c.redirect(`${landingOrigin(c.env, c.req.query("app"))}/login`, 302);
   });
