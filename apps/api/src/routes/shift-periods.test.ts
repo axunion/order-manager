@@ -9,6 +9,7 @@ import { app } from "../app";
 import {
   grantProduct,
   jsonInit,
+  seedMember,
   seedShiftStore,
   seedStore,
   withAuth,
@@ -76,13 +77,13 @@ describe("shift period access control", () => {
     expect(res.status).toBe(403);
   });
 
-  it("lets a staff session read periods but not create one", async () => {
-    // Staff need the list to find the period they are submitting for.
+  it("lets a staff session read its store's periods but not create one", async () => {
+    // Staff need the list to find the period they are submitting for. Using a
+    // colleague in the owner's own store, so the read proves visibility rather
+    // than just returning another store's empty list.
     const owner = await seedShiftStore(`Periods Owner ${crypto.randomUUID()}`);
-    const staff = await seedShiftStore(
-      `Periods Staff ${crypto.randomUUID()}`,
-      "staff",
-    );
+    const staff = await seedMember(owner.id, "staff");
+    const made = await createPeriod(owner.session_token);
 
     const read = await app.request(
       "/api/shift/periods",
@@ -90,21 +91,22 @@ describe("shift period access control", () => {
       env,
     );
     expect(read.status).toBe(200);
+    const body = (await read.json()) as { data: { id: string }[] };
+    expect(body.data.map((p) => p.id)).toEqual([made.id]);
 
     const write = await app.request(
       "/api/shift/periods",
-      withAuth(staff.session_token, jsonInit("POST", period)),
+      withAuth(
+        staff.session_token,
+        jsonInit("POST", {
+          ...period,
+          start_date: "2026-09-16",
+          end_date: "2026-09-30",
+        }),
+      ),
       env,
     );
     expect(write.status).toBe(403);
-
-    // The owner of a different store is unaffected.
-    const ownerWrite = await app.request(
-      "/api/shift/periods",
-      withAuth(owner.session_token, jsonInit("POST", period)),
-      env,
-    );
-    expect(ownerWrite.status).toBe(201);
   });
 });
 
@@ -218,6 +220,27 @@ describe("GET /api/shift/periods", () => {
 
     const body = (await res.json()) as { data: unknown[] };
     expect(body.data).toEqual([]);
+  });
+
+  it("returns a single period by id", async () => {
+    const { session_token } = await seedShiftStore(
+      `Period By Id ${crypto.randomUUID()}`,
+    );
+    const made = await createPeriod(session_token);
+
+    const res = await app.request(
+      `/api/shift/periods/${made.id}`,
+      withAuth(session_token),
+      env,
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      data: { id: string; start_date: string; status: string };
+    };
+    expect(body.data.id).toBe(made.id);
+    expect(body.data.start_date).toBe("2026-09-01");
+    expect(body.data.status).toBe("collecting");
   });
 
   it("returns 404 for another store's period by id", async () => {

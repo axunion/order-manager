@@ -77,6 +77,39 @@ export async function seedStore(
 }
 
 /**
+ * Adds a second active member, with their own session, to an existing store.
+ * seedStore/seedShiftStore create one member each in a store of their own, so
+ * this is what a test needs to prove one colleague cannot read or overwrite
+ * another's data.
+ */
+export async function seedMember(
+  store_id: string,
+  role: "owner" | "staff" = "staff",
+): Promise<{ member_id: string; session_token: string }> {
+  const db = createDb(env.DB);
+  const member_id = newId();
+  const session_token = newId();
+
+  await db.insert(schema.members).values({
+    id: member_id,
+    store_id,
+    email: `${member_id}@test.internal`,
+    role,
+    status: "active",
+    activated_at: now(),
+  });
+  await db.insert(schema.sessions).values({
+    id: newId(),
+    store_id,
+    member_id,
+    session_token: await hashToken(session_token),
+    expires_at: now() + SESSION_TTL_MS,
+  });
+
+  return { member_id, session_token };
+}
+
+/**
  * Subscribes a store to a product. seedStore grants "order" only, mirroring
  * registration, so a test that exercises a shift route grants "shift" itself.
  */

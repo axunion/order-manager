@@ -51,6 +51,7 @@ async function findPeriod(
 
 async function entriesFor(
   db: ReturnType<typeof createDb>,
+  storeId: string,
   submissionIds: string[],
 ): Promise<Map<string, AvailabilityEntryResponse[]>> {
   const bySubmission = new Map<string, AvailabilityEntryResponse[]>();
@@ -62,7 +63,14 @@ async function entriesFor(
       submission_id: schema.availabilityEntries.submission_id,
     })
     .from(schema.availabilityEntries)
-    .where(inArray(schema.availabilityEntries.submission_id, submissionIds))
+    // store_id is denormalized onto entries precisely so it can be filtered
+    // here too, even though submission_id already implies the store.
+    .where(
+      and(
+        eq(schema.availabilityEntries.store_id, storeId),
+        inArray(schema.availabilityEntries.submission_id, submissionIds),
+      ),
+    )
     .orderBy(
       asc(schema.availabilityEntries.work_date),
       asc(schema.availabilityEntries.start_minutes),
@@ -74,6 +82,49 @@ async function entriesFor(
     else bySubmission.set(submission_id, [entry]);
   }
   return bySubmission;
+}
+
+/**
+ * The contradiction a single-entry schema cannot see: a day off and an offered
+ * band on the same date, or two bands that overlap. The schedule builder would
+ * otherwise read both and have no way to choose.
+ *
+ * Returns the offending date, or null when the set is coherent.
+ */
+function contradictoryDate(
+  entries: {
+    work_date: string;
+    kind: string;
+    start_minutes: number | null;
+    end_minutes: number | null;
+  }[],
+): string | null {
+  const byDate = new Map<string, typeof entries>();
+  for (const entry of entries) {
+    const list = byDate.get(entry.work_date);
+    if (list) list.push(entry);
+    else byDate.set(entry.work_date, [entry]);
+  }
+
+  for (const [work_date, dayEntries] of byDate) {
+    const offDays = dayEntries.filter((e) => e.kind === "day_off");
+    if (offDays.length > 0 && dayEntries.length > offDays.length) {
+      return work_date;
+    }
+    if (offDays.length > 1) return work_date;
+
+    const bands = dayEntries
+      .filter((e) => e.kind === "available")
+      .map((e) => [e.start_minutes ?? 0, e.end_minutes ?? 0] as const)
+      .sort((a, b) => a[0] - b[0]);
+    for (let i = 1; i < bands.length; i++) {
+      const previous = bands[i - 1];
+      const current = bands[i];
+      if (previous && current && current[0] < previous[1]) return work_date;
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -116,7 +167,9 @@ async function readOwnSubmission(
     };
   }
 
-  const entries = (await entriesFor(db, [submission.id])).get(submission.id);
+  const entries = (await entriesFor(db, storeId, [submission.id])).get(
+    submission.id,
+  );
   return { ...submission, entries: entries ?? [] };
 }
 
@@ -181,6 +234,15 @@ export const shiftAvailabilityRouter = new Hono<AuthEnv>()
       );
     }
 
+    const contradiction = contradictoryDate(entries);
+    if (contradiction) {
+      return errorResponse(
+        "VALIDATION_ERROR",
+        `${contradiction} の希望が重複しています。`,
+        400,
+      );
+    }
+
     const existing = await db
       .select({ id: schema.availabilitySubmissions.id })
       .from(schema.availabilitySubmissions)
@@ -197,36 +259,61 @@ export const shiftAvailabilityRouter = new Hono<AuthEnv>()
     const status = submit ? ("submitted" as const) : ("draft" as const);
     const submitted_at = submit ? now() : null;
 
-    if (existing[0]) {
-      await db
-        .update(schema.availabilitySubmissions)
-        .set({ status, submitted_at, note })
-        .where(eq(schema.availabilitySubmissions.id, submissionId));
-      await db
-        .delete(schema.availabilityEntries)
-        .where(eq(schema.availabilityEntries.submission_id, submissionId));
-    } else {
-      await db.insert(schema.availabilitySubmissions).values({
-        id: submissionId,
-        store_id: storeId,
-        period_id: periodId,
-        member_id: memberId,
-        status,
-        submitted_at,
-        note,
-      });
-    }
+    const rows = entries.map((entry) => ({
+      id: newId(),
+      ...entry,
+      store_id: storeId,
+      submission_id: submissionId,
+    }));
 
-    if (entries.length > 0) {
-      await db.insert(schema.availabilityEntries).values(
-        entries.map((entry) => ({
-          id: newId(),
-          store_id: storeId,
-          submission_id: submissionId,
-          ...entry,
-        })),
+    // One transaction: without it a failed insert leaves the member's previous
+    // availability deleted and the submission reading "submitted" with nothing
+    // in it, which the manager would build a schedule on.
+    //
+    // Chunked because D1 caps a query at 100 bound parameters and each entry
+    // binds 8 (its seven columns plus the generated created_at) — a routine
+    // half-month of one band per day is already over the limit.
+    const ENTRIES_PER_INSERT = 12;
+    const inserts = [];
+    for (let i = 0; i < rows.length; i += ENTRIES_PER_INSERT) {
+      inserts.push(
+        db
+          .insert(schema.availabilityEntries)
+          .values(rows.slice(i, i + ENTRIES_PER_INSERT)),
       );
     }
+
+    await db.batch([
+      db
+        .insert(schema.availabilitySubmissions)
+        .values({
+          id: submissionId,
+          store_id: storeId,
+          period_id: periodId,
+          member_id: memberId,
+          status,
+          submitted_at,
+          note,
+        })
+        // Upsert rather than update-then-insert: two concurrent saves would
+        // otherwise race into the (period_id, member_id) unique index.
+        .onConflictDoUpdate({
+          target: [
+            schema.availabilitySubmissions.period_id,
+            schema.availabilitySubmissions.member_id,
+          ],
+          set: { status, submitted_at, note },
+        }),
+      db
+        .delete(schema.availabilityEntries)
+        .where(
+          and(
+            eq(schema.availabilityEntries.store_id, storeId),
+            eq(schema.availabilityEntries.submission_id, submissionId),
+          ),
+        ),
+      ...inserts,
+    ]);
 
     // Read back rather than echoing the request: the response then carries
     // the stored entry ids, and a client can trust it as the new state.
@@ -276,6 +363,7 @@ export const shiftAvailabilityRouter = new Hono<AuthEnv>()
 
     const entriesBySubmission = await entriesFor(
       db,
+      storeId,
       rows.map((r) => r.id),
     );
     const submissions: AvailabilitySubmissionResponse[] = rows.map((row) => ({

@@ -7,7 +7,13 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { app } from "../app";
-import { jsonInit, seedShiftStore, seedStore, withAuth } from "../test-helpers";
+import {
+  jsonInit,
+  seedMember,
+  seedShiftStore,
+  seedStore,
+  withAuth,
+} from "../test-helpers";
 
 const period = {
   start_date: "2026-09-01",
@@ -35,7 +41,11 @@ async function createPeriod(token: string): Promise<string> {
   return body.data.id;
 }
 
-/** Invites a staff member into an existing store and activates a session. */
+/**
+ * Invites a staff member into an existing store. The member stays `pending`
+ * until they verify their Magic Link — which is deliberate here: a pending
+ * invitee still counts as a non-submitter in the manager's list.
+ */
 async function addStaff(ownerToken: string): Promise<string> {
   const res = await app.request(
     "/api/staff",
@@ -84,7 +94,20 @@ describe("PUT /api/shift/availability/:periodId/me", () => {
     expect(body.data.status).toBe("draft");
     expect(body.data.submitted_at).toBeNull();
     expect(body.data.entries).toHaveLength(2);
-    expect(body.data.entries.map((e) => e.kind)).toContain("day_off");
+    expect(body.data.entries).toEqual([
+      expect.objectContaining({
+        work_date: "2026-09-01",
+        kind: "available",
+        start_minutes: 540,
+        end_minutes: 1020,
+      }),
+      expect.objectContaining({
+        work_date: "2026-09-02",
+        kind: "day_off",
+        start_minutes: null,
+        end_minutes: null,
+      }),
+    ]);
   });
 
   it("marks the submission submitted and stamps submitted_at", async () => {
@@ -193,6 +216,188 @@ describe("PUT /api/shift/availability/:periodId/me", () => {
     expect(body.error.code).toBe("CONFLICT");
   });
 
+  it("keeps one member's submission out of another's, in the same store", async () => {
+    // The store_id filter alone cannot catch this: both members are in the
+    // same store, so only the member_id filter separates them.
+    const store = await seedShiftStore(
+      `Availability Colleagues ${crypto.randomUUID()}`,
+    );
+    const colleague = await seedMember(store.id);
+    const periodId = await createPeriod(store.session_token);
+
+    await save(store.session_token, periodId, { submit: true, entries });
+
+    const theirs = await app.request(
+      `/api/shift/availability/${periodId}/me`,
+      withAuth(colleague.session_token),
+      env,
+    );
+    const theirBody = (await theirs.json()) as {
+      data: { member_id: string; status: string; entries: unknown[] };
+    };
+    expect(theirBody.data.member_id).toBe(colleague.member_id);
+    expect(theirBody.data.status).toBe("draft");
+    expect(theirBody.data.entries).toEqual([]);
+  });
+
+  it("does not let a colleague's save overwrite another member's", async () => {
+    const store = await seedShiftStore(
+      `Availability No Overwrite ${crypto.randomUUID()}`,
+    );
+    const colleague = await seedMember(store.id);
+    const periodId = await createPeriod(store.session_token);
+
+    await save(store.session_token, periodId, { submit: true, entries });
+    await save(colleague.session_token, periodId, {
+      entries: [{ work_date: "2026-09-10", kind: "day_off" }],
+    });
+
+    const mine = await app.request(
+      `/api/shift/availability/${periodId}/me`,
+      withAuth(store.session_token),
+      env,
+    );
+    const body = (await mine.json()) as {
+      data: { status: string; entries: { work_date: string }[] };
+    };
+    expect(body.data.status).toBe("submitted");
+    expect(body.data.entries.map((e) => e.work_date)).toEqual([
+      "2026-09-01",
+      "2026-09-02",
+    ]);
+  });
+
+  it("rejects a day off and an offered band on the same date", async () => {
+    const store = await seedShiftStore(
+      `Availability Contradiction ${crypto.randomUUID()}`,
+    );
+    const periodId = await createPeriod(store.session_token);
+
+    const res = await save(store.session_token, periodId, {
+      entries: [
+        {
+          work_date: "2026-09-03",
+          kind: "available",
+          start_minutes: 540,
+          end_minutes: 1020,
+        },
+        { work_date: "2026-09-03", kind: "day_off" },
+      ],
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects two overlapping bands on one date but accepts adjacent ones", async () => {
+    const store = await seedShiftStore(
+      `Availability Overlap ${crypto.randomUUID()}`,
+    );
+    const periodId = await createPeriod(store.session_token);
+
+    const overlapping = await save(store.session_token, periodId, {
+      entries: [
+        {
+          work_date: "2026-09-03",
+          kind: "available",
+          start_minutes: 540,
+          end_minutes: 1020,
+        },
+        {
+          work_date: "2026-09-03",
+          kind: "available",
+          start_minutes: 900,
+          end_minutes: 1200,
+        },
+      ],
+    });
+    expect(overlapping.status).toBe(400);
+
+    const adjacent = await save(store.session_token, periodId, {
+      entries: [
+        {
+          work_date: "2026-09-03",
+          kind: "available",
+          start_minutes: 540,
+          end_minutes: 1020,
+        },
+        {
+          work_date: "2026-09-03",
+          kind: "available",
+          start_minutes: 1020,
+          end_minutes: 1200,
+        },
+      ],
+    });
+    expect(adjacent.status).toBe(200);
+  });
+
+  it("saves a whole half-month of bands in one request", async () => {
+    // 15 entries bind more parameters than D1 allows in a single query, so
+    // this fails unless the insert is chunked.
+    const store = await seedShiftStore(
+      `Availability Full Month ${crypto.randomUUID()}`,
+    );
+    const periodId = await createPeriod(store.session_token);
+    const fullMonth = Array.from({ length: 15 }, (_, index) => ({
+      work_date: `2026-09-${String(index + 1).padStart(2, "0")}`,
+      kind: "available" as const,
+      start_minutes: 540,
+      end_minutes: 1020,
+    }));
+
+    const res = await save(store.session_token, periodId, {
+      submit: true,
+      entries: fullMonth,
+    });
+    expect(res.status).toBe(200);
+
+    const read = await app.request(
+      `/api/shift/availability/${periodId}/me`,
+      withAuth(store.session_token),
+      env,
+    );
+    const body = (await read.json()) as { data: { entries: unknown[] } };
+    expect(body.data.entries).toHaveLength(15);
+  });
+
+  it("still accepts a save after the submission deadline has passed", async () => {
+    // The deadline is advisory in v1: closing submissions is the enforcement.
+    const store = await seedShiftStore(
+      `Availability Late ${crypto.randomUUID()}`,
+    );
+    const res = await app.request(
+      "/api/shift/periods",
+      withAuth(
+        store.session_token,
+        jsonInit("POST", { ...period, submission_deadline: Date.now() - 1000 }),
+      ),
+      env,
+    );
+    const { data: made } = (await res.json()) as { data: { id: string } };
+
+    const saved = await save(store.session_token, made.id, { entries });
+
+    expect(saved.status).toBe(200);
+  });
+
+  it("returns 404 reading another store's period", async () => {
+    const storeA = await seedShiftStore(
+      `Availability Read A ${crypto.randomUUID()}`,
+    );
+    const storeB = await seedShiftStore(
+      `Availability Read B ${crypto.randomUUID()}`,
+    );
+    const periodId = await createPeriod(storeA.session_token);
+
+    const res = await app.request(
+      `/api/shift/availability/${periodId}/me`,
+      withAuth(storeB.session_token),
+      env,
+    );
+
+    expect(res.status).toBe(404);
+  });
+
   it("returns 404 for another store's period", async () => {
     const storeA = await seedShiftStore(
       `Availability A ${crypto.randomUUID()}`,
@@ -279,16 +484,16 @@ describe("GET /api/shift/availability/:periodId", () => {
     expect(body.data.missing_member_ids).toEqual([store.member_id]);
   });
 
-  it("returns 403 for a staff session — one member may not read another's", async () => {
+  it("returns 403 for a staff session in the same store — one member may not read another's", async () => {
     const store = await seedShiftStore(
       `Availability Staff ${crypto.randomUUID()}`,
-      "staff",
     );
-    const periodId = crypto.randomUUID();
+    const colleague = await seedMember(store.id, "staff");
+    const periodId = await createPeriod(store.session_token);
 
     const res = await app.request(
       `/api/shift/availability/${periodId}`,
-      withAuth(store.session_token),
+      withAuth(colleague.session_token),
       env,
     );
 
