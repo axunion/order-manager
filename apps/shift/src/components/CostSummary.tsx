@@ -1,6 +1,6 @@
 import type { LaborCost } from "@order/core";
 import { Card } from "@order/ui";
-import { For, Show } from "solid-js";
+import { createMemo, For, Show } from "solid-js";
 import { formatYen } from "../lib/format";
 import styles from "./CostSummary.module.css";
 
@@ -12,8 +12,9 @@ export default function CostSummary(props: {
   cost: LaborCost;
   nameOf: (memberId: string) => string;
 }) {
-  const members = () =>
-    Object.entries(props.cost.per_member).sort((a, b) => b[1] - a[1]);
+  const members = createMemo(() =>
+    Object.entries(props.cost.per_member).sort((a, b) => b[1] - a[1]),
+  );
 
   return (
     <Card title="人件費の目安" class={styles.panel}>
@@ -21,7 +22,9 @@ export default function CostSummary(props: {
       <Show when={props.cost.unpriced_member_ids.length > 0}>
         <p class={styles.unpriced}>
           時給が未登録のため未計上：
-          {props.cost.unpriced_member_ids.map(props.nameOf).join("、")}
+          {props.cost.unpriced_member_ids
+            .map((id) => props.nameOf(id))
+            .join("、")}
         </p>
       </Show>
       <Show when={members().length > 0}>

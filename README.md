@@ -9,6 +9,7 @@ apps/
   admin/   Management console + login (Vite SPA → Cloudflare Worker)
   order/   Customer ordering screen via QR code (Vite SPA → Cloudflare Worker)
   signup/  Merchant sign-up site (Vite SPA → Cloudflare Worker)
+  shift/   Staff scheduling, a separately sold product (Vite SPA → Cloudflare Worker)
   api/     Hono REST API (Cloudflare Worker + D1)
 
 packages/
@@ -36,6 +37,7 @@ pnpm dev:api      # start Hono Workers dev server
 pnpm dev:admin    # start admin Vite dev server
 pnpm dev:order    # start order Vite dev server
 pnpm dev:signup   # start signup Vite dev server
+pnpm dev:shift    # start shift Vite dev server
 ```
 
 ## Commands

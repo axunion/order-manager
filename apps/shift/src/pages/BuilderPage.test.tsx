@@ -84,6 +84,15 @@ const requirements = [
     end_minutes: 1020,
     required_headcount: 1,
   },
+  // Tuesday evening: exactly one person needed and exactly one working.
+  {
+    id: "req-3",
+    weekday: 2,
+    position_id: "pos-1",
+    start_minutes: 1080,
+    end_minutes: 1140,
+    required_headcount: 1,
+  },
 ];
 
 const shifts = [
@@ -161,6 +170,12 @@ const routes = (extra: MockRoute[] = []): MockRoute[] => [
   { url: "/api/shift/templates/patterns", json: data(patterns) },
 ];
 
+/** How many times the schedule was fetched — one on mount, one per reload. */
+const scheduleReads = (stub: ReturnType<typeof mockFetch>) =>
+  stub.mock.calls.filter((c) =>
+    String(c[0]).endsWith("/api/shift/schedule/period-1"),
+  ).length;
+
 const renderPage = () =>
   render(() => (
     <StoreContext.Provider value={store}>
@@ -186,6 +201,12 @@ describe("BuilderPage", () => {
     // the row carries the shortage or surplus token class, never the same one.
     expect(short.closest("li")?.className).toMatch(/shortage/);
     expect(over.closest("li")?.className).toMatch(/surplus/);
+
+    // An exactly-staffed band is neither, and says nothing extra.
+    const met = screen.getByText(/1\/1/);
+    expect(met.textContent).not.toContain("不足");
+    expect(met.textContent).not.toContain("過剰");
+    expect(met.closest("li")?.className).not.toMatch(/shortage|surplus/);
   });
 
   it("lists a daily-over-8h warning without blocking publication", async () => {
@@ -218,6 +239,8 @@ describe("BuilderPage", () => {
     // equals that one member because member-2's shift carries no wage —
     // both the grand total and the per-member row show it.
     expect(await screen.findAllByText("¥17,000")).toHaveLength(2);
+    // Excluded, not rated at zero: member-2 gets no row of their own.
+    expect(screen.queryByText("¥0")).toBeNull();
     expect((await screen.findByText(/時給が未登録/)).textContent).toContain(
       "kitchen@test.internal",
     );
@@ -254,6 +277,137 @@ describe("BuilderPage", () => {
       end_minutes: 1020,
       break_minutes: 0,
     });
+    // A write that skips the reload leaves the grid showing stale rows.
+    expect(scheduleReads(fetchStub)).toBe(2);
+  });
+
+  it("shows the API's reason when a shift clashes with one already there", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch(
+        routes([
+          {
+            url: "/api/shift/shifts",
+            method: "POST",
+            ok: false,
+            status: 409,
+            json: {
+              error: {
+                code: "CONFLICT",
+                message:
+                  "このスタッフはこの時間帯にすでにシフトが入っています。",
+              },
+            },
+          },
+        ]),
+      ),
+    );
+    const user = userEvent.setup();
+
+    renderPage();
+    await screen.findByRole("heading", { name: "9/1(火)" });
+
+    await user.selectOptions(
+      screen.getAllByLabelText(
+        "9/1(火)に追加するスタッフ",
+      )[0] as HTMLSelectElement,
+      "member-1",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "9/1(火)に早番で追加" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "このスタッフはこの時間帯にすでにシフトが入っています。",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("deletes a shift only after the confirmation is accepted", async () => {
+    const fetchStub = mockFetch(
+      routes([
+        { url: "/api/shift/shifts/shift-1", method: "DELETE", json: data({}) },
+      ]),
+    );
+    vi.stubGlobal("fetch", fetchStub);
+    const user = userEvent.setup();
+
+    renderPage();
+    await screen.findByRole("heading", { name: "9/1(火)" });
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "9/1(火)のhall@test.internalのシフトを削除",
+      }),
+    );
+    // Opening the dialog is not the delete.
+    expect(
+      fetchStub.mock.calls.some(
+        (c) => (c[1] as RequestInit | undefined)?.method === "DELETE",
+      ),
+    ).toBe(false);
+
+    await user.click(await screen.findByRole("button", { name: "削除する" }));
+
+    const call = fetchStub.mock.calls.find(
+      (c) => (c[1] as RequestInit | undefined)?.method === "DELETE",
+    ) as [string, RequestInit];
+    expect(String(call[0])).toContain("/api/shift/shifts/shift-1");
+    expect(scheduleReads(fetchStub)).toBe(2);
+  });
+
+  it("publishes the period and says so", async () => {
+    const fetchStub = mockFetch(
+      routes([
+        {
+          url: "/api/shift/periods/period-1/publish",
+          method: "POST",
+          json: data({}),
+        },
+      ]),
+    );
+    vi.stubGlobal("fetch", fetchStub);
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "公開する" }));
+
+    const call = fetchStub.mock.calls.find(
+      (c) => (c[1] as RequestInit | undefined)?.method === "POST",
+    ) as [string, RequestInit];
+    expect(String(call[0])).toContain("/api/shift/periods/period-1/publish");
+    expect(await screen.findByText(/公開しました/)).toBeTruthy();
+    expect(scheduleReads(fetchStub)).toBe(2);
+  });
+
+  it("closes submissions from a collecting period", async () => {
+    const fetchStub = mockFetch([
+      {
+        url: "/api/shift/periods/period-1/close-submissions",
+        method: "POST",
+        json: data({}),
+      },
+      scheduleRoute({ period: { ...period, status: "collecting" } }),
+      { url: "/api/shift/members", json: data(members) },
+      { url: "/api/shift/positions", json: data(positions) },
+      { url: "/api/shift/templates/patterns", json: data(patterns) },
+    ]);
+    vi.stubGlobal("fetch", fetchStub);
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(
+      await screen.findByRole("button", { name: "希望を締め切る" }),
+    );
+
+    const call = fetchStub.mock.calls.find(
+      (c) => (c[1] as RequestInit | undefined)?.method === "POST",
+    ) as [string, RequestInit];
+    expect(String(call[0])).toContain(
+      "/api/shift/periods/period-1/close-submissions",
+    );
+    expect(await screen.findByText(/締め切りました/)).toBeTruthy();
   });
 
   it("exports the schedule as CSV with worked minutes per row", async () => {
@@ -264,23 +418,34 @@ describe("BuilderPage", () => {
       return "blob:mock";
     });
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
-    // happy-dom would try to navigate on the download link's click.
-    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
-      () => undefined,
-    );
+    // happy-dom would navigate on the download link's click; capture the
+    // link instead, so the filename it carries can be asserted.
+    let downloadName = "";
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      downloadName = this.download;
+    });
     const user = userEvent.setup();
 
     renderPage();
     await screen.findByRole("heading", { name: "9/1(火)" });
     await user.click(screen.getByRole("button", { name: "CSV出力" }));
 
-    const csv = await (blobs[0] as Blob).text();
-    expect(csv).toContain(
+    const rows = (await (blobs[0] as Blob).text()).split("\r\n");
+    expect(rows[0]).toContain(
       "日付,スタッフ,ポジション,開始,終了,休憩(分),実働(分)",
     );
-    expect(csv).toContain(
+    // Every shift in the period and nothing else: header plus three rows.
+    expect(rows).toHaveLength(4);
+    expect(rows[1]).toBe(
       "2026-09-01,hall@test.internal,ホール,09:00,19:00,0,600",
     );
+    // The break is subtracted here too, so this row is not a copy of the first.
+    expect(rows[3]).toBe(
+      "2026-09-02,kitchen@test.internal,ホール,09:00,17:00,60,420",
+    );
+    expect(downloadName).toBe("shifts-2026-09-01_2026-09-02.csv");
   });
 
   it("offers closing submissions instead of publishing while still collecting", async () => {

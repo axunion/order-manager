@@ -96,10 +96,14 @@ stores 1 ──── * subscriptions          (which products this store has bo
   `'active' | 'suspended'`, and `plan` is reserved and unused. Every
   pre-existing store was grandfathered into `order`, so the order product
   needs no gate; `requireEntitlement('shift')` reads this table.
-- **positions / shift_patterns** — a store's named roles and named time
-  bands. Both are **retired** (`is_active = false`), never deleted:
-  shifts and staffing requirements reference them and an old schedule
+- **positions** — a store's named roles. **Retired** (`is_active = false`),
+  never deleted: `shifts.position_id` and
+  `staffing_requirements.position_id` reference them, so an old schedule
   still has to render.
+- **shift_patterns** — named time bands, templates only: a shift copies
+  the times and never references a pattern, so there is no FK to protect.
+  Retired rather than deleted all the same, so that retiring one does not
+  quietly change what an existing schedule was built from.
 - **staffing_requirements** — the weekly template the coverage grid
   measures a schedule against: per weekday, position and band, a required
   headcount. Hard-deleted, because a stale one keeps reporting a shortage
@@ -139,6 +143,14 @@ pending ──(magic link verified)──▶ active ──(owner: POST /me/suspe
   it sets the store back to `active`. A store row can also be deleted
   entirely (`DELETE /api/stores/me`, hard delete, no retention) — not
   a `stores.status` transition, the row stops existing.
+- **`stores.status` and `subscriptions.status` are different switches.**
+  `stores.status = 'suspended'` means the account is disabled: nothing in
+  any product works and `requireStore` rejects with 401.
+  `subscriptions.status` says whether an *active* store has bought a
+  particular product: a miss is a 403 from `requireEntitlement` and
+  affects only that product's routes. A store can be perfectly healthy and
+  still have no shift management, and suspending an account never touches
+  its subscriptions.
 
 ### members.status
 

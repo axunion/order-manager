@@ -23,6 +23,8 @@
 }
 
 .who {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-weight: var(--font-semibold);
 }
 

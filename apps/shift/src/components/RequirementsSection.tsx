@@ -3,7 +3,7 @@ import type {
   StaffingRequirementResponse,
 } from "@order/core";
 import { apiFetch, jsonFetch } from "@order/core/client";
-import { Button, Card } from "@order/ui";
+import { Button, Card, ConfirmDialog } from "@order/ui";
 import { createSignal, For, Show } from "solid-js";
 import { formatMinutes, parseMinutes } from "../lib/format";
 import styles from "./SettingsSection.module.css";
@@ -23,6 +23,9 @@ export default function RequirementsSection(props: {
 }) {
   const [weekday, setWeekday] = createSignal(1);
   const [positionId, setPositionId] = createSignal("");
+
+  /** Falls back to the first position so the select is never blank. */
+  const selectedPosition = () => positionId() || (props.positions[0]?.id ?? "");
   const [start, setStart] = createSignal(540);
   const [end, setEnd] = createSignal(1020);
   const [headcount, setHeadcount] = createSignal(1);
@@ -43,7 +46,7 @@ export default function RequirementsSection(props: {
   };
 
   const add = () => {
-    const target = positionId() || props.positions[0]?.id;
+    const target = selectedPosition();
     if (!target) return;
     return run(
       jsonFetch("/api/shift/templates/requirements", "POST", {
@@ -58,6 +61,13 @@ export default function RequirementsSection(props: {
 
   const positionName = (id: string) =>
     props.positions.find((p) => p.id === id)?.name ?? "不明なポジション";
+
+  const label = (requirement: StaffingRequirementResponse) =>
+    `${WEEKDAY_LABELS[requirement.weekday]}曜 ${positionName(
+      requirement.position_id,
+    )} ${formatMinutes(requirement.start_minutes)}–${formatMinutes(
+      requirement.end_minutes,
+    )} ${requirement.required_headcount}人`;
 
   return (
     <Card title="必要人数" class={styles.section}>
@@ -75,18 +85,16 @@ export default function RequirementsSection(props: {
             <For each={props.requirements}>
               {(requirement) => (
                 <li class={styles.item}>
-                  <span class={styles.label}>
-                    {WEEKDAY_LABELS[requirement.weekday]}曜{" "}
-                    {positionName(requirement.position_id)}{" "}
-                    {formatMinutes(requirement.start_minutes)}–
-                    {formatMinutes(requirement.end_minutes)}{" "}
-                    {requirement.required_headcount}人
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={busy()}
-                    onClick={() =>
+                  <span class={styles.label}>{label(requirement)}</span>
+                  <ConfirmDialog
+                    triggerLabel="削除"
+                    triggerVariant="ghost"
+                    triggerDisabled={busy()}
+                    aria-label={`${label(requirement)}を削除`}
+                    title="必要人数の削除"
+                    description={`${label(requirement)}を削除しますか？この曜日の過不足は表示されなくなります。`}
+                    confirmLabel="削除する"
+                    onConfirm={() =>
                       run(
                         apiFetch(
                           `/api/shift/templates/requirements/${requirement.id}`,
@@ -94,9 +102,7 @@ export default function RequirementsSection(props: {
                         ),
                       )
                     }
-                  >
-                    削除
-                  </Button>
+                  />
                 </li>
               )}
             </For>
@@ -126,7 +132,7 @@ export default function RequirementsSection(props: {
             <select
               id="requirement-position"
               class={styles.select}
-              value={positionId()}
+              value={selectedPosition()}
               disabled={busy()}
               onChange={(e) => setPositionId(e.currentTarget.value)}
             >
@@ -176,7 +182,7 @@ export default function RequirementsSection(props: {
             />
           </label>
 
-          <Button disabled={busy()} onClick={add}>
+          <Button aria-label="必要人数を追加" disabled={busy()} onClick={add}>
             追加
           </Button>
         </div>

@@ -74,6 +74,12 @@ Inherited from the base scale. Two rules specific to this app:
   change, never colour alone.
 - **Time inputs** — native `<input type="time">`, min 44px tall. The platform
   picker beats anything hand-rolled on a phone.
+- **Dropdowns** — native `<select>`, the same exception and for the same
+  reason: a manager assigns shifts from a phone in the back of house, where
+  the OS wheel picker beats a custom listbox. This is the only app in the
+  monorepo that does not use `@order/ui`'s Kobalte `Select`; use `Select`
+  for anything that needs styling, grouping or a placeholder beyond what a
+  native option list gives.
 - **Copy from the previous period** — a `ghost` Button above the day list
   with a one-line hint beside it. It prefills the form by weekday and saves
   nothing; the hint has to say so, because a button that silently wrote a
@@ -155,22 +161,6 @@ Example: "Add an owner-only settings page for shift patterns. Use Card, Field
 and Button from @order/ui, existing tokens only. Empty state: 'パターンが未登録です'.
 Errors through ErrorAlert."
 
-## 11. Screens
-
-| Route | Role | What it is |
-|---|---|---|
-| `/login` | — | Magic Link request, posting `app: "shift"` |
-| `/` | owner | Period list and the create form |
-| `/` | staff | Own published shifts, plus a link to submit |
-| `/periods/:id` | owner | The builder: coverage, warnings, cost, CSV |
-| `/periods/:id/availability` | staff | The submission form |
-| `/settings` | owner | Positions, patterns, requirements, staff |
-
-The owner and staff `/` are one component that branches on role. The API is
-the guard — every builder endpoint is owner-only — so this split is UX, not
-security, and must never be the only thing standing between a staff session
-and a wage.
-
 ## 10. Component Ownership Policy
 
 `apps/shift` owns its domain components. Promote something to `@order/ui` only
@@ -192,3 +182,19 @@ Token overrides belong in `src/styles/shift-tokens.css`, imported only from
   --color-primary: #4338ca;
 }
 ```
+
+## 11. Screens
+
+| Route | Role | What it is |
+|---|---|---|
+| `/login` | — | Magic Link request, posting `app: "shift"` |
+| `/` | owner | Period list and the create form |
+| `/` | staff | Own published shifts, plus a link to submit |
+| `/periods/:id` | owner | The builder: coverage, warnings, cost, CSV |
+| `/periods/:id/availability` | staff | The submission form |
+| `/settings` | owner | Positions, patterns, requirements, staff |
+
+The owner and staff `/` are one component that branches on role. The API is
+the guard — every builder endpoint is owner-only — so this split is UX, not
+security, and must never be the only thing standing between a staff session
+and a wage.

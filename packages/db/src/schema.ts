@@ -677,7 +677,7 @@ export const payments = sqliteTable(
 // shift ends past midnight as end_minutes > 1440 (25:00 -> 1500), which keeps
 // it attached to the business day it belongs to and makes duration, the
 // 22:00-05:00 late-night band and overlap checks plain integer arithmetic.
-// See docs/proposals/shift-management.md § 2.
+// See docs/specs/features/shift-management.md § Time encoding.
 // ===========================================================================
 
 // ---------------------------------------------------------------------------

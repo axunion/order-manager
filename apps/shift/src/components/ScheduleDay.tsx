@@ -5,7 +5,7 @@ import type {
   ShiftPatternResponse,
   ShiftResponse,
 } from "@order/core";
-import { Button } from "@order/ui";
+import { Button, ConfirmDialog } from "@order/ui";
 import { createSignal, For, Show } from "solid-js";
 import { formatMinutes, formatWorkDate } from "../lib/format";
 import styles from "./ScheduleDay.module.css";
@@ -103,18 +103,20 @@ export default function ScheduleDay(props: {
                     </span>
                   )}
                 </Show>
-                <button
-                  type="button"
-                  class={styles.remove}
-                  disabled={props.busy}
-                  onClick={() => props.onDelete(shift.id)}
-                >
-                  <span class={styles.srOnly}>
-                    {formatWorkDate(props.workDate)}の
-                    {props.nameOf(shift.member_id)}のシフトを削除
-                  </span>
-                  <span aria-hidden="true">×</span>
-                </button>
+                <ConfirmDialog
+                  triggerLabel="削除"
+                  triggerVariant="ghost"
+                  triggerDisabled={props.busy}
+                  aria-label={`${formatWorkDate(props.workDate)}の${props.nameOf(
+                    shift.member_id,
+                  )}のシフトを削除`}
+                  title="シフトの削除"
+                  description={`${formatWorkDate(props.workDate)}の${props.nameOf(
+                    shift.member_id,
+                  )}のシフトを削除しますか？`}
+                  confirmLabel="削除する"
+                  onConfirm={() => props.onDelete(shift.id)}
+                />
               </li>
             )}
           </For>
@@ -171,6 +173,8 @@ export default function ScheduleDay(props: {
               <Button
                 variant="secondary"
                 size="sm"
+                class={styles.tapTarget}
+                aria-label={`${formatWorkDate(props.workDate)}に${pattern.name}で追加`}
                 disabled={props.busy || !memberId()}
                 onClick={() => add(pattern)}
               >

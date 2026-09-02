@@ -78,6 +78,8 @@ export default function PatternsSection(props: {
                 <Button
                   variant="ghost"
                   size="sm"
+                  class={styles.tapTarget}
+                  aria-label={`「${pattern.name}」を使わない`}
                   disabled={busy()}
                   onClick={() => retire(pattern)}
                 >
@@ -121,7 +123,11 @@ export default function PatternsSection(props: {
             onInput={(e) => setEnd(parseMinutes(e.currentTarget.value))}
           />
         </label>
-        <Button disabled={busy() || !name().trim()} onClick={add}>
+        <Button
+          aria-label="パターンを追加"
+          disabled={busy() || !name().trim()}
+          onClick={add}
+        >
           追加
         </Button>
       </div>

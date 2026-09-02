@@ -6,13 +6,14 @@ Cross-origin authentication design for the order-manager monorepo.
 
 ## Overview
 
-The monorepo runs four separate origins:
+The monorepo runs five separate origins:
 
 | App | Domain (production) | Domain (local dev) |
 |---|---|---|
-| Admin SPA | `admin.example.com` | `localhost:4173` |
-| Order SPA | `order.example.com` | `localhost:4174` |
-| Signup SPA | `signup.example.com` | `localhost:4175` |
+| Admin SPA | `admin.example.com` | `localhost:5173` |
+| Order SPA | `order.example.com` | `localhost:5174` |
+| Signup SPA | `signup.example.com` | `localhost:5175` |
+| Shift SPA | `shift.example.com` | `localhost:5176` |
 | API Worker | `api.example.com` | `localhost:8787` |
 
 Two authentication mechanisms are used:

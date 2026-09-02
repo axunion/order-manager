@@ -29,6 +29,7 @@
 
 .nonSubmitters {
   margin: var(--space-3) 0 0;
+  overflow-wrap: anywhere;
   color: var(--color-warning-fg);
   font-size: var(--text-sm);
 }

@@ -396,9 +396,10 @@ export const storesRouter = new Hono<{ Bindings: Env }>()
    * sessions/magic_link_tokens/seats.qr_token are excluded from the export
    * (auth/bearer secrets, not business data) but are deleted. subscriptions
    * are likewise deleted but not exported — entitlement records, not the
-   * store's own data. The shift-management tables are deleted too; whether a
-   * published schedule belongs in the export is settled when that product
-   * ships (docs/proposals/shift-management.md).
+   * store's own data. The shift-management tables are deleted and also not
+   * exported: a schedule is exportable in a more useful shape from the
+   * builder's per-period CSV. See docs/specs/features/authentication.md
+   * § Account lifecycle.
    *
    * Response: 200 { data: { export: { store, members, menu_categories,
    *   menu_items, option_groups, options, menu_item_option_groups, seats,

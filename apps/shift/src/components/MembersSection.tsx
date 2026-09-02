@@ -83,107 +83,117 @@ export default function MembersSection(props: {
 
   return (
     <Card title="スタッフ" class={styles.section}>
-      <ul class={styles.list}>
-        <For each={props.members}>
-          {(member) => (
-            <li class={styles.item}>
-              <span class={styles.label}>{member.email}</span>
+      <Show
+        when={props.members.length > 0}
+        fallback={<p class={styles.empty}>スタッフがいません。</p>}
+      >
+        <ul class={styles.list}>
+          <For each={props.members}>
+            {(member) => (
+              <li class={styles.item}>
+                <span class={styles.label}>{member.email}</span>
 
-              <Show
-                when={editing() === member.id}
-                fallback={
-                  <>
-                    <span class={styles.meta}>
-                      {member.hourly_wage === null
-                        ? "時給未登録"
-                        : `時給 ${member.hourly_wage}円`}
-                      {member.weekly_cap_minutes === null
-                        ? ""
-                        : ` / 週${member.weekly_cap_minutes / 60}時間まで`}
-                      {member.is_minor ? " / 18歳未満" : ""}
-                    </span>
+                <Show
+                  when={editing() === member.id}
+                  fallback={
+                    <>
+                      <span class={styles.meta}>
+                        {member.hourly_wage === null
+                          ? "時給未登録"
+                          : `時給 ${member.hourly_wage}円`}
+                        {member.weekly_cap_minutes === null
+                          ? ""
+                          : ` / 週${member.weekly_cap_minutes / 60}時間まで`}
+                        {member.is_minor ? " / 18歳未満" : ""}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        class={styles.tapTarget}
+                        aria-label={`${member.email}の勤務条件を編集`}
+                        disabled={busy()}
+                        onClick={() => open(member)}
+                      >
+                        編集
+                      </Button>
+                    </>
+                  }
+                >
+                  <div class={styles.addRow}>
+                    <label class={styles.fieldLabel} for={`wage-${member.id}`}>
+                      時給（円）
+                      <input
+                        id={`wage-${member.id}`}
+                        type="number"
+                        min="0"
+                        class={`${styles.input} ${styles.numberInput}`}
+                        value={wage()}
+                        disabled={busy()}
+                        onInput={(e) => setWage(e.currentTarget.value)}
+                      />
+                    </label>
+                    <label class={styles.fieldLabel} for={`cap-${member.id}`}>
+                      週上限（時間）
+                      <input
+                        id={`cap-${member.id}`}
+                        type="number"
+                        min="0"
+                        class={`${styles.input} ${styles.numberInput}`}
+                        value={cap()}
+                        disabled={busy()}
+                        onInput={(e) => setCap(e.currentTarget.value)}
+                      />
+                    </label>
+                    <label class={styles.checkbox}>
+                      <input
+                        type="checkbox"
+                        checked={minor()}
+                        disabled={busy()}
+                        onChange={(e) => setMinor(e.currentTarget.checked)}
+                      />
+                      18歳未満
+                    </label>
+                    <Button disabled={busy()} onClick={() => save(member.id)}>
+                      保存
+                    </Button>
                     <Button
                       variant="ghost"
-                      size="sm"
                       disabled={busy()}
-                      onClick={() => open(member)}
+                      onClick={() => setEditing("")}
                     >
-                      編集
+                      やめる
                     </Button>
-                  </>
-                }
-              >
-                <div class={styles.addRow}>
-                  <label class={styles.fieldLabel} for={`wage-${member.id}`}>
-                    時給（円）
-                    <input
-                      id={`wage-${member.id}`}
-                      type="number"
-                      min="0"
-                      class={`${styles.input} ${styles.numberInput}`}
-                      value={wage()}
-                      disabled={busy()}
-                      onInput={(e) => setWage(e.currentTarget.value)}
-                    />
-                  </label>
-                  <label class={styles.fieldLabel} for={`cap-${member.id}`}>
-                    週上限（時間）
-                    <input
-                      id={`cap-${member.id}`}
-                      type="number"
-                      min="0"
-                      class={`${styles.input} ${styles.numberInput}`}
-                      value={cap()}
-                      disabled={busy()}
-                      onInput={(e) => setCap(e.currentTarget.value)}
-                    />
-                  </label>
-                  <label class={styles.checkbox}>
-                    <input
-                      type="checkbox"
-                      checked={minor()}
-                      disabled={busy()}
-                      onChange={(e) => setMinor(e.currentTarget.checked)}
-                    />
-                    18歳未満
-                  </label>
-                  <Button disabled={busy()} onClick={() => save(member.id)}>
-                    保存
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    disabled={busy()}
-                    onClick={() => setEditing("")}
-                  >
-                    やめる
-                  </Button>
-                </div>
-              </Show>
+                  </div>
+                </Show>
 
-              <Show when={props.positions.length > 0}>
-                <fieldset class={styles.positionGroup}>
-                  <legend class={styles.srOnly}>
-                    {member.email}のポジション
-                  </legend>
-                  <For each={props.positions}>
-                    {(position) => (
-                      <button
-                        type="button"
-                        class={styles.positionChip}
-                        aria-pressed={member.position_ids.includes(position.id)}
-                        disabled={busy()}
-                        onClick={() => togglePosition(member, position.id)}
-                      >
-                        {position.name}
-                      </button>
-                    )}
-                  </For>
-                </fieldset>
-              </Show>
-            </li>
-          )}
-        </For>
-      </ul>
+                <Show when={props.positions.length > 0}>
+                  <fieldset class={styles.positionGroup}>
+                    <legend class={styles.srOnly}>
+                      {member.email}のポジション
+                    </legend>
+                    <For each={props.positions}>
+                      {(position) => (
+                        <button
+                          type="button"
+                          class={styles.positionChip}
+                          aria-label={`${member.email} ${position.name}`}
+                          aria-pressed={member.position_ids.includes(
+                            position.id,
+                          )}
+                          disabled={busy()}
+                          onClick={() => togglePosition(member, position.id)}
+                        >
+                          {position.name}
+                        </button>
+                      )}
+                    </For>
+                  </fieldset>
+                </Show>
+              </li>
+            )}
+          </For>
+        </ul>
+      </Show>
     </Card>
   );
 }

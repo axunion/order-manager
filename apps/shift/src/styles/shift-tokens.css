@@ -32,6 +32,7 @@
   /* ── Layout ──────────────────────────────────────────────────────── */
   --container-content: 60rem; /* a schedule read edge-to-edge is unreadable */
   --container-login-card: 26rem;
+  --input-number-width: 6rem;
   --shift-header-height: 3.5rem;
   --touch-target-min: 44px;
 

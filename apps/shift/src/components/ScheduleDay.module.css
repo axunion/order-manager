@@ -67,6 +67,8 @@
 }
 
 .who {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-weight: var(--font-semibold);
   color: var(--color-foreground);
 }
@@ -81,21 +83,9 @@
   font-size: var(--text-sm);
 }
 
-.remove {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: var(--touch-target-min);
+/* Button's size="sm" is padding-only, which lands well under 44px. */
+.tapTarget {
   min-height: var(--touch-target-min);
-  border: none;
-  background: none;
-  color: var(--color-muted-foreground);
-  font: inherit;
-  cursor: pointer;
-}
-
-.remove:hover:not(:disabled) {
-  color: var(--color-danger-fg);
 }
 
 .adder {

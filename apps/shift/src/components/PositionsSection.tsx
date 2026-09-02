@@ -69,6 +69,8 @@ export default function PositionsSection(props: {
                     <Button
                       variant="ghost"
                       size="sm"
+                      class={styles.tapTarget}
+                      aria-label={`「${position.name}」を復帰`}
                       disabled={busy()}
                       onClick={() => setActive(position, true)}
                     >
@@ -79,6 +81,8 @@ export default function PositionsSection(props: {
                   <Button
                     variant="ghost"
                     size="sm"
+                    class={styles.tapTarget}
+                    aria-label={`「${position.name}」を使わない`}
                     disabled={busy()}
                     onClick={() => setActive(position, false)}
                   >
@@ -99,7 +103,11 @@ export default function PositionsSection(props: {
           disabled={busy()}
           onInput={(e) => setName(e.currentTarget.value)}
         />
-        <Button disabled={busy() || !name().trim()} onClick={add}>
+        <Button
+          aria-label="ポジションを追加"
+          disabled={busy() || !name().trim()}
+          onClick={add}
+        >
           追加
         </Button>
       </div>
