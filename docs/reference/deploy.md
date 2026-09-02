@@ -1,6 +1,6 @@
 # Deployment
 
-All four apps deploy to Cloudflare Workers with `wrangler deploy`. Deployment is
+All five apps deploy to Cloudflare Workers with `wrangler deploy`. Deployment is
 **manual** for now — CI (`.github/workflows/ci.yml`) runs `pnpm check` / `test` /
 `build` only and does not deploy.
 
@@ -65,7 +65,7 @@ pnpm --filter @order/api exec wrangler deploy
 VITE_API_BASE=https://api.example.com VITE_ORDER_BASE=https://order.example.com \
   pnpm --filter @order/admin build
 pnpm --filter @order/admin exec wrangler deploy
-# repeat for @order/order and @order/signup (VITE_API_BASE only)
+# repeat for @order/order, @order/signup and @order/shift (VITE_API_BASE only)
 ```
 
 Apply migrations before deploying API code that depends on them.

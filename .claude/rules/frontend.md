@@ -15,7 +15,10 @@ paths:
 
 ## API fetch helpers
 
-Import from `@order/core/client`. Both return `{ ok: boolean; data?: T; message?: string }`.
+Import from `@order/core/client`. Both return
+`{ ok: boolean; data?: T; message?: string; status?: number }` — `status` is the HTTP
+status when a response came back, for the rare caller that must tell one failure code
+from another (a 403 product gate is a screen, not an error banner).
 
 | Helper | Use for |
 |---|---|

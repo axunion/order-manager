@@ -334,7 +334,10 @@ with `devServerConfig(5176)`, `vitest.config.ts`, `wrangler.jsonc` with
   pattern buttons, warnings panel, cost summary, CSV export),
   `/settings` (positions, patterns, requirements, member work profiles).
 - Staff pages: `/` my published shifts, `/periods/:id/availability` the
-  submission form (with "copy the previous period").
+  submission form (with "copy the previous period" — matched **by
+  weekday**, since it stands in for the standing weekday rules v1 does
+  not store; the first entry for a weekday wins, and the copy only
+  prefills the form, so nothing is written until the member saves).
 - Role branching follows admin's `<Show when={store.role === "owner"}>`;
   the API is the actual guard, the UI split is UX only.
 - `apps/shift/src/styles/shift-tokens.css` imported only from
@@ -461,6 +464,13 @@ Following `docs/reference/implementation-loop.md`; one slice = one commit.
 - CSV export produces the expected header and one row per shift
   (`vi.spyOn(URL, "createObjectURL"/"revokeObjectURL")` plus a stubbed
   `HTMLAnchorElement.prototype.click`, as in the sales-report tests).
+
+**Known limitation (slice 7):** `availability_entries` allows several
+bands per `(submission, work_date)`, but the staff form offers one per
+day: it renders the first and a re-save drops the rest. Nothing in v1
+writes a second band, so this is a form limitation rather than data loss;
+it is pinned by a test so a later multi-band feature has to face it
+deliberately.
 
 **Deliberately untested:**
 

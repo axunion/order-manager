@@ -9,6 +9,7 @@ All workspace packages use the `@order/` scope:
 | `apps/admin` | `@order/admin` |
 | `apps/order` | `@order/order` |
 | `apps/signup` | `@order/signup` |
+| `apps/shift` | `@order/shift` |
 | `apps/api` | `@order/api` |
 | `packages/db` | `@order/db` |
 | `packages/core` | `@order/core` |
@@ -100,7 +101,8 @@ Biome-only, so no ESLint-based rule).
 
 Forbidden imports to watch for:
 
-- `import ... from "@order/db"` inside any `apps/admin`, `apps/order`, or `apps/signup` file
+- `import ... from "@order/db"` inside any `apps/admin`, `apps/order`, `apps/signup`, or
+  `apps/shift` file
 - `import ... from "@order/ui"` inside any `apps/api` file
 - `import ... from "@order/core/client"` inside any `apps/api` file
 

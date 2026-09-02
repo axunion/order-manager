@@ -21,6 +21,7 @@
     "dev:admin": "pnpm --filter @order/admin dev",
     "dev:order": "pnpm --filter @order/order dev",
     "dev:signup": "pnpm --filter @order/signup dev",
+    "dev:shift": "pnpm --filter @order/shift dev",
     "dev:api": "pnpm --filter @order/api dev",
     "build": "pnpm -r build",
     "check": "biome check && pnpm -r exec tsc --noEmit",

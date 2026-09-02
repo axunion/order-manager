@@ -1,0 +1,18 @@
+.wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: var(--space-6);
+  background: var(--color-background);
+}
+
+.card {
+  max-width: var(--container-login-card);
+}
+
+.body {
+  margin: 0;
+  color: var(--color-muted-foreground);
+  line-height: var(--leading-normal);
+}
