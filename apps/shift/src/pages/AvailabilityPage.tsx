@@ -10,7 +10,12 @@ import { useParams } from "@solidjs/router";
 import { createSignal, For, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import ShiftLayout from "../layouts/ShiftLayout";
-import { formatMinutes, formatWorkDate, weekdayOf } from "../lib/format";
+import {
+  formatMinutes,
+  formatWorkDate,
+  parseMinutes,
+  weekdayOf,
+} from "../lib/format";
 import styles from "./AvailabilityPage.module.css";
 
 type Kind = "none" | "available" | "day_off";
@@ -34,16 +39,6 @@ const DEFAULT_END = 1020; // 17:00
 
 /** An end at or past midnight cannot be typed into <input type="time">. */
 const isOvernight = (day: DayChoice) => day.end_minutes >= 1440;
-
-function toMinutes(value: string): number {
-  const [hours = "0", rest = "0"] = value.split(":");
-  return Number(hours) * 60 + Number(rest);
-}
-
-/** Only ever called for a band that fits inside the day — see isOvernight. */
-function toTimeValue(minutes: number): string {
-  return formatMinutes(minutes);
-}
 
 export default function AvailabilityPage() {
   const params = useParams<{ periodId: string }>();
@@ -296,11 +291,13 @@ export default function AvailabilityPage() {
                           <input
                             type="time"
                             class={styles.time}
-                            value={toTimeValue(day.start_minutes)}
+                            value={formatMinutes(day.start_minutes)}
                             disabled={closed()}
                             onInput={(e) =>
                               update(index(), {
-                                start_minutes: toMinutes(e.currentTarget.value),
+                                start_minutes: parseMinutes(
+                                  e.currentTarget.value,
+                                ),
                               })
                             }
                           />
@@ -313,11 +310,13 @@ export default function AvailabilityPage() {
                           <input
                             type="time"
                             class={styles.time}
-                            value={toTimeValue(day.end_minutes)}
+                            value={formatMinutes(day.end_minutes)}
                             disabled={closed()}
                             onInput={(e) =>
                               update(index(), {
-                                end_minutes: toMinutes(e.currentTarget.value),
+                                end_minutes: parseMinutes(
+                                  e.currentTarget.value,
+                                ),
                               })
                             }
                           />

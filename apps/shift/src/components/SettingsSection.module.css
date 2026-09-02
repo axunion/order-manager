@@ -1,0 +1,128 @@
+.section {
+  margin-bottom: var(--space-5);
+}
+
+.list {
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  min-height: var(--touch-target-min);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.item:last-child {
+  border-bottom: none;
+}
+
+.retired {
+  color: var(--color-subtle-foreground);
+  text-decoration: line-through;
+}
+
+.addRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.fieldLabel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--color-muted-foreground);
+  font-size: var(--text-sm);
+}
+
+.input,
+.select {
+  min-height: var(--touch-target-min);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.numberInput {
+  width: 6rem;
+}
+
+.label {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-foreground);
+}
+
+.meta {
+  color: var(--color-muted-foreground);
+  font-size: var(--text-sm);
+}
+
+.empty {
+  margin: 0 0 var(--space-4);
+  color: var(--color-muted-foreground);
+}
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch-target-min);
+  color: var(--color-muted-foreground);
+  font-size: var(--text-sm);
+}
+
+.positionGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.positionChip {
+  min-height: var(--touch-target-min);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-muted-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+
+.positionChip[aria-pressed="true"] {
+  border-color: var(--color-primary);
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+  font-weight: var(--font-semibold);
+}
+
+.positionChip:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

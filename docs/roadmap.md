@@ -25,6 +25,7 @@ Conventions:
 | 3 | Customer experience | ✅ Shipped |
 | 4 | Money: payments, receipts, adjustments | ✅ Shipped |
 | 5 | Team, scale, and account lifecycle | ✅ Shipped |
+| — | Shift management (second product) | ✅ Shipped (v1) |
 | — | Engineering track (parallel) | Ongoing |
 
 ## Shipped (Phases 1–5)
@@ -56,6 +57,14 @@ One line per phase; the linked specs describe the full shipped behavior.
   sales analytics & CSV export. →
   [authentication](specs/features/authentication.md),
   [checkout](specs/features/checkout.md)
+- **Shift management (v1)** — a second product for the same stores, sold
+  independently through a `subscriptions` entitlement layer: availability
+  collection → schedule building → publish, in the `apps/shift` SPA.
+  Coverage, labour warnings and cost are computed from the shift rows,
+  never stored. Post-publish changes (absence, swap, open shifts) are a
+  v2 follow-up. →
+  [shift-management](specs/features/shift-management.md),
+  [domain-model](specs/domain-model.md)
 
 ## Backlog (demand-driven)
 
@@ -70,15 +79,12 @@ design sketch in `proposals/`.
 3. **Platform admin** — minimal internal view of stores/health once
    store count makes SQL-by-hand impractical. Sketch:
    [team-and-scale](proposals/team-and-scale.md).
-
-## Next product
-
-- **Shift management** — a second product for the same stores (staff
-  scheduling), sold independently via a new entitlements layer. Ready to
-  implement: v1 covers availability collection → schedule building →
-  publish, in a new `apps/shift` SPA; post-publish changes (absence,
-  swap, open shifts) are a v2 follow-up. Proposal:
-  [shift-management](proposals/shift-management.md).
+4. **Shift management v2** — post-publish changes: absence reporting,
+   staff-to-staff swap with manager approval, and an open-shift board.
+   Two more state machines and a notification channel; revisit once a
+   store has run a published schedule for a few periods. Shipped v1
+   behavior and its deliberate gaps:
+   [shift-management](specs/features/shift-management.md).
 
 ## Engineering track (parallel, not a phase)
 

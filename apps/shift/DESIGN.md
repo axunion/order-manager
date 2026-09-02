@@ -155,6 +155,22 @@ Example: "Add an owner-only settings page for shift patterns. Use Card, Field
 and Button from @order/ui, existing tokens only. Empty state: 'パターンが未登録です'.
 Errors through ErrorAlert."
 
+## 11. Screens
+
+| Route | Role | What it is |
+|---|---|---|
+| `/login` | — | Magic Link request, posting `app: "shift"` |
+| `/` | owner | Period list and the create form |
+| `/` | staff | Own published shifts, plus a link to submit |
+| `/periods/:id` | owner | The builder: coverage, warnings, cost, CSV |
+| `/periods/:id/availability` | staff | The submission form |
+| `/settings` | owner | Positions, patterns, requirements, staff |
+
+The owner and staff `/` are one component that branches on role. The API is
+the guard — every builder endpoint is owner-only — so this split is UX, not
+security, and must never be the only thing standing between a staff session
+and a wage.
+
 ## 10. Component Ownership Policy
 
 `apps/shift` owns its domain components. Promote something to `@order/ui` only

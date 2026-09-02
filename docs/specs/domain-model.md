@@ -14,6 +14,15 @@ stores 1 ──── * menu_categories 1 ──── * menu_items 1 ───�
    └──── * members 1 ──── * sessions
             │
             └──── * magic_link_tokens
+
+stores 1 ──── * subscriptions          (which products this store has bought)
+   │
+   ├──── * positions 1 ──── * member_positions * ──── 1 members
+   │        └──── * staffing_requirements       (weekly template)
+   ├──── * shift_patterns                       (named bands)
+   ├──── * member_work_profiles 1 ──── 1 members
+   └──── * schedule_periods 1 ──┬── * availability_submissions 1 ──── * availability_entries
+                                └── * shifts
 ```
 
 - **stores** — one row per tenant. `email` is fixed at whatever address
@@ -81,6 +90,33 @@ stores 1 ──── * menu_categories 1 ──── * menu_items 1 ───�
   `member_id`, not `store_id` — a store can have multiple members now,
   and unrelated members issuing tokens concurrently must not invalidate
   each other's link.
+
+- **subscriptions** — one row per `(store_id, product)`, unique on that
+  pair. `product` is `'order' | 'shift'`, `status` is
+  `'active' | 'suspended'`, and `plan` is reserved and unused. Every
+  pre-existing store was grandfathered into `order`, so the order product
+  needs no gate; `requireEntitlement('shift')` reads this table.
+- **positions / shift_patterns** — a store's named roles and named time
+  bands. Both are **retired** (`is_active = false`), never deleted:
+  shifts and staffing requirements reference them and an old schedule
+  still has to render.
+- **staffing_requirements** — the weekly template the coverage grid
+  measures a schedule against: per weekday, position and band, a required
+  headcount. Hard-deleted, because a stale one keeps reporting a shortage
+  that no longer exists.
+- **member_work_profiles** — hourly wage, weekly cap and a minor flag.
+  Owner-only on the API: none of it may reach a staff session. A null
+  wage means *not recorded*, not free.
+- **schedule_periods** — a whole half-month (1st–15th, or 16th–end of
+  month) with a status (see State machines below).
+- **availability_submissions / availability_entries** — one submission per
+  `(period, member)`; entries carry `work_date` plus a band or a day-off
+  marker. The schema allows several entries per `(submission, work_date)`;
+  the v1 staff form writes one.
+- **shifts** — an assignment of a member to a band on a business date,
+  optionally in a position. Coverage, labour warnings and cost are
+  **computed from these rows, never stored** — see
+  [features/shift-management.md](./features/shift-management.md).
 
 ## State machines
 
@@ -171,6 +207,24 @@ open ──(staff resolves)──▶ resolved
   frees the seat for a fresh `open` call — the partial unique index
   only covers `status = 'open'`.
 
+### schedule_periods.status
+
+```
+collecting ──close-submissions──▶ building ──publish──▶ published
+```
+
+- `collecting` — staff may save and submit availability; the availability
+  PUT is **409** from any later state. `submission_deadline` is advisory
+  in v1: closing submissions is the enforcement, not the timestamp.
+- `building` — availability is frozen and the owner assigns shifts.
+- `published` — staff can read their own shifts. **Terminal**: publishing
+  again is a 409, and later edits to a published period's shifts take
+  effect immediately without a republish.
+- Both transitions are owner-only and conditional on the current state, so
+  a wrong-state transition is **409** while a foreign or missing period is
+  **404** — distinguished by a second read after the guarded UPDATE
+  matches nothing.
+
 ## Invariants (DB-enforced)
 
 1. **One active order per seat** — partial unique index on
@@ -193,6 +247,20 @@ open ──(staff resolves)──▶ resolved
 5. **Positive amounts** — `menu_items.price > 0`,
    `order_items.quantity > 0` (also capped at 99 by Zod),
    `payments.total_amount >= 0`, `payments.discount_amount >= 0`.
+6. **One subscription per product per store** — unique index on
+   `(store_id, product)`, which doubles as the entitlement lookup index.
+7. **Canonical time encoding on every band** (`shifts`, `shift_patterns`,
+   `staffing_requirements`, `availability_entries`) — CHECK constraints
+   require `start_minutes < 1440`, `end_minutes > start_minutes`, and
+   `end_minutes <= start_minutes + 1440`. A shift ending at 1am the next
+   morning is therefore `1500` (25:00) and never `60`: one encoding, so
+   overnight comparisons are plain arithmetic.
+8. **Business dates are real dates** — `work_date` and the period bounds
+   are `YYYY-MM-DD` enforced by a GLOB CHECK, with calendar validity
+   checked by Zod (`2026-02-30` is rejected, not rolled over).
+9. **A day-off availability entry carries no times** — CHECK: `kind =
+   'day_off'` requires both minute columns null, `kind = 'available'`
+   requires both set.
 
 ## Invariants (API-enforced)
 
@@ -208,6 +276,26 @@ open ──(staff resolves)──▶ resolved
   tradeoff as the slug/email uniqueness checks elsewhere in this
   codebase. See
   [features/authentication.md](./features/authentication.md#staff-management-appsapisrcroutesstaffts-owner-only).
+
+- **A member never has two overlapping shifts** — `POST`/`PATCH
+  /api/shift/shifts` scan the member's other shifts on the adjacent dates
+  and return **409** on any overlap, overnight bands included (compared
+  through `absoluteRange`, so a 21:00–25:00 shift is adjacent to, not
+  overlapping with, the next morning's 09:00 start). A check-then-act
+  guard, like the owner-count rule above: D1 offers no range-exclusion
+  constraint to lean on.
+- **A submission never contradicts itself on one date** — a `day_off`
+  entry and an `available` band for the same `work_date` in one PUT is
+  **400**, and every entry must fall inside the period.
+- **Foreign keys in a request body are verified against the caller's
+  store, not trusted** — a `period_id`, `member_id` or `position_id`
+  belonging to another store answers **404**, the same as an id that does
+  not exist. The FK columns alone would not catch this: they point at
+  rows that really exist, just in someone else's store.
+- **Entitlement is 403, not 404** — `requireEntitlement` refuses a store
+  without an active subscription for the product. The store, session and
+  route all exist, so this is the `requireOwner` category of refusal, not
+  the cross-tenant existence-leak category.
 
 ## Multi-tenant isolation rule
 
