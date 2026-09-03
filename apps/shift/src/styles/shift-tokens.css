@@ -1,0 +1,42 @@
+/* apps/shift/src/styles/shift-tokens.css
+   Import ONLY from apps/shift/src/main.tsx — never from shared packages.
+
+   Shift management is a back-of-house tool used on a phone by staff and on a
+   laptop by the manager, so it keeps admin's cool, businesslike register but
+   leans indigo to stay visibly distinct from the order product. */
+:root {
+  /* ── Primary — Indigo ─────────────────────────────────────────────── */
+  --color-primary: #4338ca;
+  --color-primary-hover: #3730a3;
+  --color-primary-active: #312e81;
+  --color-primary-foreground: #ffffff;
+  --color-primary-subtle: #eef2ff;
+
+  /* ── Neutrals — cool slate, as in admin ──────────────────────────── */
+  --color-background: #f8fafc;
+  --color-foreground: #0f172a;
+  --color-muted-foreground: #475569;
+  --color-subtle-foreground: #94a3b8;
+  --color-border: #e2e8f0;
+  --color-input: #cbd5e1;
+  --color-surface: #ffffff;
+
+  /* ── Shortage / surplus (net-new roles for the coverage grid) ─────── */
+  --color-shortage-bg: #fef2f2;
+  --color-shortage-fg: #b91c1c;
+  --color-shortage-border: #fecaca;
+  --color-surplus-bg: #f0f9ff;
+  --color-surplus-fg: #0369a1;
+  --color-surplus-border: #bae6fd;
+
+  /* ── Layout ──────────────────────────────────────────────────────── */
+  --container-content: 60rem; /* a schedule read edge-to-edge is unreadable */
+  --container-login-card: 26rem;
+  --input-number-width: 6rem;
+  --shift-header-height: 3.5rem;
+  --touch-target-min: 44px;
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP",
+    "Yu Gothic", sans-serif;
+}

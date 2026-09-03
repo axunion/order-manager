@@ -9,12 +9,33 @@ All workspace packages use the `@order/` scope:
 | `apps/admin` | `@order/admin` |
 | `apps/order` | `@order/order` |
 | `apps/signup` | `@order/signup` |
+| `apps/shift` | `@order/shift` |
 | `apps/api` | `@order/api` |
 | `packages/db` | `@order/db` |
 | `packages/core` | `@order/core` |
 | `packages/ui` | `@order/ui` |
 
 All packages are `"private": true` — nothing is published to npm.
+
+---
+
+## pnpm version
+
+The root `package.json` pins pnpm exactly, in `packageManager`. pnpm reads that
+field and **switches itself to the pinned version** before running, so you do
+not need that version installed — any reasonably recent pnpm will do, and CI
+(`pnpm/action-setup` with no `version` input) resolves the same field.
+
+This pin is load-bearing, not hygiene. The lockfile carries a
+`packageManagerDependencies` section that only pnpm 11 understands; an older
+pnpm drops it silently on `pnpm install`, reports the lockfile as up to date,
+and CI then rejects the install with `Cannot update packageManagerDependencies
+with "frozen-lockfile"`. `devEngines.packageManager` repeats the same version
+with `onFail: "error"` as a backstop for environments where the automatic
+switch is turned off.
+
+When bumping pnpm, change both fields together — pnpm warns and ignores
+`packageManager` if the two disagree.
 
 ---
 
@@ -100,7 +121,8 @@ Biome-only, so no ESLint-based rule).
 
 Forbidden imports to watch for:
 
-- `import ... from "@order/db"` inside any `apps/admin`, `apps/order`, or `apps/signup` file
+- `import ... from "@order/db"` inside any `apps/admin`, `apps/order`, `apps/signup`, or
+  `apps/shift` file
 - `import ... from "@order/ui"` inside any `apps/api` file
 - `import ... from "@order/core/client"` inside any `apps/api` file
 

@@ -1,0 +1,95 @@
+.section {
+  margin-bottom: var(--space-5);
+}
+
+.createForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.formLabel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--color-muted-foreground);
+  font-size: var(--text-sm);
+}
+
+.dateInput {
+  min-height: var(--touch-target-min);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.hint {
+  margin: var(--space-3) 0 0;
+  color: var(--color-muted-foreground);
+  font-size: var(--text-sm);
+}
+
+.periodList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.periodItem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.periodItem:last-child {
+  border-bottom: none;
+}
+
+.periodLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-target-min);
+  color: var(--color-primary);
+  font-weight: var(--font-semibold);
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.periodLink:hover {
+  text-decoration: underline;
+}
+
+.status {
+  color: var(--color-muted-foreground);
+  font-size: var(--text-sm);
+}
+
+.empty {
+  margin: 0;
+  color: var(--color-muted-foreground);
+}
+
+.settingsRow {
+  margin: 0 0 var(--space-4);
+}
+
+.settingsLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-target-min);
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.settingsLink:hover {
+  text-decoration: underline;
+}

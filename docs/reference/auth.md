@@ -6,13 +6,14 @@ Cross-origin authentication design for the order-manager monorepo.
 
 ## Overview
 
-The monorepo runs four separate origins:
+The monorepo runs five separate origins:
 
 | App | Domain (production) | Domain (local dev) |
 |---|---|---|
-| Admin SPA | `admin.example.com` | `localhost:4173` |
-| Order SPA | `order.example.com` | `localhost:4174` |
-| Signup SPA | `signup.example.com` | `localhost:4175` |
+| Admin SPA | `admin.example.com` | `localhost:5173` |
+| Order SPA | `order.example.com` | `localhost:5174` |
+| Signup SPA | `signup.example.com` | `localhost:5175` |
+| Shift SPA | `shift.example.com` | `localhost:5176` |
 | API Worker | `api.example.com` | `localhost:8787` |
 
 Two authentication mechanisms are used:
@@ -72,7 +73,12 @@ has to defend against CSRF:
 
 ```ts
 // apps/api/src/app.ts (shape, not verbatim)
-const allowed = [env.ADMIN_ORIGIN, env.ORDER_ORIGIN, env.SIGNUP_ORIGIN];
+const allowed = [
+  env.ADMIN_ORIGIN,
+  env.ORDER_ORIGIN,
+  env.SIGNUP_ORIGIN,
+  env.SHIFT_ORIGIN,
+];
 const origin = c.req.header("Origin") ?? "";
 const isAllowedOrigin = allowed.includes(origin);
 
@@ -314,9 +320,10 @@ for `/api/order/*` routes — they use `requireSeat` not `requireStore`.
 
 | Variable | Example | Purpose |
 |---|---|---|
-| `ADMIN_ORIGIN` | `https://admin.example.com` | `verify` redirect target; CORS allowlist |
+| `ADMIN_ORIGIN` | `https://admin.example.com` | Default `verify`/`logout` redirect target; CORS allowlist |
 | `ORDER_ORIGIN` | `https://order.example.com` | CORS allowlist |
-| `SIGNUP_ORIGIN` | `https://signup.example.com` | `logout` redirect target; CORS allowlist |
+| `SIGNUP_ORIGIN` | `https://signup.example.com` | CORS allowlist |
+| `SHIFT_ORIGIN` | `https://shift.example.com` | `verify`/`logout` redirect target when the login carried `app: "shift"`; CORS allowlist |
 | `COOKIE_DOMAIN` | `.example.com` | Cookie `Domain` attribute |
 | `RESEND_API_KEY` | `re_...` | Magic Link email delivery (secret) |
 | `MAIL_FROM` | `noreply@example.com` | Magic Link `From` address |

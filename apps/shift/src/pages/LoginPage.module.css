@@ -1,0 +1,25 @@
+.loginPage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: var(--space-6);
+  background: var(--color-background);
+}
+
+.card {
+  width: 100%;
+  max-width: var(--container-login-card);
+}
+
+.title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xl);
+  color: var(--color-foreground);
+}
+
+.subtitle {
+  margin: 0 0 var(--space-5);
+  color: var(--color-muted-foreground);
+  line-height: var(--leading-normal);
+}

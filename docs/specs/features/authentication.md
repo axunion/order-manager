@@ -107,7 +107,12 @@ this spec covers product behavior.
 - `GET /api/staff` — lists the calling store's members (`id, email, role,
   status, created_at, activated_at`).
 - `DELETE /api/staff/:id` — revokes a member's access: deletes the member
-  row and cascades their sessions and magic-link tokens. Rejects 400 for
+  row and cascades their sessions and magic-link tokens. For a store with
+  shift management it also deletes that member's shift rows — their
+  availability submissions and entries, assigned shifts, position
+  assignments and work profile. Removing somebody therefore erases their
+  scheduling history as well as their access; export the schedule first
+  (the builder's CSV) if that history matters. Rejects 400 for
   self-removal (use logout instead) and for removing the store's last
   remaining owner (a co-owner can still be removed, leaving one owner) —
   a store always keeps at least one owner.
@@ -150,6 +155,15 @@ until a real billing system exists to trigger it.
   API), produced atomically with the delete rather than via a separate
   export endpoint, so the frontend can offer it as a download in the same
   action.
+- **What the export does not carry:** `subscriptions` (entitlement
+  records, not the store's own data) and the shift-management tables.
+  Both are deleted with everything else. Leaving schedules out is a
+  deliberate v1 call rather than an oversight: a schedule is already
+  exportable in a more useful shape from the builder's per-period CSV,
+  and the delete path is a single ~25-statement batch whose response is
+  the export body, so adding nine more tables to it should be driven by
+  somebody actually asking. Revisit if a pilot store asks to take its
+  scheduling history with it.
 - Frontend: "一時停止" (suspend, `ConfirmDialog`) redirects to `/login`
   afterward (the session is about to stop working anyway — same reasoning
   as the logout-all button). "アカウントを削除" (delete) requires typing the

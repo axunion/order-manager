@@ -1,0 +1,62 @@
+.shell {
+  min-height: 100dvh;
+  background: var(--color-background);
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: var(--shift-header-height);
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+
+.headerInner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 100%;
+  max-width: var(--container-content);
+  margin: 0 auto;
+  padding: 0 var(--space-4);
+}
+
+.back,
+.logout {
+  min-height: var(--touch-target-min);
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.back:hover,
+.logout:hover {
+  text-decoration: underline;
+}
+
+.storeName {
+  flex: 1;
+  font-weight: var(--font-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main {
+  max-width: var(--container-content);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-10);
+}
+
+.title {
+  margin: 0 0 var(--space-5);
+  font-size: var(--text-xl);
+  color: var(--color-foreground);
+}

@@ -9,7 +9,7 @@ import {
   SESSION_TTL_MS,
 } from "@order/core";
 import { createDb, schema } from "@order/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import {
@@ -108,6 +108,43 @@ export const requireOwner = createMiddleware<AuthEnv>(async (c, next) => {
   }
   await next();
 });
+
+/**
+ * Hono middleware factory restricting a route to stores that subscribe to
+ * `product`. Must run after requireStore (reads c.var.store.id).
+ *
+ * Returns 403 for a store without an active subscription — the same category
+ * as requireOwner's role failure. 404 (the cross-tenant convention) would be
+ * wrong here: the store, the session and the route all exist.
+ *
+ * Usage: new Hono<AuthEnv>().use(requireStore).use(requireEntitlement("shift"))
+ */
+export function requireEntitlement(product: "order" | "shift") {
+  return createMiddleware<AuthEnv>(async (c, next) => {
+    const db = createDb(c.env.DB);
+    const rows = await db
+      .select({ id: schema.subscriptions.id })
+      .from(schema.subscriptions)
+      .where(
+        and(
+          eq(schema.subscriptions.store_id, c.var.store.id),
+          eq(schema.subscriptions.product, product),
+          eq(schema.subscriptions.status, "active"),
+        ),
+      )
+      .limit(1);
+
+    if (rows.length === 0) {
+      return errorResponse(
+        "FORBIDDEN",
+        `The ${product} product is not enabled for this store`,
+        403,
+      );
+    }
+
+    await next();
+  });
+}
 
 /**
  * Hono middleware that resolves the :seatToken URL parameter to a SeatSession.

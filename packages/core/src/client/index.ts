@@ -21,6 +21,10 @@ const API_BASE: string =
 /**
  * Fetches a path and unwraps the { data } / { error } response envelope.
  * Returns { ok: true, data } on success or { ok: false, message } on failure.
+ * `status` carries the HTTP status when there was a response, so a caller can
+ * tell apart failures that mean different things — a 403 from a product gate
+ * is a screen, not an error banner. It is undefined when the request never
+ * reached the server.
  *
  * Automatically prepends the API base URL and adds credentials: "include"
  * so the session_token cookie is sent across origins (admin.example.com →
@@ -29,7 +33,7 @@ const API_BASE: string =
 export async function apiFetch<T>(
   path: string,
   init: RequestInit = {},
-): Promise<{ ok: boolean; data?: T; message?: string }> {
+): Promise<{ ok: boolean; data?: T; message?: string; status?: number }> {
   const url = `${API_BASE}${path}`;
   try {
     const res = await fetch(url, {
@@ -42,12 +46,13 @@ export async function apiFetch<T>(
     if (!res.ok) {
       return {
         ok: false,
+        status: res.status,
         message:
           (body as { error: { code: string; message: string } }).error
             ?.message ?? "エラーが発生しました",
       };
     }
-    return { ok: true, data: (body as { data: T }).data };
+    return { ok: true, status: res.status, data: (body as { data: T }).data };
   } catch {
     return {
       ok: false,
@@ -61,7 +66,7 @@ export function jsonFetch<T>(
   path: string,
   method: string,
   body: unknown,
-): Promise<{ ok: boolean; data?: T; message?: string }> {
+): Promise<{ ok: boolean; data?: T; message?: string; status?: number }> {
   return apiFetch<T>(path, {
     method,
     headers: { "Content-Type": "application/json" },

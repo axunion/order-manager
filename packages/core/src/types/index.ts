@@ -1,21 +1,13 @@
 import { z } from "zod";
+import { displayName, sortOrderValue } from "./primitives";
+
+// Shift management lives in its own file; re-exported so `@order/core/types`
+// stays one import for callers.
+export * from "./shift";
 
 // ---------------------------------------------------------------------------
 // Shared primitive schemas
 // ---------------------------------------------------------------------------
-
-/** Trimmed, non-empty display name (1–100 chars). */
-const displayName = z
-  .string()
-  .transform((s) => s.trim())
-  .pipe(z.string().min(1).max(100));
-
-/**
- * Sort order used across menu categories/items/option groups/options.
- * Upper bound is a sanity cap (no real menu approaches it), not a
- * meaningful business constraint.
- */
-const sortOrderValue = z.number().int().min(0).max(100_000);
 
 /** Price in JPY (tax-inclusive), > 0. Upper bound is a sanity cap. */
 const priceValue = z.number().int().positive().max(1_000_000);
@@ -84,6 +76,12 @@ export interface EmailChangeResponse {
 
 export const LoginInput = z.object({
   email: z.email(),
+  /**
+   * Which SPA the Magic Link should land in. An enum, not a URL: the API maps
+   * it to an origin from its own env, so a caller can never redirect the link
+   * somewhere of its choosing.
+   */
+  app: z.enum(["admin", "shift"]).default("admin"),
 });
 export type LoginInput = z.infer<typeof LoginInput>;
 

@@ -119,6 +119,81 @@ async function seedFullStore(storeId: string) {
     paid_at: now,
   });
 
+  // Shift-management rows: a store that uses the second product must still be
+  // deletable, and every one of these tables references stores or members.
+  const positionId = crypto.randomUUID();
+  const periodId = crypto.randomUUID();
+  const submissionId = crypto.randomUUID();
+
+  await db.insert(schema.positions).values({
+    id: positionId,
+    store_id: storeId,
+    name: "ホール",
+  });
+  await db.insert(schema.memberPositions).values({
+    id: crypto.randomUUID(),
+    store_id: storeId,
+    member_id: owner.id,
+    position_id: positionId,
+  });
+  await db.insert(schema.memberWorkProfiles).values({
+    id: crypto.randomUUID(),
+    store_id: storeId,
+    member_id: owner.id,
+    hourly_wage: 1100,
+  });
+  await db.insert(schema.shiftPatterns).values({
+    id: crypto.randomUUID(),
+    store_id: storeId,
+    name: "早番",
+    start_minutes: 540,
+    end_minutes: 1020,
+  });
+  await db.insert(schema.staffingRequirements).values({
+    id: crypto.randomUUID(),
+    store_id: storeId,
+    weekday: 5,
+    position_id: positionId,
+    start_minutes: 1020,
+    end_minutes: 1320,
+    required_headcount: 2,
+  });
+  await db.insert(schema.schedulePeriods).values({
+    id: periodId,
+    store_id: storeId,
+    start_date: "2026-09-01",
+    end_date: "2026-09-15",
+    submission_deadline: now,
+  });
+  await db.insert(schema.availabilitySubmissions).values({
+    id: submissionId,
+    store_id: storeId,
+    period_id: periodId,
+    member_id: owner.id,
+    status: "submitted",
+    submitted_at: now,
+  });
+  await db.insert(schema.availabilityEntries).values({
+    id: crypto.randomUUID(),
+    store_id: storeId,
+    submission_id: submissionId,
+    work_date: "2026-09-01",
+    kind: "available",
+    start_minutes: 540,
+    end_minutes: 1020,
+  });
+  await db.insert(schema.shifts).values({
+    id: crypto.randomUUID(),
+    store_id: storeId,
+    period_id: periodId,
+    member_id: owner.id,
+    position_id: positionId,
+    work_date: "2026-09-01",
+    start_minutes: 540,
+    end_minutes: 1020,
+    break_minutes: 60,
+  });
+
   return { itemId, groupId };
 }
 
@@ -599,6 +674,25 @@ describe("DELETE /api/stores/me", () => {
     expect(body.data.export).not.toHaveProperty("sessions");
     expect(body.data.export).not.toHaveProperty("magic_link_tokens");
 
+    // subscriptions are entitlement records, not the store's own data —
+    // deleted below, but deliberately absent from the export. The shift
+    // tables are deleted and unexported for now too; whether a published
+    // schedule belongs in the export is settled when that product ships.
+    for (const absent of [
+      "subscriptions",
+      "positions",
+      "member_positions",
+      "member_work_profiles",
+      "shift_patterns",
+      "staffing_requirements",
+      "schedule_periods",
+      "availability_submissions",
+      "availability_entries",
+      "shifts",
+    ]) {
+      expect(body.data.export).not.toHaveProperty(absent);
+    }
+
     // Every row is actually gone from D1.
     const db = createDb(env.DB);
     const storeRows = await db
@@ -621,6 +715,16 @@ describe("DELETE /api/stores/me", () => {
       schema.orderItemOptions,
       schema.staffCalls,
       schema.payments,
+      schema.subscriptions,
+      schema.positions,
+      schema.memberPositions,
+      schema.memberWorkProfiles,
+      schema.shiftPatterns,
+      schema.staffingRequirements,
+      schema.schedulePeriods,
+      schema.availabilitySubmissions,
+      schema.availabilityEntries,
+      schema.shifts,
     ];
     for (const table of storeScopedTables) {
       const rows = await db
@@ -665,5 +769,31 @@ describe("DELETE /api/stores/me", () => {
       .from(schema.seats)
       .where(eq(schema.seats.store_id, storeB.id));
     expect(storeBSeats).toHaveLength(1);
+
+    const storeBSubscriptions = await db
+      .select()
+      .from(schema.subscriptions)
+      .where(eq(schema.subscriptions.store_id, storeB.id));
+    expect(storeBSubscriptions).toHaveLength(1);
+
+    // Store B's shift rows survive too: a delete that lost its store_id filter
+    // on any of these tables would pass every assertion above.
+    for (const table of [
+      schema.positions,
+      schema.memberPositions,
+      schema.memberWorkProfiles,
+      schema.shiftPatterns,
+      schema.staffingRequirements,
+      schema.schedulePeriods,
+      schema.availabilitySubmissions,
+      schema.availabilityEntries,
+      schema.shifts,
+    ]) {
+      const rows = await db
+        .select()
+        .from(table)
+        .where(eq(table.store_id, storeB.id));
+      expect(rows).toHaveLength(1);
+    }
   });
 });

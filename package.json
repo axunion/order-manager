@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.0.1",
+  "packageManager": "pnpm@11.8.0",
   "devEngines": {
     "runtime": {
       "name": "node",
@@ -11,8 +12,8 @@
     },
     "packageManager": {
       "name": "pnpm",
-      "version": "^11",
-      "onFail": "warn"
+      "version": "11.8.0",
+      "onFail": "error"
     }
   },
   "scripts": {
@@ -21,6 +22,7 @@
     "dev:admin": "pnpm --filter @order/admin dev",
     "dev:order": "pnpm --filter @order/order dev",
     "dev:signup": "pnpm --filter @order/signup dev",
+    "dev:shift": "pnpm --filter @order/shift dev",
     "dev:api": "pnpm --filter @order/api dev",
     "build": "pnpm -r build",
     "check": "biome check && pnpm -r exec tsc --noEmit",

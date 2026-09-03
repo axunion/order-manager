@@ -65,7 +65,72 @@ export async function seedStore(
     expires_at: now() + SESSION_TTL_MS,
   });
 
+  // Mirror registration: every store subscribes to the order product.
+  // Tests that need another product insert their own row.
+  await db.insert(schema.subscriptions).values({
+    id: newId(),
+    store_id: id,
+    product: "order",
+  });
+
   return { id, member_id, session_token };
+}
+
+/**
+ * Adds a second active member, with their own session, to an existing store.
+ * seedStore/seedShiftStore create one member each in a store of their own, so
+ * this is what a test needs to prove one colleague cannot read or overwrite
+ * another's data.
+ */
+export async function seedMember(
+  store_id: string,
+  role: "owner" | "staff" = "staff",
+): Promise<{ member_id: string; session_token: string }> {
+  const db = createDb(env.DB);
+  const member_id = newId();
+  const session_token = newId();
+
+  await db.insert(schema.members).values({
+    id: member_id,
+    store_id,
+    email: `${member_id}@test.internal`,
+    role,
+    status: "active",
+    activated_at: now(),
+  });
+  await db.insert(schema.sessions).values({
+    id: newId(),
+    store_id,
+    member_id,
+    session_token: await hashToken(session_token),
+    expires_at: now() + SESSION_TTL_MS,
+  });
+
+  return { member_id, session_token };
+}
+
+/**
+ * Subscribes a store to a product. seedStore grants "order" only, mirroring
+ * registration, so a test that exercises a shift route grants "shift" itself.
+ */
+export async function grantProduct(
+  store_id: string,
+  product: "order" | "shift",
+  status: "active" | "suspended" = "active",
+): Promise<void> {
+  await createDb(env.DB)
+    .insert(schema.subscriptions)
+    .values({ id: newId(), store_id, product, status });
+}
+
+/** Seeds a store that already subscribes to shift management. */
+export async function seedShiftStore(
+  name: string,
+  role: "owner" | "staff" = "owner",
+): Promise<SeedStore> {
+  const store = await seedStore(name, role);
+  await grantProduct(store.id, "shift");
+  return store;
 }
 
 // ---------------------------------------------------------------------------

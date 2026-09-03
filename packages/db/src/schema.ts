@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnySQLiteColumn,
   check,
   index,
   integer,
@@ -7,6 +8,21 @@ import {
   text,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
+
+/**
+ * A time-of-day band: start_minutes is a time of day (< 1440), end_minutes
+ * may cross midnight but not run past the next one — so each wall-clock band
+ * has exactly one encoding. Shared by every table that stores such a band.
+ */
+function bandTimesCheck(
+  name: string,
+  table: { start_minutes: AnySQLiteColumn; end_minutes: AnySQLiteColumn },
+) {
+  return check(
+    name,
+    sql`${table.start_minutes} >= 0 AND ${table.start_minutes} < 1440 AND ${table.end_minutes} > ${table.start_minutes} AND ${table.end_minutes} <= ${table.start_minutes} + 1440`,
+  );
+}
 
 // ---------------------------------------------------------------------------
 // stores — one record per tenant
@@ -43,6 +59,57 @@ export const stores = sqliteTable(
     check(
       "stores_status_chk",
       sql`${table.status} IN ('pending', 'active', 'suspended')`,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// subscriptions — which products a store has bought
+// ---------------------------------------------------------------------------
+export const subscriptions = sqliteTable(
+  "subscriptions",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    /**
+     * Product the store subscribes to:
+     *   order — mobile ordering and checkout; every store has this
+     *   shift — staff shift scheduling, gated by requireEntitlement("shift")
+     */
+    product: text("product", { enum: ["order", "shift"] }).notNull(),
+    /** Plan name; reserved for per-plan limits, unused today. */
+    plan: text("plan"), // nullable
+    /**
+     * active    — the store may use the product
+     * suspended — kept on file but not usable
+     *
+     * Distinct from stores.status: that disables the account, this one
+     * disables a single product.
+     */
+    status: text("status", { enum: ["active", "suspended"] })
+      .notNull()
+      .default("active"),
+    created_at: integer("created_at")
+      .notNull()
+      .$defaultFn(() => Date.now()), // Unix ms
+  },
+  (table) => [
+    // One row per (store, product) — also the lookup requireEntitlement uses.
+    uniqueIndex("idx_subscriptions_store_product").on(
+      table.store_id,
+      table.product,
+    ),
+    check(
+      "subscriptions_product_chk",
+      sql`${table.product} IN ('order', 'shift')`,
+    ),
+    check(
+      "subscriptions_status_chk",
+      sql`${table.status} IN ('active', 'suspended')`,
     ),
   ],
 );
@@ -615,5 +682,408 @@ export const payments = sqliteTable(
     uniqueIndex("idx_one_settled_payment_per_order")
       .on(table.order_id)
       .where(sql`${table.voided_at} IS NULL`),
+  ],
+);
+
+// ===========================================================================
+// Shift management (second product, gated by subscriptions.product = 'shift')
+//
+// Dates and times depart from the Unix-ms convention used above: a shift is a
+// JST business date plus minute offsets from that date's 00:00. An overnight
+// shift ends past midnight as end_minutes > 1440 (25:00 -> 1500), which keeps
+// it attached to the business day it belongs to and makes duration, the
+// 22:00-05:00 late-night band and overlap checks plain integer arithmetic.
+// See docs/specs/features/shift-management.md § Time encoding.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// positions — job positions a shift can be assigned to (kitchen, hall, …)
+// ---------------------------------------------------------------------------
+export const positions = sqliteTable(
+  "positions",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    name: text("name").notNull(),
+    sort_order: integer("sort_order").notNull().default(0),
+    /** Retired positions stay for the shifts that reference them. */
+    is_active: integer("is_active", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    created_at: integer("created_at")
+      .notNull()
+      .$defaultFn(() => Date.now()), // Unix ms
+  },
+  (table) => [
+    index("idx_positions_store").on(table.store_id, table.sort_order),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// member_positions — which positions a member can work
+// ---------------------------------------------------------------------------
+export const memberPositions = sqliteTable(
+  "member_positions",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    member_id: text("member_id")
+      .notNull()
+      .references(() => members.id),
+    position_id: text("position_id")
+      .notNull()
+      .references(() => positions.id),
+    created_at: integer("created_at")
+      .notNull()
+      .$defaultFn(() => Date.now()), // Unix ms
+  },
+  (table) => [
+    uniqueIndex("idx_member_positions_pair").on(
+      table.member_id,
+      table.position_id,
+    ),
+    index("idx_member_positions_store").on(table.store_id),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// member_work_profiles — per-member scheduling constraints and wage
+// ---------------------------------------------------------------------------
+export const memberWorkProfiles = sqliteTable(
+  "member_work_profiles",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    member_id: text("member_id")
+      .notNull()
+      .references(() => members.id),
+    /** JPY per hour; null when the store hasn't recorded one. */
+    hourly_wage: integer("hourly_wage"), // nullable
+    /** Weekly ceiling the schedule builder warns against exceeding. */
+    weekly_cap_minutes: integer("weekly_cap_minutes"), // nullable
+    /** Drives the minors' late-night warning (labour law, warn only). */
+    is_minor: integer("is_minor", { mode: "boolean" }).notNull().default(false),
+    created_at: integer("created_at")
+      .notNull()
+      .$defaultFn(() => Date.now()), // Unix ms
+  },
+  (table) => [
+    uniqueIndex("idx_member_work_profiles_member").on(table.member_id),
+    index("idx_member_work_profiles_store").on(table.store_id),
+    check(
+      "member_work_profiles_wage_nonneg_chk",
+      sql`${table.hourly_wage} IS NULL OR ${table.hourly_wage} >= 0`,
+    ),
+    check(
+      "member_work_profiles_cap_positive_chk",
+      sql`${table.weekly_cap_minutes} IS NULL OR ${table.weekly_cap_minutes} > 0`,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// shift_patterns — named templates (early/mid/late) for entering a shift.
+// Templates only: shifts copy the times, they never reference a pattern, so
+// editing one never rewrites a schedule that is already built.
+// ---------------------------------------------------------------------------
+export const shiftPatterns = sqliteTable(
+  "shift_patterns",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    name: text("name").notNull(),
+    /** Minutes from the business date's 00:00 JST. */
+    start_minutes: integer("start_minutes").notNull(),
+    /** May exceed 1440 for a pattern that runs past midnight. */
+    end_minutes: integer("end_minutes").notNull(),
+    sort_order: integer("sort_order").notNull().default(0),
+    is_active: integer("is_active", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    created_at: integer("created_at")
+      .notNull()
+      .$defaultFn(() => Date.now()), // Unix ms
+  },
+  (table) => [
+    index("idx_shift_patterns_store").on(table.store_id, table.sort_order),
+    bandTimesCheck("shift_patterns_times_chk", table),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// staffing_requirements — required headcount per weekday, position and band.
+// A store-level weekday template, not per period: the same week shape repeats,
+// and per-date overrides (holidays) are deferred.
+// ---------------------------------------------------------------------------
+export const staffingRequirements = sqliteTable(
+  "staffing_requirements",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    /** 0 = Sunday … 6 = Saturday, matching toJstWeekday(). */
+    weekday: integer("weekday").notNull(),
+    position_id: text("position_id")
+      .notNull()
+      .references(() => positions.id),
+    start_minutes: integer("start_minutes").notNull(),
+    end_minutes: integer("end_minutes").notNull(),
+    /** 0 is meaningful: it closes a band that used to need staff. */
+    required_headcount: integer("required_headcount").notNull(),
+    created_at: integer("created_at")
+      .notNull()
+      .$defaultFn(() => Date.now()), // Unix ms
+  },
+  (table) => [
+    index("idx_staffing_requirements_store_weekday").on(
+      table.store_id,
+      table.weekday,
+    ),
+    check(
+      "staffing_requirements_weekday_chk",
+      sql`${table.weekday} BETWEEN 0 AND 6`,
+    ),
+    bandTimesCheck("staffing_requirements_times_chk", table),
+    check(
+      "staffing_requirements_headcount_nonneg_chk",
+      sql`${table.required_headcount} >= 0`,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// schedule_periods — one half-month scheduling cycle (1st-15th, 16th-end)
+//
+// collecting --(close submissions)--> building --(publish)--> published
+// published is terminal; later edits to its shifts take effect immediately.
+// ---------------------------------------------------------------------------
+export const schedulePeriods = sqliteTable(
+  "schedule_periods",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    /** JST business date, "YYYY-MM-DD"; day 1 or 16 of a month. */
+    start_date: text("start_date").notNull(),
+    /** JST business date, inclusive; day 15 or the month's last day. */
+    end_date: text("end_date").notNull(),
+    /**
+     * collecting — staff may submit availability
+     * building   — submissions closed, the manager is assigning shifts
+     * published  — staff can see their own confirmed shifts
+     */
+    status: text("status", { enum: ["collecting", "building", "published"] })
+      .notNull()
+      .default("collecting"),
+    /** Unix ms; advisory in v1 — closing submissions is the enforcement. */
+    submission_deadline: integer("submission_deadline").notNull(),
+    published_at: integer("published_at"), // Unix ms, nullable
+    created_at: integer("created_at")
+      .notNull()
+      .$defaultFn(() => Date.now()), // Unix ms
+  },
+  (table) => [
+    uniqueIndex("idx_schedule_periods_store_start").on(
+      table.store_id,
+      table.start_date,
+    ),
+    check(
+      "schedule_periods_status_chk",
+      sql`${table.status} IN ('collecting', 'building', 'published')`,
+    ),
+    // Both comparisons below and idx_schedule_periods_store_start are plain
+    // TEXT comparisons, so a non-canonical "2026-9-1" would defeat each of
+    // them. Pin the format at the DB level.
+    check(
+      "schedule_periods_date_format_chk",
+      sql`${table.start_date} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND ${table.end_date} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'`,
+    ),
+    check(
+      "schedule_periods_dates_chk",
+      sql`${table.end_date} >= ${table.start_date}`,
+    ),
+    check(
+      "schedule_periods_published_chk",
+      sql`${table.status} != 'published' OR ${table.published_at} IS NOT NULL`,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// availability_submissions — one member's availability for one period
+// ---------------------------------------------------------------------------
+export const availabilitySubmissions = sqliteTable(
+  "availability_submissions",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    period_id: text("period_id")
+      .notNull()
+      .references(() => schedulePeriods.id),
+    member_id: text("member_id")
+      .notNull()
+      .references(() => members.id),
+    /**
+     * draft     — saved, still editable, not counted as submitted
+     * submitted — the member is done; the manager sees it as complete
+     */
+    status: text("status", { enum: ["draft", "submitted"] })
+      .notNull()
+      .default("draft"),
+    submitted_at: integer("submitted_at"), // Unix ms, nullable
+    note: text("note"), // nullable
+    created_at: integer("created_at")
+      .notNull()
+      .$defaultFn(() => Date.now()), // Unix ms
+  },
+  (table) => [
+    uniqueIndex("idx_availability_submissions_pair").on(
+      table.period_id,
+      table.member_id,
+    ),
+    index("idx_availability_submissions_store").on(table.store_id),
+    check(
+      "availability_submissions_status_chk",
+      sql`${table.status} IN ('draft', 'submitted')`,
+    ),
+    check(
+      "availability_submissions_submitted_chk",
+      sql`${table.status} != 'submitted' OR ${table.submitted_at} IS NOT NULL`,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// availability_entries — one offered band, or one day-off request, per row.
+// Several rows may share a work_date: a member can offer two bands in a day.
+// ---------------------------------------------------------------------------
+export const availabilityEntries = sqliteTable(
+  "availability_entries",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    submission_id: text("submission_id")
+      .notNull()
+      .references(() => availabilitySubmissions.id),
+    /** JST business date, "YYYY-MM-DD". */
+    work_date: text("work_date").notNull(),
+    /**
+     * available — the member can work start_minutes..end_minutes
+     * day_off   — the member asks for the whole day off (times are null)
+     */
+    kind: text("kind", { enum: ["available", "day_off"] }).notNull(),
+    start_minutes: integer("start_minutes"), // nullable; required when available
+    end_minutes: integer("end_minutes"), // nullable; required when available
+    created_at: integer("created_at")
+      .notNull()
+      .$defaultFn(() => Date.now()), // Unix ms
+  },
+  (table) => [
+    index("idx_availability_entries_submission").on(
+      table.submission_id,
+      table.work_date,
+    ),
+    index("idx_availability_entries_store").on(table.store_id),
+    check(
+      "availability_entries_kind_chk",
+      sql`${table.kind} IN ('available', 'day_off')`,
+    ),
+    check(
+      "availability_entries_work_date_chk",
+      sql`${table.work_date} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'`,
+    ),
+    check(
+      "availability_entries_available_times_chk",
+      sql`${table.kind} != 'available' OR (${table.start_minutes} IS NOT NULL AND ${table.end_minutes} IS NOT NULL AND ${table.start_minutes} >= 0 AND ${table.start_minutes} < 1440 AND ${table.end_minutes} > ${table.start_minutes} AND ${table.end_minutes} <= ${table.start_minutes} + 1440)`,
+    ),
+    check(
+      "availability_entries_day_off_times_chk",
+      sql`${table.kind} != 'day_off' OR (${table.start_minutes} IS NULL AND ${table.end_minutes} IS NULL)`,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// shifts — one assigned shift.
+//
+// "No two overlapping shifts for the same member" is API-enforced, not a
+// constraint here: SQLite cannot express range non-overlap in a partial unique
+// index. See docs/specs/domain-model.md § Invariants (API-enforced).
+// ---------------------------------------------------------------------------
+export const shifts = sqliteTable(
+  "shifts",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    store_id: text("store_id")
+      .notNull()
+      .references(() => stores.id),
+    period_id: text("period_id")
+      .notNull()
+      .references(() => schedulePeriods.id),
+    member_id: text("member_id")
+      .notNull()
+      .references(() => members.id),
+    /** Null while the store schedules without positions. */
+    position_id: text("position_id").references(() => positions.id), // nullable
+    /** JST business date, "YYYY-MM-DD". */
+    work_date: text("work_date").notNull(),
+    start_minutes: integer("start_minutes").notNull(),
+    /** May exceed 1440 for an overnight shift (25:00 -> 1500). */
+    end_minutes: integer("end_minutes").notNull(),
+    break_minutes: integer("break_minutes").notNull().default(0),
+    note: text("note"), // nullable
+    created_at: integer("created_at")
+      .notNull()
+      .$defaultFn(() => Date.now()), // Unix ms
+  },
+  (table) => [
+    index("idx_shifts_store_date").on(table.store_id, table.work_date),
+    index("idx_shifts_period").on(table.period_id),
+    index("idx_shifts_member_date").on(table.member_id, table.work_date),
+    check(
+      "shifts_work_date_chk",
+      sql`${table.work_date} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'`,
+    ),
+    // start_minutes is a time of day on work_date, so a shift has exactly one
+    // encoding; end_minutes may cross midnight (25:00 -> 1500) but a shift
+    // cannot run longer than 24 hours.
+    bandTimesCheck("shifts_times_chk", table),
+    // A break can't swallow the shift: worked minutes must stay positive.
+    check(
+      "shifts_break_chk",
+      sql`${table.break_minutes} >= 0 AND ${table.break_minutes} < ${table.end_minutes} - ${table.start_minutes}`,
+    ),
   ],
 );

@@ -22,6 +22,7 @@
     "ADMIN_ORIGIN": "http://admin.localhost",
     "ORDER_ORIGIN": "http://order.localhost",
     "SIGNUP_ORIGIN": "http://signup.localhost",
+    "SHIFT_ORIGIN": "http://shift.localhost",
     "COOKIE_DOMAIN": "",
     "RESEND_API_KEY": "",
     "MAIL_FROM": "",

@@ -118,6 +118,25 @@ describe("POST /api/stores", () => {
     expect(tokens[0]?.member_id).toBe(members[0]?.id);
   });
 
+  it("subscribes the new store to the order product", async () => {
+    const email = `subscription-${crypto.randomUUID()}@example.com`;
+    const res = await app.request(
+      "/api/stores",
+      { method: "POST", headers: JSON_HEADERS, body: storeBody({ email }) },
+      env,
+    );
+    const body = (await res.json()) as { data: { id: string } };
+
+    const db = createDb(env.DB);
+    const subscriptions = await db
+      .select()
+      .from(schema.subscriptions)
+      .where(eq(schema.subscriptions.store_id, body.data.id));
+    expect(subscriptions).toHaveLength(1);
+    expect(subscriptions[0]?.product).toBe("order");
+    expect(subscriptions[0]?.status).toBe("active");
+  });
+
   it("returns 400 when name is missing", async () => {
     const res = await app.request(
       "/api/stores",

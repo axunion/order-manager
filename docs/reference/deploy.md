@@ -1,6 +1,6 @@
 # Deployment
 
-All four apps deploy to Cloudflare Workers with `wrangler deploy`. Deployment is
+All five apps deploy to Cloudflare Workers with `wrangler deploy`. Deployment is
 **manual** for now — CI (`.github/workflows/ci.yml`) runs `pnpm check` / `test` /
 `build` only and does not deploy.
 
@@ -25,8 +25,10 @@ All four apps deploy to Cloudflare Workers with `wrangler deploy`. Deployment is
    chose a different name. No `database_id`-style opaque ID to copy — R2
    buckets are addressed by name.
 4. Set production values in `apps/api/wrangler.jsonc` `vars`:
-   - `ADMIN_ORIGIN` / `ORDER_ORIGIN` / `SIGNUP_ORIGIN` — the deployed SPA URLs
-     (currently localhost placeholders).
+   - `ADMIN_ORIGIN` / `ORDER_ORIGIN` / `SIGNUP_ORIGIN` / `SHIFT_ORIGIN` — the
+     deployed SPA URLs (currently localhost placeholders). Replace **all four**:
+     each is in the credentialed CORS allowlist, so a leftover `localhost`
+     value stays allowed in production.
    - `COOKIE_DOMAIN` — e.g. `.example.com` for cross-subdomain cookie sharing.
    - `ENVIRONMENT` — must stay `"production"` (gates dev-only auth conveniences,
      see [auth.md](./auth.md)).
@@ -63,7 +65,7 @@ pnpm --filter @order/api exec wrangler deploy
 VITE_API_BASE=https://api.example.com VITE_ORDER_BASE=https://order.example.com \
   pnpm --filter @order/admin build
 pnpm --filter @order/admin exec wrangler deploy
-# repeat for @order/order and @order/signup (VITE_API_BASE only)
+# repeat for @order/order, @order/signup and @order/shift (VITE_API_BASE only)
 ```
 
 Apply migrations before deploying API code that depends on them.
