@@ -6,7 +6,7 @@ import type {
 } from "@order/core";
 import { apiFetch } from "@order/core/client";
 import { ErrorAlert } from "@order/ui";
-import { createSignal, onMount, Show } from "solid-js";
+import { createMemo, createSignal, onMount, Show } from "solid-js";
 import MembersSection from "../components/MembersSection";
 import PatternsSection from "../components/PatternsSection";
 import PositionsSection from "../components/PositionsSection";
@@ -32,7 +32,12 @@ export default function SettingsPage() {
   const load = async () => {
     const [positionList, patternList, requirementList, memberList] =
       await Promise.all([
-        apiFetch<PositionResponse[]>("/api/shift/positions"),
+        // Retired positions included: the positions section lists them with a
+        // way back, and without them "使わない" would make a position vanish
+        // from this screen for good.
+        apiFetch<PositionResponse[]>(
+          "/api/shift/positions?include_inactive=true",
+        ),
         apiFetch<ShiftPatternResponse[]>("/api/shift/templates/patterns"),
         apiFetch<StaffingRequirementResponse[]>(
           "/api/shift/templates/requirements",
@@ -54,6 +59,11 @@ export default function SettingsPage() {
     await load();
     setLoading(false);
   });
+
+  /** Only a live position can be staffed or newly assigned to a member. */
+  const activePositions = createMemo(() =>
+    positions().filter((position) => position.is_active),
+  );
 
   return (
     <ShiftLayout title="シフトの設定" backHref="/" backLabel="期間一覧">
@@ -77,13 +87,13 @@ export default function SettingsPage() {
         />
         <RequirementsSection
           requirements={requirements()}
-          positions={positions()}
+          positions={activePositions()}
           onChanged={load}
           onError={setError}
         />
         <MembersSection
           members={members()}
-          positions={positions()}
+          positions={activePositions()}
           onChanged={load}
           onError={setError}
         />

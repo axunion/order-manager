@@ -1,5 +1,5 @@
 import type { SchedulePeriodResponse } from "@order/core";
-import { halfMonthPeriod, jstDayRange } from "@order/core";
+import { halfMonthPeriod, jstDayRange, todayJst } from "@order/core";
 import { apiFetch, jsonFetch } from "@order/core/client";
 import { Button, Card, ErrorAlert } from "@order/ui";
 import { A } from "@solidjs/router";
@@ -7,11 +7,6 @@ import { createSignal, For, onMount, Show } from "solid-js";
 import ShiftLayout from "../layouts/ShiftLayout";
 import { formatWorkDate, PERIOD_STATUS_LABEL } from "../lib/format";
 import styles from "./PeriodsPage.module.css";
-
-/** Today in JST, as the YYYY-MM-DD the date inputs and the API both use. */
-function todayJst(): string {
-  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
 
 export default function PeriodsPage() {
   const [periods, setPeriods] = createSignal<SchedulePeriodResponse[]>([]);
@@ -49,20 +44,30 @@ export default function PeriodsPage() {
     }
   };
 
+  /**
+   * The deadline is the end of the chosen day, not its first moment. Null when
+   * the date input is empty — a date input can be cleared, and jstDayRange()
+   * throws on anything that is not a real date.
+   */
+  const deadlineMs = () => {
+    try {
+      return jstDayRange(deadline()).to;
+    } catch {
+      return null;
+    }
+  };
+
   const create = async () => {
     const range = bounds();
-    if (!range) return;
+    const submission_deadline = deadlineMs();
+    if (!range || submission_deadline === null) return;
     setError("");
     setCreating(true);
     try {
       const result = await jsonFetch<SchedulePeriodResponse>(
         "/api/shift/periods",
         "POST",
-        {
-          ...range,
-          // The deadline is the end of the chosen day, not its first moment.
-          submission_deadline: jstDayRange(deadline()).to,
-        },
+        { ...range, submission_deadline },
       );
       if (!result.ok) {
         setError(result.message ?? "期間の作成に失敗しました。");
@@ -108,7 +113,10 @@ export default function PeriodsPage() {
               onInput={(e) => setDeadline(e.currentTarget.value)}
             />
           </label>
-          <Button disabled={creating() || !bounds()} onClick={create}>
+          <Button
+            disabled={creating() || !bounds() || deadlineMs() === null}
+            onClick={create}
+          >
             作成する
           </Button>
         </div>

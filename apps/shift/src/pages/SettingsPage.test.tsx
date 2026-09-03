@@ -67,7 +67,12 @@ const routes = (
   }> = {},
 ): MockRoute[] => [
   ...extra,
-  { url: "/api/shift/positions", json: data(overrides.positions ?? positions) },
+  {
+    // The settings screen asks for retired positions too, so it can offer a
+    // way back from "使わない".
+    url: "/api/shift/positions?include_inactive=true",
+    json: data(overrides.positions ?? positions),
+  },
   {
     url: "/api/shift/templates/patterns",
     json: data(overrides.patterns ?? []),
