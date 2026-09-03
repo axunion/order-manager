@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnySQLiteColumn,
   check,
   index,
   integer,
@@ -7,6 +8,21 @@ import {
   text,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
+
+/**
+ * A time-of-day band: start_minutes is a time of day (< 1440), end_minutes
+ * may cross midnight but not run past the next one — so each wall-clock band
+ * has exactly one encoding. Shared by every table that stores such a band.
+ */
+function bandTimesCheck(
+  name: string,
+  table: { start_minutes: AnySQLiteColumn; end_minutes: AnySQLiteColumn },
+) {
+  return check(
+    name,
+    sql`${table.start_minutes} >= 0 AND ${table.start_minutes} < 1440 AND ${table.end_minutes} > ${table.start_minutes} AND ${table.end_minutes} <= ${table.start_minutes} + 1440`,
+  );
+}
 
 // ---------------------------------------------------------------------------
 // stores — one record per tenant
@@ -806,12 +822,7 @@ export const shiftPatterns = sqliteTable(
   },
   (table) => [
     index("idx_shift_patterns_store").on(table.store_id, table.sort_order),
-    // start is a time of day; end may cross midnight but not run past the
-    // next one, so each wall-clock band has exactly one encoding.
-    check(
-      "shift_patterns_times_chk",
-      sql`${table.start_minutes} >= 0 AND ${table.start_minutes} < 1440 AND ${table.end_minutes} > ${table.start_minutes} AND ${table.end_minutes} <= ${table.start_minutes} + 1440`,
-    ),
+    bandTimesCheck("shift_patterns_times_chk", table),
   ],
 );
 
@@ -851,10 +862,7 @@ export const staffingRequirements = sqliteTable(
       "staffing_requirements_weekday_chk",
       sql`${table.weekday} BETWEEN 0 AND 6`,
     ),
-    check(
-      "staffing_requirements_times_chk",
-      sql`${table.start_minutes} >= 0 AND ${table.start_minutes} < 1440 AND ${table.end_minutes} > ${table.start_minutes} AND ${table.end_minutes} <= ${table.start_minutes} + 1440`,
-    ),
+    bandTimesCheck("staffing_requirements_times_chk", table),
     check(
       "staffing_requirements_headcount_nonneg_chk",
       sql`${table.required_headcount} >= 0`,
@@ -1071,10 +1079,7 @@ export const shifts = sqliteTable(
     // start_minutes is a time of day on work_date, so a shift has exactly one
     // encoding; end_minutes may cross midnight (25:00 -> 1500) but a shift
     // cannot run longer than 24 hours.
-    check(
-      "shifts_times_chk",
-      sql`${table.start_minutes} >= 0 AND ${table.start_minutes} < 1440 AND ${table.end_minutes} > ${table.start_minutes} AND ${table.end_minutes} <= ${table.start_minutes} + 1440`,
-    ),
+    bandTimesCheck("shifts_times_chk", table),
     // A break can't swallow the shift: worked minutes must stay positive.
     check(
       "shifts_break_chk",

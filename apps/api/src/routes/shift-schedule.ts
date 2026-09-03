@@ -22,6 +22,7 @@ import {
   requireOwner,
   requireStore,
 } from "../middleware";
+import { entriesBySubmission } from "../shift-entries";
 import { bodyValidator } from "../validator";
 
 const shiftColumns = {
@@ -72,31 +73,32 @@ async function resolveShiftRefs(
   const period = await findPeriod(db, storeId, input.period_id);
   if (!period) return null;
 
-  const member = await db
-    .select({ id: schema.members.id })
-    .from(schema.members)
-    .where(
-      and(
-        eq(schema.members.id, input.member_id),
-        eq(schema.members.store_id, storeId),
-      ),
-    )
-    .limit(1);
-  if (member.length === 0) return null;
-
-  if (input.position_id) {
-    const position = await db
-      .select({ id: schema.positions.id })
-      .from(schema.positions)
+  const [member, position] = await Promise.all([
+    db
+      .select({ id: schema.members.id })
+      .from(schema.members)
       .where(
         and(
-          eq(schema.positions.id, input.position_id),
-          eq(schema.positions.store_id, storeId),
+          eq(schema.members.id, input.member_id),
+          eq(schema.members.store_id, storeId),
         ),
       )
-      .limit(1);
-    if (position.length === 0) return null;
-  }
+      .limit(1),
+    input.position_id
+      ? db
+          .select({ id: schema.positions.id })
+          .from(schema.positions)
+          .where(
+            and(
+              eq(schema.positions.id, input.position_id),
+              eq(schema.positions.store_id, storeId),
+            ),
+          )
+          .limit(1)
+      : Promise.resolve(null),
+  ]);
+  if (member.length === 0) return null;
+  if (position !== null && position.length === 0) return null;
 
   return { period };
 }
@@ -160,6 +162,50 @@ async function hasOverlap(
   );
 }
 
+/**
+ * The checks a shift write must pass, shared by POST and PATCH: the period,
+ * member and position must belong to the caller's store; the date must fall
+ * inside the period; and the member must not already be working that time.
+ * Returns an error Response, or null when the write may proceed.
+ */
+async function validateShiftPlacement(
+  db: ReturnType<typeof createDb>,
+  storeId: string,
+  input: {
+    period_id: string;
+    member_id: string;
+    position_id: string | null;
+    work_date: string;
+    start_minutes: number;
+    end_minutes: number;
+  },
+  excludeShiftId?: string,
+): Promise<Response | null> {
+  const refs = await resolveShiftRefs(db, storeId, input);
+  if (!refs) {
+    return errorResponse("NOT_FOUND", "Shift target not found", 404);
+  }
+
+  const dates = periodDates(refs.period.start_date, refs.period.end_date);
+  if (!dates.includes(input.work_date)) {
+    return errorResponse(
+      "VALIDATION_ERROR",
+      `${input.work_date} はこの期間に含まれていません。`,
+      400,
+    );
+  }
+
+  if (await hasOverlap(db, storeId, input, excludeShiftId)) {
+    return errorResponse(
+      "CONFLICT",
+      "このスタッフはこの時間帯にすでにシフトが入っています。",
+      409,
+    );
+  }
+
+  return null;
+}
+
 export const shiftScheduleRouter = new Hono<AuthEnv>()
   .use(requireStore)
   .use(requireEntitlement("shift"))
@@ -192,7 +238,9 @@ export const shiftScheduleRouter = new Hono<AuthEnv>()
       });
     }
 
-    const shifts = await db
+    // Started before the role branch so the owner path (below) can await it
+    // alongside the submissions/requirements queries instead of after them.
+    const shiftsQuery = db
       .select(shiftColumns)
       .from(schema.shifts)
       .where(
@@ -211,11 +259,16 @@ export const shiftScheduleRouter = new Hono<AuthEnv>()
 
     if (role !== "owner") {
       return c.json({
-        data: { period, published, shifts } satisfies ScheduleResponse,
+        data: {
+          period,
+          published,
+          shifts: await shiftsQuery,
+        } satisfies ScheduleResponse,
       });
     }
 
-    const [submissionRows, requirements] = await Promise.all([
+    const [shifts, submissionRows, requirements] = await Promise.all([
+      shiftsQuery,
       db
         .select({
           id: schema.availabilitySubmissions.id,
@@ -244,35 +297,15 @@ export const shiftScheduleRouter = new Hono<AuthEnv>()
         .where(eq(schema.staffingRequirements.store_id, storeId)),
     ]);
 
-    const entries =
-      submissionRows.length === 0
-        ? []
-        : await db
-            .select({
-              id: schema.availabilityEntries.id,
-              submission_id: schema.availabilityEntries.submission_id,
-              work_date: schema.availabilityEntries.work_date,
-              kind: schema.availabilityEntries.kind,
-              start_minutes: schema.availabilityEntries.start_minutes,
-              end_minutes: schema.availabilityEntries.end_minutes,
-            })
-            .from(schema.availabilityEntries)
-            .where(
-              and(
-                eq(schema.availabilityEntries.store_id, storeId),
-                inArray(
-                  schema.availabilityEntries.submission_id,
-                  submissionRows.map((r) => r.id),
-                ),
-              ),
-            );
-
+    const entriesBySub = await entriesBySubmission(
+      db,
+      storeId,
+      submissionRows.map((r) => r.id),
+    );
     const submissions: AvailabilitySubmissionResponse[] = submissionRows.map(
       (row) => ({
         ...row,
-        entries: entries
-          .filter((e) => e.submission_id === row.id)
-          .map(({ submission_id: _submission, ...entry }) => entry),
+        entries: entriesBySub.get(row.id) ?? [],
       }),
     );
 
@@ -303,27 +336,8 @@ export const shiftsRouter = new Hono<AuthEnv>()
     const input = c.req.valid("json");
     const db = createDb(c.env.DB);
 
-    const refs = await resolveShiftRefs(db, storeId, input);
-    if (!refs) {
-      return errorResponse("NOT_FOUND", "Shift target not found", 404);
-    }
-
-    const dates = periodDates(refs.period.start_date, refs.period.end_date);
-    if (!dates.includes(input.work_date)) {
-      return errorResponse(
-        "VALIDATION_ERROR",
-        `${input.work_date} はこの期間に含まれていません。`,
-        400,
-      );
-    }
-
-    if (await hasOverlap(db, storeId, input)) {
-      return errorResponse(
-        "CONFLICT",
-        "このスタッフはこの時間帯にすでにシフトが入っています。",
-        409,
-      );
-    }
+    const placementError = await validateShiftPlacement(db, storeId, input);
+    if (placementError) return placementError;
 
     const id = newId();
     await db.insert(schema.shifts).values({ id, ...input, store_id: storeId });
@@ -341,41 +355,28 @@ export const shiftsRouter = new Hono<AuthEnv>()
     const input = c.req.valid("json");
     const db = createDb(c.env.DB);
 
-    // Resolve the target first: otherwise an unknown or foreign id whose body
-    // happens to collide with the caller's own schedule answers 409, which
-    // says nothing true about the shift they asked to change.
-    const target = await db
-      .select({ id: schema.shifts.id })
-      .from(schema.shifts)
-      .where(
-        and(eq(schema.shifts.id, shiftId), eq(schema.shifts.store_id, storeId)),
-      )
-      .limit(1);
+    // Both queries are independent of each other, but if the target doesn't
+    // exist its "Shift not found" must win over a placement error — an
+    // unknown or foreign id whose body happens to collide with the caller's
+    // own schedule should not answer 409, which says nothing true about the
+    // shift they asked to change.
+    const [target, placementError] = await Promise.all([
+      db
+        .select({ id: schema.shifts.id })
+        .from(schema.shifts)
+        .where(
+          and(
+            eq(schema.shifts.id, shiftId),
+            eq(schema.shifts.store_id, storeId),
+          ),
+        )
+        .limit(1),
+      validateShiftPlacement(db, storeId, input, shiftId),
+    ]);
     if (target.length === 0) {
       return errorResponse("NOT_FOUND", "Shift not found", 404);
     }
-
-    const refs = await resolveShiftRefs(db, storeId, input);
-    if (!refs) {
-      return errorResponse("NOT_FOUND", "Shift target not found", 404);
-    }
-
-    const dates = periodDates(refs.period.start_date, refs.period.end_date);
-    if (!dates.includes(input.work_date)) {
-      return errorResponse(
-        "VALIDATION_ERROR",
-        `${input.work_date} はこの期間に含まれていません。`,
-        400,
-      );
-    }
-
-    if (await hasOverlap(db, storeId, input, shiftId)) {
-      return errorResponse(
-        "CONFLICT",
-        "このスタッフはこの時間帯にすでにシフトが入っています。",
-        409,
-      );
-    }
+    if (placementError) return placementError;
 
     const updated = await db
       .update(schema.shifts)

@@ -21,6 +21,24 @@ export default function MembersSection(props: {
   const [minor, setMinor] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
 
+  /** Returns whether the request succeeded, so a caller can gate follow-up state. */
+  const run = async (
+    request: Promise<{ ok: boolean; message?: string }>,
+  ): Promise<boolean> => {
+    setBusy(true);
+    try {
+      const result = await request;
+      if (!result.ok) {
+        props.onError(result.message ?? "更新に失敗しました。");
+        return false;
+      }
+      await props.onChanged();
+      return true;
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const open = (member: ShiftMemberResponse) => {
     setEditing(member.id);
     setWage(member.hourly_wage === null ? "" : String(member.hourly_wage));
@@ -33,52 +51,27 @@ export default function MembersSection(props: {
   };
 
   const save = async (memberId: string) => {
-    setBusy(true);
-    try {
-      const capHours = Number(cap());
-      const result = await jsonFetch(
-        `/api/shift/members/${memberId}/work-profile`,
-        "PUT",
-        {
-          hourly_wage: wage() === "" ? null : Number(wage()),
-          weekly_cap_minutes:
-            cap() === "" || capHours <= 0 ? null : Math.round(capHours * 60),
-          is_minor: minor(),
-        },
-      );
-      if (!result.ok) {
-        props.onError(result.message ?? "保存に失敗しました。");
-        return;
-      }
-      await props.onChanged();
-      setEditing("");
-    } finally {
-      setBusy(false);
-    }
+    const capHours = Number(cap());
+    const ok = await run(
+      jsonFetch(`/api/shift/members/${memberId}/work-profile`, "PUT", {
+        hourly_wage: wage() === "" ? null : Number(wage()),
+        weekly_cap_minutes:
+          cap() === "" || capHours <= 0 ? null : Math.round(capHours * 60),
+        is_minor: minor(),
+      }),
+    );
+    if (ok) setEditing("");
   };
 
-  const togglePosition = async (
-    member: ShiftMemberResponse,
-    positionId: string,
-  ) => {
+  const togglePosition = (member: ShiftMemberResponse, positionId: string) => {
     const next = member.position_ids.includes(positionId)
       ? member.position_ids.filter((id) => id !== positionId)
       : [...member.position_ids, positionId];
-    setBusy(true);
-    try {
-      const result = await jsonFetch(
-        `/api/shift/members/${member.id}/positions`,
-        "PUT",
-        { position_ids: next },
-      );
-      if (!result.ok) {
-        props.onError(result.message ?? "更新に失敗しました。");
-        return;
-      }
-      await props.onChanged();
-    } finally {
-      setBusy(false);
-    }
+    return run(
+      jsonFetch(`/api/shift/members/${member.id}/positions`, "PUT", {
+        position_ids: next,
+      }),
+    );
   };
 
   return (

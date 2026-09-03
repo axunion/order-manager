@@ -14,18 +14,13 @@
 import { z } from "zod";
 import { halfMonthPeriod } from "../domain/shift";
 import { jstDayRange } from "../domain/time";
+import { displayName, sortOrderValue } from "./primitives";
 
 // ---------------------------------------------------------------------------
 // Shared primitives
 // ---------------------------------------------------------------------------
 
 const MINUTES_PER_DAY = 1440;
-
-/** Trimmed, non-empty display name (1–100 chars). */
-const displayName = z
-  .string()
-  .transform((s) => s.trim())
-  .pipe(z.string().min(1).max(100));
 
 /** JST business date, "YYYY-MM-DD", rejecting calendar-invalid days. */
 const workDate = z
@@ -56,7 +51,6 @@ const endOfBand = z
 
 const headcount = z.number().int().min(0).max(999);
 const weekday = z.number().int().min(0).max(6);
-const sortOrderValue = z.number().int().min(0).max(100_000);
 
 /** Rejects a band that runs backwards or spans more than 24 hours. */
 function bandRefinement<
@@ -267,7 +261,7 @@ const withShiftRules = <T extends z.ZodType<z.infer<typeof shiftShape>>>(
 export const CreateShiftInput = withShiftRules(shiftShape);
 export type CreateShiftInput = z.infer<typeof CreateShiftInput>;
 
-export const UpdateShiftInput = withShiftRules(shiftShape);
+export const UpdateShiftInput = CreateShiftInput;
 export type UpdateShiftInput = z.infer<typeof UpdateShiftInput>;
 
 // ---------------------------------------------------------------------------

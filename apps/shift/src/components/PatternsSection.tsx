@@ -20,37 +20,10 @@ export default function PatternsSection(props: {
   const [end, setEnd] = createSignal(1020);
   const [busy, setBusy] = createSignal(false);
 
-  const add = async () => {
-    if (!name().trim()) return;
+  const run = async (request: Promise<{ ok: boolean; message?: string }>) => {
     setBusy(true);
     try {
-      // An end earlier than the start means the next morning, not a mistake.
-      const endMinutes = end() <= start() ? end() + 1440 : end();
-      const result = await jsonFetch("/api/shift/templates/patterns", "POST", {
-        name: name(),
-        start_minutes: start(),
-        end_minutes: endMinutes,
-        sort_order: props.patterns.length,
-      });
-      if (!result.ok) {
-        props.onError(result.message ?? "パターンの追加に失敗しました。");
-        return;
-      }
-      await props.onChanged();
-      setName("");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const retire = async (pattern: ShiftPatternResponse) => {
-    setBusy(true);
-    try {
-      const result = await jsonFetch(
-        `/api/shift/templates/patterns/${pattern.id}`,
-        "PATCH",
-        { ...pattern, is_active: false },
-      );
+      const result = await request;
       if (!result.ok) {
         props.onError(result.message ?? "更新に失敗しました。");
         return;
@@ -60,6 +33,29 @@ export default function PatternsSection(props: {
       setBusy(false);
     }
   };
+
+  const add = async () => {
+    if (!name().trim()) return;
+    // An end earlier than the start means the next morning, not a mistake.
+    const endMinutes = end() <= start() ? end() + 1440 : end();
+    await run(
+      jsonFetch("/api/shift/templates/patterns", "POST", {
+        name: name(),
+        start_minutes: start(),
+        end_minutes: endMinutes,
+        sort_order: props.patterns.length,
+      }),
+    );
+    setName("");
+  };
+
+  const retire = (pattern: ShiftPatternResponse) =>
+    run(
+      jsonFetch(`/api/shift/templates/patterns/${pattern.id}`, "PATCH", {
+        ...pattern,
+        is_active: false,
+      }),
+    );
 
   return (
     <Card title="シフトパターン" class={styles.section}>

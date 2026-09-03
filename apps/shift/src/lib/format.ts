@@ -4,6 +4,8 @@
  * wrapping to 01:00 — that is what tells a reader the shift runs overnight.
  */
 
+import { jstDayRange, toJstWeekday } from "@order/core";
+
 /** 540 -> "09:00", 1500 -> "25:00". */
 export function formatMinutes(minutes: number): string {
   const hours = Math.floor(minutes / 60);
@@ -19,12 +21,9 @@ export function parseMinutes(value: string): number {
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
-/** "2026-09-01" -> 2. Sunday is 0, as in Date#getUTCDay. */
+/** "2026-09-01" -> 2. Sunday is 0, matching toJstWeekday(). */
 export function weekdayOf(workDate: string): number {
-  const [year = "", month = "", day = ""] = workDate.split("-");
-  return new Date(
-    Date.UTC(Number(year), Number(month) - 1, Number(day)),
-  ).getUTCDay();
+  return toJstWeekday(jstDayRange(workDate).from);
 }
 
 /** "2026-09-01" -> "9/1(火)". */

@@ -6,6 +6,7 @@ import type {
   ShiftResponse,
 } from "@order/core";
 import {
+  type CoverageRow,
   coverage,
   estimatedLaborCost,
   laborWarnings,
@@ -63,11 +64,16 @@ export default function BuilderPage() {
     setLoading(false);
   });
 
+  const memberById = createMemo(() => new Map(members().map((m) => [m.id, m])));
+  const positionById = createMemo(
+    () => new Map(positions().map((p) => [p.id, p])),
+  );
+
   const nameOf = (memberId: string) =>
-    members().find((m) => m.id === memberId)?.email ?? "不明なスタッフ";
+    memberById().get(memberId)?.email ?? "不明なスタッフ";
 
   const positionNameOf = (positionId: string | null) =>
-    positions().find((p) => p.id === positionId)?.name ?? "";
+    (positionId ? positionById().get(positionId)?.name : undefined) ?? "";
 
   const dates = createMemo(() => {
     const period = schedule()?.period;
@@ -79,6 +85,26 @@ export default function BuilderPage() {
   const coverageRows = createMemo(() =>
     coverage(shifts(), schedule()?.requirements ?? [], dates()),
   );
+
+  const shiftsByDate = createMemo(() => {
+    const grouped = new Map<string, ShiftResponse[]>();
+    for (const shift of shifts()) {
+      const list = grouped.get(shift.work_date);
+      if (list) list.push(shift);
+      else grouped.set(shift.work_date, [shift]);
+    }
+    return grouped;
+  });
+
+  const coverageByDate = createMemo(() => {
+    const grouped = new Map<string, CoverageRow[]>();
+    for (const row of coverageRows()) {
+      const list = grouped.get(row.work_date);
+      if (list) list.push(row);
+      else grouped.set(row.work_date, [row]);
+    }
+    return grouped;
+  });
 
   /** The roster keyed the way the domain functions expect it. */
   const profiles = createMemo(() =>
@@ -247,10 +273,8 @@ export default function BuilderPage() {
                   {(workDate) => (
                     <ScheduleDay
                       workDate={workDate}
-                      shifts={shifts().filter((s) => s.work_date === workDate)}
-                      coverage={coverageRows().filter(
-                        (row) => row.work_date === workDate,
-                      )}
+                      shifts={shiftsByDate().get(workDate) ?? []}
+                      coverage={coverageByDate().get(workDate) ?? []}
                       members={members()}
                       positions={positions()}
                       patterns={patterns()}

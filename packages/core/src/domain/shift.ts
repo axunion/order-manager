@@ -304,10 +304,11 @@ export function coverage(
   dates: string[],
 ): CoverageRow[] {
   const rows: CoverageRow[] = [];
+  const shiftsByDate = groupBy(shifts, (s) => s.work_date);
 
   for (const work_date of dates) {
     const weekday = toJstWeekday(jstDayRange(work_date).from);
-    const dayShifts = shifts.filter((s) => s.work_date === work_date);
+    const dayShifts = shiftsByDate.get(work_date) ?? [];
 
     for (const requirement of requirements) {
       if (requirement.weekday !== weekday) continue;

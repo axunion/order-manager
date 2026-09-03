@@ -24,36 +24,41 @@ export async function entriesBySubmission(
   storeId: string,
   submissionIds: string[],
 ): Promise<Map<string, AvailabilityEntryResponse[]>> {
-  const grouped = new Map<string, AvailabilityEntryResponse[]>();
-
+  const chunks: string[][] = [];
   for (let i = 0; i < submissionIds.length; i += IDS_PER_QUERY) {
-    const chunk = submissionIds.slice(i, i + IDS_PER_QUERY);
-    const rows = await db
-      .select({
-        id: schema.availabilityEntries.id,
-        submission_id: schema.availabilityEntries.submission_id,
-        work_date: schema.availabilityEntries.work_date,
-        kind: schema.availabilityEntries.kind,
-        start_minutes: schema.availabilityEntries.start_minutes,
-        end_minutes: schema.availabilityEntries.end_minutes,
-      })
-      .from(schema.availabilityEntries)
-      .where(
-        and(
-          eq(schema.availabilityEntries.store_id, storeId),
-          inArray(schema.availabilityEntries.submission_id, chunk),
-        ),
-      )
-      .orderBy(
-        asc(schema.availabilityEntries.work_date),
-        asc(schema.availabilityEntries.start_minutes),
-      );
+    chunks.push(submissionIds.slice(i, i + IDS_PER_QUERY));
+  }
 
-    for (const { submission_id, ...entry } of rows) {
-      const list = grouped.get(submission_id);
-      if (list) list.push(entry);
-      else grouped.set(submission_id, [entry]);
-    }
+  const chunkRows = await Promise.all(
+    chunks.map((chunk) =>
+      db
+        .select({
+          id: schema.availabilityEntries.id,
+          submission_id: schema.availabilityEntries.submission_id,
+          work_date: schema.availabilityEntries.work_date,
+          kind: schema.availabilityEntries.kind,
+          start_minutes: schema.availabilityEntries.start_minutes,
+          end_minutes: schema.availabilityEntries.end_minutes,
+        })
+        .from(schema.availabilityEntries)
+        .where(
+          and(
+            eq(schema.availabilityEntries.store_id, storeId),
+            inArray(schema.availabilityEntries.submission_id, chunk),
+          ),
+        )
+        .orderBy(
+          asc(schema.availabilityEntries.work_date),
+          asc(schema.availabilityEntries.start_minutes),
+        ),
+    ),
+  );
+
+  const grouped = new Map<string, AvailabilityEntryResponse[]>();
+  for (const { submission_id, ...entry } of chunkRows.flat()) {
+    const list = grouped.get(submission_id);
+    if (list) list.push(entry);
+    else grouped.set(submission_id, [entry]);
   }
 
   return grouped;
