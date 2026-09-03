@@ -19,6 +19,26 @@ All packages are `"private": true` — nothing is published to npm.
 
 ---
 
+## pnpm version
+
+The root `package.json` pins pnpm exactly, in `packageManager`. pnpm reads that
+field and **switches itself to the pinned version** before running, so you do
+not need that version installed — any reasonably recent pnpm will do, and CI
+(`pnpm/action-setup` with no `version` input) resolves the same field.
+
+This pin is load-bearing, not hygiene. The lockfile carries a
+`packageManagerDependencies` section that only pnpm 11 understands; an older
+pnpm drops it silently on `pnpm install`, reports the lockfile as up to date,
+and CI then rejects the install with `Cannot update packageManagerDependencies
+with "frozen-lockfile"`. `devEngines.packageManager` repeats the same version
+with `onFail: "error"` as a backstop for environments where the automatic
+switch is turned off.
+
+When bumping pnpm, change both fields together — pnpm warns and ignores
+`packageManager` if the two disagree.
+
+---
+
 ## Running commands
 
 ### Targeting a single package
